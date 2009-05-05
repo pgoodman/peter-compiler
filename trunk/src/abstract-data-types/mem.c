@@ -6,10 +6,15 @@
  *     Version: $Id$
  */
 
+#include <stdlib.h>
 #include <stdio.h>
 
-inline void *mem_alloc(const int s) {
+void *mem_alloc(const int s) {
     return malloc(s);
+}
+
+void mem_free(void *x) {
+    free(x);
 }
 
 inline void mem_error(const char * const s) {

@@ -9,11 +9,16 @@
 #ifndef GENERATOR_H_
 #define GENERATOR_H_
 
+#include "delegate.h"
+#include "function.h"
+
 typedef struct Generator {
-    F1 generate;
-    D1 free;
+    F1 _gen;
+    D1 _free;
 } Generator;
 
 void *generator_alloc(int);
+void generator_free(void *);
+void *generator_next(void *);
 
 #endif /* GENERATOR_H_ */

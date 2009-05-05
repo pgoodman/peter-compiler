@@ -9,12 +9,14 @@
 #ifndef LIST_H_
 #define LIST_H_
 
+#include "delegate.h"
+
 typedef struct List {
-    struct List *next;
+    void *next; // sketchy! :P
 } List;
 
 typedef struct GenericList {
-    List;
+    List _;
     void *elm;
 } GenericList;
 

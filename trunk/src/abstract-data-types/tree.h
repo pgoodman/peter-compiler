@@ -9,21 +9,27 @@
 #ifndef TREE_H_
 #define TREE_H_
 
+#include "delegate.h"
+#include "generator.h"
+
 /**
  * Threaded tree type.
  */
 typedef struct Tree {
-	size_t degree;
-	struct Tree *branches[];
+	size_t degree,
+           fill;
+	struct Tree **branches;
 } Tree;
 
+/*
 typedef struct GenericTree {
     Tree;
     void *elm;
 } GenericTree;
+*/
 
 typedef struct TreeGenerator {
-    Generator;
+    Generator _;
     void *adt;
 } TreeGenerator;
 
@@ -34,16 +40,16 @@ typedef enum {
     TREE_TRAVERSE_LEVELORDER
 } TreeTraversal;
 
-/**
- * Tree visitor type.
- */
-Tree *tree_alloc(int);
+// tree operations
+void *tree_alloc(int, const size_t);
 void tree_free(Tree *, D1);
-void tree_free_visitor(Tree *);
-void tree_traverse_df(Tree * const, D1);
-void tree_traverse_bf(Tree * const, D1);
+int tree_add_branch(void *, void *);
 
-inline GenericTree *gen_tree_alloc(void);
-void gen_tree_free(GenericTree *, D1);
+// tree generator
+TreeGenerator *tree_generator_alloc(void *, const TreeTraversal);
+void tree_generator_free(void *);
+void *T_traverse_df_generate(void *);
+void *T_traverse_bf_generate(void *);
+void *T_traverse_po_generate(void *);
 
 #endif /* TREE_H_ */

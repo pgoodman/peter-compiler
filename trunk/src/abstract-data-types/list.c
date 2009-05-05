@@ -6,7 +6,10 @@
  *     Version: $Id$
  */
 
+#include <stdlib.h>
 #include "delegate.h"
+#include "mem.h"
+#include "list.h"
 
 /**
  * Allocate a new linked list.
@@ -32,11 +35,11 @@ void list_free(List *L, D1 free_list) {
     List *next;
 
     if(NULL == free_list)
-       free_list = &free;
+       free_list = &mem_free;
 
     while(NULL != L) {
         next = L->next;
-        free_list(curr);
+        free_list(L);
         L = next;
     }
 }
@@ -57,12 +60,12 @@ void gen_list_free(GenericList *L, D1 free_elm) {
     GenericList *next;
 
     if(NULL == free_elm)
-        free_elm = &free;
+        free_elm = &mem_free;
 
     while(NULL != L) {
-        next = L->next;
+        next = ((List *) L)->next;
         free_elm(L->elm);
-        free(L);
+        mem_free(L);
         L = next;
     }
 }

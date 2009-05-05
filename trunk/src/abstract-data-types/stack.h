@@ -9,6 +9,9 @@
 #ifndef STACK_H_
 #define STACK_H_
 
+#include "delegate.h"
+#include "list.h"
+
 typedef struct Stack {
     GenericList *head,
                 *unused;
@@ -16,10 +19,10 @@ typedef struct Stack {
 
 Stack *stack_alloc(void);
 void stack_free(Stack *, D1);
-List *stack_alloc_list(Stack * const);
+GenericList *stack_alloc_list(Stack *);
 
-inline int stack_empty(const Stack * const);
-void stack_push(Stack * const, const void * const);
+int stack_empty(const Stack * const);
+void stack_push(Stack * const, void *);
 void *stack_pop(Stack * const);
 void *stack_peek(const Stack * const);
 

@@ -6,9 +6,10 @@
  *     Version: $Id$
  */
 
+#include <stdlib.h>
+#include "mem.h"
 #include "list.h"
 #include "stack.h"
-#include "mem.h"
 #include "delegate.h"
 
 /**
@@ -38,7 +39,7 @@ void stack_free(Stack *S, D1 free_elm) {
 
     gen_list_free(S->head, free_elm);
     gen_list_free(S->unused, &D1_ignore);
-    free(S);
+    mem_free(S);
 
     S = NULL;
 }
@@ -46,7 +47,7 @@ void stack_free(Stack *S, D1 free_elm) {
 /**
  * Allocate a new stack list.
  */
-List *stack_alloc_list(Stack * const S) {
+GenericList *stack_alloc_list(Stack * const S) {
     GenericList *L;
 
     if(NULL == S)
@@ -66,14 +67,14 @@ List *stack_alloc_list(Stack * const S) {
 /**
  * Check if a stack is empty.
  */
-inline int stack_empty(const Stack * const S) {
+int stack_empty(const Stack * const S) {
     return NULL == S || NULL == S->head;
 }
 
 /**
  * Push an element onto the stack.
  */
-void stack_push(Stack * const S, const void * const E) {
+void stack_push(Stack * const S, void * E) {
     GenericList *L = stack_alloc_list(S);
 
     if(NULL == L)

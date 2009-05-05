@@ -6,6 +6,8 @@
  *     Version: $Id$
  */
 
+#include <stdlib.h>
+#include "mem.h"
 #include "list.h"
 #include "stack.h"
 #include "queue.h"
@@ -34,7 +36,7 @@ Queue *queue_alloc(void) {
  * Free an allocated queue.
  */
 inline void queue_free(Queue *Q, D1 free_elm) {
-    stack_free(Q);
+    stack_free((Stack *) Q, free_elm);
     Q = NULL;
 }
 
@@ -42,46 +44,52 @@ inline void queue_free(Queue *Q, D1 free_elm) {
  * Check if the queue is empty.
  */
 inline int queue_empty(const Queue * const Q) {
-    return stack_empty(Q);
+    return stack_empty((Stack *) Q);
 }
 
 /**
  * Dequeue an element off of a queue.
  */
 inline void *queue_pop(Queue * const Q) {
-    return stack_pop(Q);
+    return stack_pop((Stack *) Q);
 }
 
 /**
  * Peek at the first element added to the queue.
  */
 inline void *queue_peek(const Queue * const Q) {
-    return stack_peek(Q);
+    return stack_peek((Stack *) Q);
 }
 
 /**
  * Enqueue an element onto a queue.
  */
-void queue_push(Queue * const Q, const void * const E) {
+void queue_push(Queue * Q, void *E) {
 
-    GenericList *L = stack_alloc_list(Q),
+    Stack *S = (Stack *) Q;
+    GenericList *L = stack_alloc_list(S),
                 *H = NULL;
-
-    Stack *S = (Stack *)Q;
 
     if(NULL == L)
         return;
 
     L->elm = E;
 
+    // if we have a tail to this queue then add E after the tail and remember
+    // what the tail was in H
     if(NULL != Q->tail) {
-        ((List *) (Q->tail))->next = L;
+        ((List *) \
+            ((GenericList *) \
+                (Q->tail))) \
+                    ->next = L;
         H = Q->tail;
     } else {
         H = L;
     }
+
     Q->tail = L;
 
+    // we don't have a head to the list so set the head to what the old tail was
     if(NULL == S->head)
         S->head = H;
 }
