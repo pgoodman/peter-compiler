@@ -13,8 +13,7 @@
  * Threaded tree type.
  */
 typedef struct Tree {
-	size_t degree,
-           fill;
+	size_t degree;
 	struct Tree *branches[];
 } Tree;
 
@@ -25,19 +24,11 @@ typedef struct GenericTree {
 
 typedef struct TreeGenerator {
     Generator;
-
     void *adt;
-    int (*adt_empty)(void *);
-    D1 adt_push;
-    F2 adt_pop;
-    D2 adt_free;
-
-    //TreeTraversal type;
-    //Tree *tree;
 } TreeGenerator;
 
+// in-order is not well-defined for N-ary trees, hence its exclusion
 typedef enum {
-    TREE_TRAVERSE_INORDER,
     TREE_TRAVERSE_PREORDER,
     TREE_TRAVERSE_POSTORDER,
     TREE_TRAVERSE_LEVELORDER

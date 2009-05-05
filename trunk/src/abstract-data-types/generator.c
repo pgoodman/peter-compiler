@@ -13,6 +13,7 @@
  */
 void *generator_alloc(int size) {
     void *G;
+    Generator *g;
 
     if(size < sizeof(Generator))
         size = sizeof(Generator);
@@ -20,6 +21,11 @@ void *generator_alloc(int size) {
     G = malloc(size);
     if(NULL == G)
         mem_error("Unable to allocate generator on the heap.");
+
+    // set the default values for these things
+    g = (Generator *)G;
+    g->free = NULL;
+    g->generate = NULL;
 
     return G;
 }
