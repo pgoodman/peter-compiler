@@ -6,8 +6,7 @@
  *     Version: $Id$
  */
 
-#include <stdlib.h>
-#include <stdio.h>
+#include "mem.h"
 
 void *mem_alloc(const int s) {
     return malloc(s);

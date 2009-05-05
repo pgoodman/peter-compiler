@@ -6,11 +6,7 @@
  *     Version: $Id$
  */
 
-#include <stdlib.h>
-#include "mem.h"
-#include "list.h"
 #include "stack.h"
-#include "delegate.h"
 
 /**
  * Allocate a new stack on the heap.

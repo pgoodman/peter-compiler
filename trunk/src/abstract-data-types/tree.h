@@ -9,7 +9,12 @@
 #ifndef TREE_H_
 #define TREE_H_
 
+#include <stdlib.h>
+#include "mem.h"
+#include "stack.h"
+#include "queue.h"
 #include "delegate.h"
+#include "function.h"
 #include "generator.h"
 
 /**

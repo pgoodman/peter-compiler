@@ -6,10 +6,7 @@
  *     Version: $Id$
  */
 
-#include <stdlib.h>
-#include "mem.h"
 #include "generator.h"
-
 
 /**
  * Allocate a new generator on the heap.

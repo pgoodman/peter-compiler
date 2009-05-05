@@ -6,12 +6,7 @@
  *     Version: $Id$
  */
 
-#include <stdlib.h>
-#include "mem.h"
-#include "list.h"
-#include "stack.h"
 #include "queue.h"
-#include "delegate.h"
 
 /**
  * Allocate a new queue on the heap.

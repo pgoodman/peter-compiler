@@ -9,6 +9,9 @@
 #ifndef MEMORY_H_
 #define MEMORY_H_
 
+#include <stdlib.h>
+#include <stdio.h>
+
 // function type to report a heap allocation error
 typedef int (*mem_error_fnc)(const char * const);
 

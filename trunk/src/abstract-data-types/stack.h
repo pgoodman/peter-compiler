@@ -9,8 +9,10 @@
 #ifndef STACK_H_
 #define STACK_H_
 
-#include "delegate.h"
+#include <stdlib.h>
+#include "mem.h"
 #include "list.h"
+#include "delegate.h"
 
 typedef struct Stack {
     GenericList *head,

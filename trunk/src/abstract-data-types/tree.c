@@ -6,14 +6,7 @@
  *     Version: $Id$
  */
 
-#include <stdlib.h>
-#include "mem.h"
 #include "tree.h"
-#include "stack.h"
-#include "queue.h"
-#include "delegate.h"
-#include "function.h"
-#include "generator.h"
 
 /**
  * Allocate a new tree on the heap.

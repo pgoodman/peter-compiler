@@ -9,7 +9,9 @@
 #ifndef LIST_H_
 #define LIST_H_
 
+#include <stdlib.h>
 #include "delegate.h"
+#include "mem.h"
 
 typedef struct List {
     void *next; // sketchy! :P

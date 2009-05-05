@@ -54,5 +54,7 @@ int main() {
         printf(&(curr->letter));
     }
 
+    //printf("hello world!\n");
+
     return 0;
 }

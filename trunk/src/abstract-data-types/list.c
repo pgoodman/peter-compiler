@@ -6,9 +6,6 @@
  *     Version: $Id$
  */
 
-#include <stdlib.h>
-#include "delegate.h"
-#include "mem.h"
 #include "list.h"
 
 /**

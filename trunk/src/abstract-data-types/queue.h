@@ -9,9 +9,11 @@
 #ifndef QUEUE_H_
 #define QUEUE_H_
 
-#include "delegate.h"
+#include <stdlib.h>
+#include "mem.h"
 #include "list.h"
 #include "stack.h"
+#include "delegate.h"
 
 typedef struct Queue {
     Stack _;
