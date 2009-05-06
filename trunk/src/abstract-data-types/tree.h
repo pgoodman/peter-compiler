@@ -47,12 +47,12 @@ typedef enum {
 
 // tree operations
 void *tree_alloc(int, const size_t);
-void tree_free(Tree *, D1);
+void tree_free(void *, D1);
 int tree_add_branch(void *, void *);
 
 // tree generator
 TreeGenerator *tree_generator_alloc(void *, const TreeTraversal);
-void tree_generator_free(void *);
+void T_generator_free(void *);
 void *T_traverse_df_generate(void *);
 void *T_traverse_bf_generate(void *);
 void *T_traverse_po_generate(void *);

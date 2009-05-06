@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "abstract-data-types/tree.h"
+#include "abstract-data-types/delegate.h"
 
 typedef struct CharTree {
     Tree _;
@@ -19,16 +20,20 @@ int main() {
     int s = sizeof(CharTree);
     TreeGenerator *gen = NULL;
 
-    CharTree *A = tree_alloc(s, 2),
-             *B = tree_alloc(s, 2),
-             *C = tree_alloc(s, 2),
+    printf("before alloc trees.\n");
+
+    CharTree *A = tree_alloc(s, 3),
+             *B = tree_alloc(s, 3),
+             *C = tree_alloc(s, 0),
              *D = tree_alloc(s, 2),
-             *E = tree_alloc(s, 2),
-             *F = tree_alloc(s, 2),
-             *G = tree_alloc(s, 2),
-             *H = tree_alloc(s, 2),
-             *I = tree_alloc(s, 2),
+             *E = tree_alloc(s, 0),
+             *F = tree_alloc(s, 1),
+             *G = tree_alloc(s, 0),
+             *H = tree_alloc(s, 1),
+             *I = tree_alloc(s, 0),
+             *J = tree_alloc(s, 0),
              *curr = NULL;
+
 
     A->letter = 'A';
     B->letter = 'B';
@@ -39,22 +44,44 @@ int main() {
     G->letter = 'G';
     H->letter = 'H';
     I->letter = 'I';
+    J->letter = 'J';
 
-    tree_add_branch(F, B); // root
-    tree_add_branch(F, G);
-    tree_add_branch(B, A);
-    tree_add_branch(B, D);
-    tree_add_branch(D, C);
-    tree_add_branch(D, E);
-    tree_add_branch(G, I);
-    tree_add_branch(I, H);
+    tree_add_branch(A, B);
+        tree_add_branch(B, E);
+        tree_add_branch(B, F);
+            tree_add_branch(F, H);
+        tree_add_branch(B, G);
+    tree_add_branch(A, C);
+    tree_add_branch(A, D);
+        tree_add_branch(D, I);
+        tree_add_branch(D, J);
 
-    gen = tree_generator_alloc(F, TREE_TRAVERSE_PREORDER);
+    printf("Post-order:\n");
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER);
     while(NULL != (curr = generator_next(gen))) {
-        printf(&(curr->letter));
+        printf("\t%c\n", curr->letter);
     }
+    generator_free(gen);
 
-    //printf("hello world!\n");
+    printf("Pre-order (depth-first):\n");
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_PREORDER);
+    while(NULL != (curr = generator_next(gen))) {
+        printf("\t%c\n", curr->letter);
+    }
+    generator_free(gen);
+
+    printf("Level-order (breadth-first):\n");
+
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_LEVELORDER);
+    while(NULL != (curr = generator_next(gen))) {
+        printf("\t%c\n", curr->letter);
+    }
+    generator_free(gen);
+
+    printf("freeing tree...\n");
+    tree_free(F, D1_ignore);
+
+    printf("resources freed.\n");
 
     return 0;
 }

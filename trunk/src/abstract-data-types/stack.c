@@ -6,13 +6,14 @@
  *     Version: $Id$
  */
 
+#include <stdio.h>
 #include "stack.h"
 
 /**
  * Allocate a new stack on the heap.
  */
 Stack *stack_alloc(void) {
-    Stack *S = mem_alloc(sizeof(Stack));
+    Stack *S = mem_alloc(sizeof(Stack) MEM_DEBUG_INFO);
 
     if(NULL == S)
         mem_error("Unable to allocate a new stack on the heap.");
@@ -33,9 +34,11 @@ void stack_free(Stack *S, D1 free_elm) {
     if(NULL == free_elm)
         free_elm = &D1_ignore;
 
+    printf("freeing S->head\n");
     gen_list_free(S->head, free_elm);
+    printf("freeing S->unused\n");
     gen_list_free(S->unused, &D1_ignore);
-    mem_free(S);
+    mem_free(S MEM_DEBUG_INFO);
 
     S = NULL;
 }
@@ -44,17 +47,20 @@ void stack_free(Stack *S, D1 free_elm) {
  * Allocate a new stack list.
  */
 GenericList *stack_alloc_list(Stack * const S) {
-    GenericList *L;
+    GenericList *L = NULL;
 
     if(NULL == S)
         return NULL;
 
-    // allocate a new list or use an available one
+    // allocate a new list
     if(NULL == S->unused) {
         L = gen_list_alloc();
+
+    // use an available one
     } else {
         L = S->unused;
-        S->unused = ((List *) L)->next;
+        S->unused = (GenericList *) (((List *) L)->next);
+        ((List *) L)->next = NULL;
     }
 
     return L;
@@ -77,7 +83,7 @@ void stack_push(Stack * const S, void * E) {
         return;
 
     // add in the list to the head of the stack
-    ((List *) L)->next = S->head;
+    ((List *) L)->next = (List *)S->head;
     S->head = L;
     L->elm = E;
 }
@@ -95,6 +101,9 @@ void *stack_pop(Stack * const S) {
     // extract the element
     L = S->head;
     E = L->elm;
+
+    // update the head pointer
+    S->head = (GenericList *) (((List *) L)->next);
 
     // keep the list around for future use
     L->elm = NULL;

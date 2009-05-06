@@ -6,13 +6,14 @@
  *     Version: $Id$
  */
 
+#include <stdio.h>
 #include "queue.h"
 
 /**
  * Allocate a new queue on the heap.
  */
 Queue *queue_alloc(void) {
-    Queue *Q = mem_alloc(sizeof(Queue));
+    Queue *Q = mem_alloc(sizeof(Queue) MEM_DEBUG_INFO);
     Stack *S;
 
     if(NULL == Q)
@@ -21,7 +22,6 @@ Queue *queue_alloc(void) {
     S = (Stack *)Q;
     S->head = NULL;
     S->unused = NULL;
-
     Q->tail = NULL;
 
     return Q;
@@ -31,6 +31,8 @@ Queue *queue_alloc(void) {
  * Free an allocated queue.
  */
 inline void queue_free(Queue *Q, D1 free_elm) {
+	Q->tail = NULL;
+	printf("freeing a queue.\n");
     stack_free((Stack *) Q, free_elm);
     Q = NULL;
 }
@@ -62,8 +64,7 @@ inline void *queue_peek(const Queue * const Q) {
 void queue_push(Queue * Q, void *E) {
 
     Stack *S = (Stack *) Q;
-    GenericList *L = stack_alloc_list(S),
-                *H = NULL;
+    GenericList *L = stack_alloc_list(S);
 
     if(NULL == L)
         return;
@@ -77,14 +78,10 @@ void queue_push(Queue * Q, void *E) {
             ((GenericList *) \
                 (Q->tail))) \
                     ->next = L;
-        H = Q->tail;
-    } else {
-        H = L;
     }
-
     Q->tail = L;
 
     // we don't have a head to the list so set the head to what the old tail was
     if(NULL == S->head)
-        S->head = H;
+        S->head = L;
 }

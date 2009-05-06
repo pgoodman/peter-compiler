@@ -19,12 +19,12 @@ void *tree_alloc(int size, const size_t degree) {
     if(size < sizeof(Tree))
         size = sizeof(Tree);
 
-    tree = mem_alloc(size);
+    tree = mem_alloc(size MEM_DEBUG_INFO);
     if(NULL == tree)
         mem_error("Unable to allocate a tree on the heap.");
 
     T = (Tree *)tree;
-    B = mem_alloc(size * degree);
+    B = mem_alloc(size * degree MEM_DEBUG_INFO);
     if(NULL == B)
         mem_error("Unable to allocate the branches for a tree on the heap.");
 
@@ -43,10 +43,10 @@ void *tree_alloc(int size, const size_t degree) {
  *     which are not part of the Tree structure. The Tree structure should be
  *     seen as a black box and not touched.
  */
-void tree_free(Tree *T, D1 free_tree_visitor) {
+void tree_free(void *T, D1 free_tree_visitor) {
 
-    TreeGenerator *G;
-    Tree *elm;
+    TreeGenerator *G = NULL;
+    void *elm = NULL;
 
     if(NULL == T)
         return;
@@ -54,12 +54,12 @@ void tree_free(Tree *T, D1 free_tree_visitor) {
     if(NULL == free_tree_visitor)
         free_tree_visitor = &D1_ignore;
 
-    // traverse the tree in postorder and free the tree nodes from the bottom up.
+    // traverse the tree in post order and free the tree nodes from the bottom up.
     G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
     while(NULL != (elm = generator_next(G))) {
         free_tree_visitor(elm);
-        mem_free(elm->branches);
-        mem_free(elm);
+        mem_free(((Tree *) elm)->branches MEM_DEBUG_INFO);
+        mem_free(elm MEM_DEBUG_INFO);
     }
 
     // free the generator
@@ -112,7 +112,7 @@ TreeGenerator *tree_generator_alloc(void *tree, const TreeTraversal type) {
         // generator
         case TREE_TRAVERSE_POSTORDER:
             G->adt = stack_alloc();
-            g->_free = &tree_generator_free;
+            g->_free = &T_generator_free;
             g->_gen = &T_traverse_po_generate;
             stack_push(G->adt, T);
             break;
@@ -120,7 +120,7 @@ TreeGenerator *tree_generator_alloc(void *tree, const TreeTraversal type) {
         // depth-first traversal
         case TREE_TRAVERSE_PREORDER:
             G->adt = stack_alloc();
-            g->_free = &tree_generator_free;
+            g->_free = &T_generator_free;
             g->_gen = &T_traverse_df_generate;
             stack_push(G->adt, T);
             break;
@@ -128,7 +128,7 @@ TreeGenerator *tree_generator_alloc(void *tree, const TreeTraversal type) {
         // breadth-first traversal
         case TREE_TRAVERSE_LEVELORDER:
             G->adt = queue_alloc();
-            g->_free = &tree_generator_free;
+            g->_free = &T_generator_free;
             g->_gen = &T_traverse_bf_generate;
             queue_push(G->adt, T);
             break;
@@ -140,17 +140,19 @@ TreeGenerator *tree_generator_alloc(void *tree, const TreeTraversal type) {
 /**
  * Free a tree generator.
  */
-void tree_generator_free(void *g) {
+void T_generator_free(void *g) {
     TreeGenerator *G = NULL;
 
     if(NULL == g)
         return;
 
     G = (TreeGenerator *) g;
-    stack_free((Stack *) G->adt, D1_ignore);
+    printf("freeing a stack of a generator.\n");
+    stack_free((Stack *) (G->adt), D1_ignore);
     G->adt = NULL;
 
-    mem_free(G);
+    mem_free(g MEM_DEBUG_INFO);
+    g = NULL;
     G = NULL;
 }
 
@@ -179,12 +181,13 @@ void *T_traverse_df_generate(void *g) {
             continue;
 
         // push the branches onto the stack
-        for(i = curr->fill - 1; i >= 0; --i)
-            stack_push(S, curr->branches[i]);
+        for(i = curr->fill; i > 0; ) {
+            stack_push(S, curr->branches[--i]);
+        }
 
         return ret;
 
-    } while(1);
+    };
 
     return NULL;
 }
@@ -214,12 +217,13 @@ void *T_traverse_bf_generate(void *g) {
             continue;
 
         // push the branches onto the queue
-        for(i = curr->fill - 1; i >= 0; --i)
+        for(i = 0; i < curr->fill; ++i) {
             queue_push(Q, curr->branches[i]);
+        }
 
         return ret;
 
-    } while(1);
+    };
 
     return NULL;
 }
@@ -245,6 +249,7 @@ void *T_traverse_po_generate(void *g) {
         return NULL;
 
     while(!stack_empty(S)) {
+
         curr = stack_peek(S);
 
         // subtrees have been explored
@@ -255,28 +260,32 @@ void *T_traverse_po_generate(void *g) {
             ret = stack_pop(S);
             curr = (Tree *)ret;
 
-            // we are looking at the last element that is a direct descendent
+            // we are looking at the last element that is a direct descendant
             // of the tree on the top of the stack, push NULL on the stack to
             // notify us to ignore this nodes children in future
             if(!stack_empty(S)) {
-                top = stack_peek(S);
 
-                if(top->fill > 0) {
-                    if(top->branches[top->fill-1] == curr)
-                        stack_push(S, NULL);
-                } else {
+                top = (Tree *)stack_peek(S);
+
+                if(NULL == top)
+                    break;
+
+                if(top->fill == 0 || top->branches[top->fill - 1] == curr) {
                     stack_push(S, NULL);
                 }
             }
 
             break;
+
         // subtrees weren't explored, explore them!
         } else {
             do {
                 // add in the children of this node to the stack
                 if(curr->fill > 0) {
-                    for(i = curr->fill - 1; i >= 0; --i)
-                        stack_push(S, curr->branches[i]);
+
+                    for(i = curr->fill; i > 0; ) {
+                        stack_push(S, curr->branches[--i]);
+                    }
 
                     curr = stack_peek(S);
 
@@ -286,7 +295,7 @@ void *T_traverse_po_generate(void *g) {
                     break;
                 }
 
-            } while(1);
+            } while(NULL != curr);
         }
     }
 

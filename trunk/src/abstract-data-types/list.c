@@ -6,6 +6,7 @@
  *     Version: $Id$
  */
 
+#include <stdio.h>
 #include "list.h"
 
 /**
@@ -15,7 +16,7 @@ void *list_alloc(int size) {
     if(size < sizeof(List))
         size = sizeof(List);
 
-    void *L = mem_alloc(size);
+    void *L = mem_alloc(size MEM_DEBUG_INFO);
 
     if(NULL == L)
         mem_error("Unable to allocate a linked list on the heap.");
@@ -36,6 +37,12 @@ void list_free(List *L, D1 free_list) {
 
     while(NULL != L) {
         next = L->next;
+
+#ifdef MEM_DEBUG
+        if((void *)free_list == (void *)&mem_free)
+            mem_free(L MEM_DEBUG_INFO);
+        else
+#endif
         free_list(L);
         L = next;
     }
@@ -58,11 +65,29 @@ void gen_list_free(GenericList *L, D1 free_elm) {
 
     if(NULL == free_elm)
         free_elm = &mem_free;
-
+/*
+    int i = 0;
+    GenericList *list = L;
+    while(NULL != list) {
+        printf("%d,",i++);
+        list = (GenericList *) ((List *) list)->next;
+    }
+*/
+    printf("\nstarting to free list...\n");
     while(NULL != L) {
-        next = ((List *) L)->next;
+        next = (GenericList *) (((List *) L)->next);
+
+#ifdef MEM_DEBUG
+        if((void *)free_elm == (void *)&mem_free)
+            mem_free(L->elm MEM_DEBUG_INFO);
+        else
+#endif
         free_elm(L->elm);
-        mem_free(L);
+
+        L->elm = NULL;
+        mem_free(L MEM_DEBUG_INFO);
         L = next;
     }
+    printf("list freed.\n");
+    fflush(stdout);
 }

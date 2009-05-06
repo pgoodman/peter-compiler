@@ -18,7 +18,7 @@ void *generator_alloc(int size) {
     if(size < sizeof(Generator))
         size = sizeof(Generator);
 
-    G = mem_alloc(size);
+    G = mem_alloc(size MEM_DEBUG_INFO);
     if(NULL == G)
         mem_error("Unable to allocate generator on the heap.");
 
