@@ -55,8 +55,12 @@ void tree_free(void *T, D1 free_tree_visitor) {
         free_tree_visitor = &D1_ignore;
 
     // traverse the tree in post order and free the tree nodes from the bottom up.
+    char i = 'A';
+    printf("freeing tree nodes...\n");
+
     G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
     while(NULL != (elm = generator_next(G))) {
+        printf("\t%c\n", i++);
         free_tree_visitor(elm);
         mem_free(((Tree *) elm)->branches MEM_DEBUG_INFO);
         mem_free(elm MEM_DEBUG_INFO);

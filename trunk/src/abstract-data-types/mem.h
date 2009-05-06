@@ -32,5 +32,6 @@ typedef int (*mem_error_fnc)(const char * const);
 void mem_error(const char * const);
 void *mem_alloc(const int MEM_DEBUG_PARAMS);
 void mem_free(void * MEM_DEBUG_PARAMS);
+void mem_free_no_debug(void *);
 
 #endif /* MEMORY_H_ */

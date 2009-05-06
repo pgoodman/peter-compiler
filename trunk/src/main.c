@@ -79,7 +79,7 @@ int main() {
     generator_free(gen);
 
     printf("freeing tree...\n");
-    tree_free(F, D1_ignore);
+    tree_free(F, &mem_free_no_debug);
 
     printf("resources freed.\n");
 

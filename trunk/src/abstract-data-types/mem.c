@@ -36,6 +36,16 @@ void mem_free(void *x MEM_DEBUG_PARAMS) {
     free(x);
 }
 
+void mem_free_no_debug(void *x) {
+#ifdef MEM_DEBUG
+    --num_loose_pointers;
+    printf("Freeing memory address 0x%X, loose pointers remaining: %d.\n", (unsigned int)x, num_loose_pointers);
+    fflush(stdout);
+#endif
+
+    free(x);
+}
+
 inline void mem_error(const char * const s) {
     printf(s);
     exit(1);

@@ -33,7 +33,7 @@ void list_free(List *L, D1 free_list) {
     List *next;
 
     if(NULL == free_list)
-       free_list = &mem_free;
+       free_list = &mem_free_no_debug;
 
     while(NULL != L) {
         next = L->next;
@@ -64,15 +64,8 @@ void gen_list_free(GenericList *L, D1 free_elm) {
     GenericList *next;
 
     if(NULL == free_elm)
-        free_elm = &mem_free;
-/*
-    int i = 0;
-    GenericList *list = L;
-    while(NULL != list) {
-        printf("%d,",i++);
-        list = (GenericList *) ((List *) list)->next;
-    }
-*/
+        free_elm = &mem_free_no_debug;
+
     printf("\nstarting to free list...\n");
     while(NULL != L) {
         next = (GenericList *) (((List *) L)->next);
