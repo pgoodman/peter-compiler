@@ -6,7 +6,6 @@
  *     Version: $Id$
  */
 
-#include <stdio.h>
 #include "stack.h"
 
 /**
@@ -34,9 +33,7 @@ void stack_free(Stack *S, D1 free_elm) {
     if(NULL == free_elm)
         free_elm = &D1_ignore;
 
-    printf("freeing S->head\n");
     gen_list_free(S->head, free_elm);
-    printf("freeing S->unused\n");
     gen_list_free(S->unused, &D1_ignore);
     mem_free(S MEM_DEBUG_INFO);
 

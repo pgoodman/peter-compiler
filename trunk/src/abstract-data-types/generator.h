@@ -17,10 +17,12 @@
 typedef struct Generator {
     F1 _gen;
     D1 _free;
+    void *_curr;
 } Generator;
 
 void *generator_alloc(int);
 void generator_free(void *);
-void *generator_next(void *);
+int generator_next(void *);
+void *generator_current(void *);
 
 #endif /* GENERATOR_H_ */

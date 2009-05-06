@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "abstract-data-types/tree.h"
-#include "abstract-data-types/delegate.h"
 
 typedef struct CharTree {
     Tree _;
@@ -34,7 +33,6 @@ int main() {
              *J = tree_alloc(s, 0),
              *curr = NULL;
 
-
     A->letter = 'A';
     B->letter = 'B';
     C->letter = 'C';
@@ -58,14 +56,16 @@ int main() {
 
     printf("Post-order:\n");
     gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER);
-    while(NULL != (curr = generator_next(gen))) {
+    while(generator_next(gen)) {
+        curr = generator_current(gen);
         printf("\t%c\n", curr->letter);
     }
     generator_free(gen);
 
     printf("Pre-order (depth-first):\n");
     gen = tree_generator_alloc(A, TREE_TRAVERSE_PREORDER);
-    while(NULL != (curr = generator_next(gen))) {
+    while(generator_next(gen)) {
+        curr = generator_current(gen);
         printf("\t%c\n", curr->letter);
     }
     generator_free(gen);
@@ -73,13 +73,13 @@ int main() {
     printf("Level-order (breadth-first):\n");
 
     gen = tree_generator_alloc(A, TREE_TRAVERSE_LEVELORDER);
-    while(NULL != (curr = generator_next(gen))) {
+    while(generator_next(gen)) {
+        curr = generator_current(gen);
         printf("\t%c\n", curr->letter);
     }
     generator_free(gen);
-
-    printf("freeing tree...\n");
-    tree_free(F, &mem_free_no_debug);
+    printf("freeing tree..\n");
+    tree_free(A, &D1_ignore);
 
     printf("resources freed.\n");
 

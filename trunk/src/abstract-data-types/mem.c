@@ -6,10 +6,10 @@
  *     Version: $Id$
  */
 
-#include <stdio.h>
 #include "mem.h"
 
 #ifdef MEM_DEBUG
+#include <stdio.h>
 unsigned int num_loose_pointers = 0;
 #endif
 

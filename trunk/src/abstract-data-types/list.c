@@ -6,7 +6,6 @@
  *     Version: $Id$
  */
 
-#include <stdio.h>
 #include "list.h"
 
 /**
@@ -32,17 +31,11 @@ void *list_alloc(int size) {
 void list_free(List *L, D1 free_list) {
     List *next;
 
-    if(NULL == free_list)
-       free_list = &mem_free_no_debug;
+    if(NULL == free_list || (void *)free_list == (void *)&mem_free)
+        free_list = &mem_free_no_debug;
 
     while(NULL != L) {
         next = L->next;
-
-#ifdef MEM_DEBUG
-        if((void *)free_list == (void *)&mem_free)
-            mem_free(L MEM_DEBUG_INFO);
-        else
-#endif
         free_list(L);
         L = next;
     }
@@ -63,24 +56,14 @@ inline GenericList *gen_list_alloc(void) {
 void gen_list_free(GenericList *L, D1 free_elm) {
     GenericList *next;
 
-    if(NULL == free_elm)
+    if(NULL == free_elm || (void *)free_elm == (void *)&mem_free)
         free_elm = &mem_free_no_debug;
 
-    printf("\nstarting to free list...\n");
     while(NULL != L) {
         next = (GenericList *) (((List *) L)->next);
-
-#ifdef MEM_DEBUG
-        if((void *)free_elm == (void *)&mem_free)
-            mem_free(L->elm MEM_DEBUG_INFO);
-        else
-#endif
         free_elm(L->elm);
-
         L->elm = NULL;
         mem_free(L MEM_DEBUG_INFO);
         L = next;
     }
-    printf("list freed.\n");
-    fflush(stdout);
 }

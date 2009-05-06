@@ -53,8 +53,8 @@ int tree_add_branch(void *, void *);
 // tree generator
 TreeGenerator *tree_generator_alloc(void *, const TreeTraversal);
 void T_generator_free(void *);
-void *T_traverse_df_generate(void *);
-void *T_traverse_bf_generate(void *);
-void *T_traverse_po_generate(void *);
+void *T_generator_next_df(void *);
+void *T_generator_next_bf(void *);
+void *T_generator_next_po(void *);
 
 #endif /* TREE_H_ */

@@ -6,7 +6,6 @@
  *     Version: $Id$
  */
 
-#include <stdio.h>
 #include "queue.h"
 
 /**
@@ -32,7 +31,6 @@ Queue *queue_alloc(void) {
  */
 inline void queue_free(Queue *Q, D1 free_elm) {
 	Q->tail = NULL;
-	printf("freeing a queue.\n");
     stack_free((Stack *) Q, free_elm);
     Q = NULL;
 }
