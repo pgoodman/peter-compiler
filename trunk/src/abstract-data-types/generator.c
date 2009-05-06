@@ -41,6 +41,20 @@ void generator_free(void *Cg) {
 }
 
 /**
+ * Initialize the generator.
+ */
+void generator_init(void *gen, F1 gen_next, D1 gen_free) {
+    Generator *G;
+
+    if(NULL == gen)
+        return;
+
+    G = (Generator *)gen;
+    G->_gen = gen_next;
+    G->_free = gen_free;
+}
+
+/**
  * Advance to the next node in the generator.
  */
 int generator_next(void *Cg) {

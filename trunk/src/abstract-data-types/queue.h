@@ -16,15 +16,16 @@
 #include "delegate.h"
 
 typedef struct Queue {
-    Stack _;
-    GenericList *tail;
+    GenericList *_head,
+                *_tail,
+                *_unused;
 } Queue;
 
-Queue *queue_alloc(void);
-inline void queue_free(Queue *, D1);
-inline int queue_empty(const Queue * const);
-inline void *queue_pop(Queue * const);
-inline void *queue_peek(const Queue * const);
+void *queue_alloc(int);
+void queue_free(Queue *, D1);
+int queue_empty(const Queue * const);
+void *queue_pop(Queue * const);
+void *queue_peek(const Queue * const);
 void queue_push(Queue *, void *);
 
 #endif /* QUEUE_H_ */

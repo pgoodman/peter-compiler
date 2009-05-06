@@ -11,17 +11,21 @@
 /**
  * Allocate a new queue on the heap.
  */
-Queue *queue_alloc(void) {
-    Queue *Q = mem_alloc(sizeof(Queue) MEM_DEBUG_INFO);
-    Stack *S;
+void *queue_alloc(int struct_size) {
+    void *queue = NULL;
+    Queue *Q;
 
-    if(NULL == Q)
+    if(struct_size < sizeof(Queue))
+        struct_size = sizeof(Queue);
+
+    queue = mem_alloc(struct_size MEM_DEBUG_INFO);
+    if(NULL == queue)
         mem_error("Unable to allocate a new queue on the heap.");
 
-    S = (Stack *)Q;
-    S->head = NULL;
-    S->unused = NULL;
-    Q->tail = NULL;
+    Q = (Queue *) queue;
+    Q->_head = NULL;
+    Q->_tail = NULL;
+    Q->_unused = NULL;
 
     return Q;
 }
@@ -29,57 +33,90 @@ Queue *queue_alloc(void) {
 /**
  * Free an allocated queue.
  */
-inline void queue_free(Queue *Q, D1 free_elm) {
-	Q->tail = NULL;
-    stack_free((Stack *) Q, free_elm);
+void queue_free(Queue *Q, D1 free_elm) {
+    if(NULL == Q)
+        return;
+
+    if(NULL == free_elm)
+        free_elm = &D1_ignore;
+
+    Q->_tail = NULL;
+
+    gen_list_free(Q->_head, free_elm);
+    gen_list_free(Q->_unused, &D1_ignore);
+    mem_free(Q MEM_DEBUG_INFO);
+
     Q = NULL;
 }
 
 /**
  * Check if the queue is empty.
  */
-inline int queue_empty(const Queue * const Q) {
-    return stack_empty((Stack *) Q);
+int queue_empty(const Queue * const Q) {
+    return NULL == Q->_head;
 }
 
 /**
- * Dequeue an element off of a queue.
+ * Push an element onto the queue.
  */
-inline void *queue_pop(Queue * const Q) {
-    return stack_pop((Stack *) Q);
-}
+void queue_push(Queue * const Q, void * E) {
+    GenericList *L = NULL;
 
-/**
- * Peek at the first element added to the queue.
- */
-inline void *queue_peek(const Queue * const Q) {
-    return stack_peek((Stack *) Q);
-}
-
-/**
- * Enqueue an element onto a queue.
- */
-void queue_push(Queue * Q, void *E) {
-
-    Stack *S = (Stack *) Q;
-    GenericList *L = stack_alloc_list(S);
-
-    if(NULL == L)
+    if(NULL == Q)
         return;
 
-    L->elm = E;
+    // allocate a slot if needed
+    if(NULL == Q->_unused) {
+        L = gen_list_alloc();
 
-    // if we have a tail to this queue then add E after the tail and remember
-    // what the tail was in H
-    if(NULL != Q->tail) {
-        ((List *) \
-            ((GenericList *) \
-                (Q->tail))) \
-                    ->next = L;
+    // take the first unused one otherwise
+    } else {
+        L = Q->_unused;
+        Q->_unused = (GenericList *) list_get_next(L);
     }
-    Q->tail = L;
 
-    // we don't have a head to the list so set the head to what the old tail was
-    if(NULL == S->head)
-        S->head = L;
+    // add in the slot to the tail of the queue
+    if(NULL != Q->_tail) {
+        list_set_next(Q->_tail, L);
+
+    // the tail is null <==> the head is null
+    } else {
+        Q->_head = L;
+    }
+
+    // update the to the new tail
+    Q->_tail = L;
+    gen_list_set_elm(L, E);
+}
+
+/**
+ * Dequeue an element from the queue.
+ */
+void *queue_pop(Queue * const Q) {
+    void *E = NULL;
+    GenericList *L = NULL;
+
+    if(queue_empty(Q))
+        return NULL;
+
+    // extract the element
+    L = Q->_head;
+    E = gen_list_get_elm(L);
+
+    // clear out the tail pointer if necessary if the head was the tail
+    if(Q->_tail == L) {
+        Q->_tail = NULL;
+        Q->_head = NULL;
+
+    // update the head pointer
+    } else {
+        Q->_head = (GenericList *) list_get_next(L);
+    }
+
+    // keep the list around for future use
+    gen_list_set_elm(L, NULL);
+    list_set_next(L, Q->_unused);
+    Q->_unused = L;
+
+    return E;
 }

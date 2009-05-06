@@ -21,9 +21,9 @@
  * Threaded tree type.
  */
 typedef struct Tree {
-	size_t degree,
-           fill;
-	struct Tree **branches;
+	size_t _degree,
+           _fill;
+	struct Tree **_branches;
 } Tree;
 
 /*
@@ -35,7 +35,7 @@ typedef struct GenericTree {
 
 typedef struct TreeGenerator {
     Generator _;
-    void *adt;
+    void *_adt;
 } TreeGenerator;
 
 // in-order is not well-defined for N-ary trees, hence its exclusion
@@ -49,6 +49,8 @@ typedef enum {
 void *tree_alloc(int, const size_t);
 void tree_free(void *, D1);
 int tree_add_branch(void *, void *);
+size_t tree_degree(void *);
+size_t tree_fill(void *);
 
 // tree generator
 TreeGenerator *tree_generator_alloc(void *, const TreeTraversal);

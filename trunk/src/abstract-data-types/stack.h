@@ -15,14 +15,12 @@
 #include "delegate.h"
 
 typedef struct Stack {
-    GenericList *head,
-                *unused;
+    GenericList *_head,
+                *_unused;
 } Stack;
 
-Stack *stack_alloc(void);
+void *stack_alloc(int);
 void stack_free(Stack *, D1);
-GenericList *stack_alloc_list(Stack *);
-
 int stack_empty(const Stack * const);
 void stack_push(Stack * const, void *);
 void *stack_pop(Stack * const);

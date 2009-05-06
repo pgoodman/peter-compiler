@@ -22,6 +22,7 @@ typedef struct Generator {
 
 void *generator_alloc(int);
 void generator_free(void *);
+void generator_init(void *, F1, D1);
 int generator_next(void *);
 void *generator_current(void *);
 

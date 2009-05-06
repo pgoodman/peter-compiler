@@ -14,18 +14,24 @@
 #include "mem.h"
 
 typedef struct List {
-    void *next; // sketchy! :P
+    void *_next; // sketchy! :P
 } List;
 
 typedef struct GenericList {
     List _;
-    void *elm;
+    void *_elm;
 } GenericList;
 
 void *list_alloc(int);
-void list_free(List *, D1);
+void list_free(void *, D1);
+
+List *list_get_next(void *);
+void list_set_next(void *, void *);
 
 inline GenericList *gen_list_alloc(void);
 void gen_list_free(GenericList *, D1);
+
+void *gen_list_get_elm(GenericList *);
+void gen_list_set_elm(GenericList *, void *) ;
 
 #endif /* LIST_H_ */
