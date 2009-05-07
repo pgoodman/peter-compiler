@@ -9,7 +9,7 @@
 #ifndef MEMORY_H_
 #define MEMORY_H_
 
-#define MEM_DEBUG
+//#  define MEM_DEBUG
 
 /**
  * Deal with debugging heap allocation and freeing.

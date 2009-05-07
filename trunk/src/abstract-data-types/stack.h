@@ -10,7 +10,7 @@
 #define STACK_H_
 
 #include <stdlib.h>
-#include "mem.h"
+#include <memory-management/mem.h>
 #include "list.h"
 #include "delegate.h"
 

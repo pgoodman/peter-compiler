@@ -10,8 +10,8 @@
 #define LIST_H_
 
 #include <stdlib.h>
+#include <memory-management/mem.h>
 #include "delegate.h"
-#include "mem.h"
 
 typedef struct List {
     void *_next; // sketchy! :P
