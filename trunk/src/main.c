@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include "abstract-data-types/stack.h"
 #include "abstract-data-types/tree.h"
 
 typedef struct CharTree {
@@ -18,6 +19,7 @@ typedef struct CharTree {
 int main() {
     int s = sizeof(CharTree);
     TreeGenerator *gen = NULL;
+    Stack *S = NULL;
 
     printf("before alloc trees.\n");
 
@@ -54,6 +56,7 @@ int main() {
         tree_add_branch(D, I);
         tree_add_branch(D, J);
 
+    // try out the post-ordering generator
     printf("Post-order:\n");
     gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER);
     while(generator_next(gen)) {
@@ -62,6 +65,7 @@ int main() {
     }
     generator_free(gen);
 
+    // try out the pre-ordering generator
     printf("Pre-order (depth-first):\n");
     gen = tree_generator_alloc(A, TREE_TRAVERSE_PREORDER);
     while(generator_next(gen)) {
@@ -70,15 +74,31 @@ int main() {
     }
     generator_free(gen);
 
+    // try out the level ordering generator
     printf("Level-order (breadth-first):\n");
-
     gen = tree_generator_alloc(A, TREE_TRAVERSE_LEVELORDER);
     while(generator_next(gen)) {
         curr = generator_current(gen);
         printf("\t%c\n", curr->letter);
     }
     generator_free(gen);
-    printf("freeing tree..\n");
+
+    // try out tree trimming the branches of and internal node
+    S = stack_alloc(0);
+    tree_trim(B, S);
+
+    // see what the post-order traversal looks like
+    printf("Post-order AFTER tree trimming the branches of B:\n");
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER);
+    while(generator_next(gen)) {
+        curr = generator_current(gen);
+        printf("\t%c\n", curr->letter);
+    }
+    generator_free(gen);
+
+    printf("freeing resources..\n");
+
+    stack_free(S, &D1_tree_free);
     tree_free(A, &D1_ignore);
 
     printf("resources freed.\n");

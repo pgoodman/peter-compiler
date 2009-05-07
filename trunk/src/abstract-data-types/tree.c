@@ -9,7 +9,7 @@
 #include "tree.h"
 
 #define FREE_GENERATOR_FUNC(N, T, F) \
-    void N(void *g) { \
+    static void N(void *g) { \
         TreeGenerator *G = NULL; \
         T *A = NULL; \
         if(NULL == g) \
@@ -51,6 +51,8 @@ void *tree_alloc(int struct_size, const size_t degree) {
     T->_degree = degree;
     T->_fill = 0;
     T->_branches = B;
+    T->_parent_branch = 0;
+    T->_parent = NULL;
 
     return tree;
 }
@@ -123,6 +125,13 @@ void tree_free(void *T, D1 free_tree_fnc) {
 }
 
 /**
+ * A tree free with no callback.
+ */
+void D1_tree_free(void *T) {
+    tree_free(T, &D1_ignore);
+}
+
+/**
  * Return the number of branches allocated for this tree.
  */
 size_t tree_degree(void *t) {
@@ -138,6 +147,44 @@ size_t tree_fill(void *t) {
     if(NULL == t)
         return 0;
     return ((Tree *) t)->_fill;
+}
+
+/**
+ * Trim off all of the branches, and push each of them into the garbage stack.
+ */
+void tree_trim(void *t, Stack *S) {
+
+    Tree *T = NULL, // tree
+         *B = NULL; // branch
+    size_t i;
+
+    if(NULL == t || NULL == S)
+        return;
+
+    T = (Tree *) t;
+
+    if(NULL == T->_branches || T->_degree == 0)
+        return;
+
+    // sub-trees are there, collect them into our garbage collection.
+    if(T->_fill > 0) {
+        for(i = 0; i < T->_fill; ++i) {
+            B = (Tree *) (T->_branches[i]);
+            stack_push(S, B);
+
+            // update the branches parent information
+            B->_parent_branch = 0;
+            B->_parent = NULL;
+            T->_branches[i] = NULL;
+        }
+    }
+
+    mem_free(T->_branches MEM_DEBUG_INFO);
+
+    // update the tree accordingly
+    T->_branches = NULL;
+    T->_degree = 0;
+    T->_fill = 0;
 }
 
 /**
@@ -163,53 +210,9 @@ FREE_GENERATOR_FUNC(T_generator_free_s, Stack, stack_free)
 FREE_GENERATOR_FUNC(T_generator_free_q, Queue, queue_free)
 
 /**
- * Allocate a tree generator on the heap and initialize that generator.
- */
-TreeGenerator *tree_generator_alloc(void *tree, const TreeTraversal traverse_type) {
-
-    Tree *T = (Tree *) tree;
-    TreeGenerator *G = NULL;
-
-    if(NULL == T)
-        return NULL;
-
-    // allocate the generator
-    G = generator_alloc(sizeof(TreeGenerator));
-    G->_adt = NULL;
-
-    // initialize the various types of generators
-    switch(traverse_type) {
-
-        // post-order traversal, doesn't use the generic ADT methods of the
-        // generator
-        case TREE_TRAVERSE_POSTORDER:
-            G->_adt = stack_alloc(0);
-            generator_init(G, &T_generator_next_po, &T_generator_free_s);
-            stack_push(G->_adt, T);
-            break;
-
-        // depth-first traversal
-        case TREE_TRAVERSE_PREORDER:
-            G->_adt = stack_alloc(0);
-            generator_init(G, &T_generator_next_df, &T_generator_free_s);
-            stack_push(G->_adt, T);
-            break;
-
-        // breadth-first traversal
-        case TREE_TRAVERSE_LEVELORDER:
-            G->_adt = queue_alloc(0);
-            generator_init(G, &T_generator_next_bf, &T_generator_free_q);
-            queue_push(G->_adt, T);
-            break;
-    }
-
-    return G;
-}
-
-/**
  * Generate the next tree element in a depth-first traversal of the tree.
  */
-void *T_generator_next_df(void *g) {
+static void *T_generator_next_df(void *g) {
     Stack *S = NULL;
     Tree *curr = NULL;
     void *ret = NULL;
@@ -245,7 +248,7 @@ void *T_generator_next_df(void *g) {
 /**
  * Generate the next tree element in a breadth-first traversal of the tree.
  */
-void *T_generator_next_bf(void *g) {
+static void *T_generator_next_bf(void *g) {
     Queue *Q = NULL;
     Tree *curr = NULL;
     void *ret = NULL;
@@ -280,7 +283,7 @@ void *T_generator_next_bf(void *g) {
 /**
  * Generate the nodes of a post-order traversal of a tree one at a time.
  */
-void *T_generator_next_po(void *g) {
+static void *T_generator_next_po(void *g) {
     Stack *S = NULL;
     Tree *curr = NULL,
          *top;
@@ -348,4 +351,48 @@ void *T_generator_next_po(void *g) {
     }
 
     return ret;
+}
+
+/**
+ * Allocate a tree generator on the heap and initialize that generator.
+ */
+TreeGenerator *tree_generator_alloc(void *tree, const TreeTraversal traverse_type) {
+
+    Tree *T = (Tree *) tree;
+    TreeGenerator *G = NULL;
+
+    if(NULL == T)
+        return NULL;
+
+    // allocate the generator
+    G = generator_alloc(sizeof(TreeGenerator));
+    G->_adt = NULL;
+
+    // initialize the various types of generators
+    switch(traverse_type) {
+
+        // post-order traversal, doesn't use the generic ADT methods of the
+        // generator
+        case TREE_TRAVERSE_POSTORDER:
+            G->_adt = stack_alloc(0);
+            generator_init(G, &T_generator_next_po, &T_generator_free_s);
+            stack_push(G->_adt, T);
+            break;
+
+        // depth-first traversal
+        case TREE_TRAVERSE_PREORDER:
+            G->_adt = stack_alloc(0);
+            generator_init(G, &T_generator_next_df, &T_generator_free_s);
+            stack_push(G->_adt, T);
+            break;
+
+        // breadth-first traversal
+        case TREE_TRAVERSE_LEVELORDER:
+            G->_adt = queue_alloc(0);
+            generator_init(G, &T_generator_next_bf, &T_generator_free_q);
+            queue_push(G->_adt, T);
+            break;
+    }
+
+    return G;
 }

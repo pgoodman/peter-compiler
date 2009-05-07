@@ -21,17 +21,13 @@
  * Threaded tree type.
  */
 typedef struct Tree {
-	size_t _degree,
-           _fill;
-	struct Tree **_branches;
-} Tree;
+	size_t _degree, // number of allocated branches
+           _fill, // number of branches with children
+           _parent_branch; // which branch of the parent this tree is using
 
-/*
-typedef struct GenericTree {
-    Tree;
-    void *elm;
-} GenericTree;
-*/
+	struct Tree **_branches, // array of branches
+                *_parent; // parent tree
+} Tree;
 
 typedef struct TreeGenerator {
     Generator _;
@@ -48,15 +44,13 @@ typedef enum {
 // tree operations
 void *tree_alloc(int, const size_t);
 void tree_free(void *, D1);
+void D1_tree_free(void *);
+void tree_trim(void *, Stack *);
 int tree_add_branch(void *, void *);
 size_t tree_degree(void *);
 size_t tree_fill(void *);
 
 // tree generator
 TreeGenerator *tree_generator_alloc(void *, const TreeTraversal);
-void T_generator_free(void *);
-void *T_generator_next_df(void *);
-void *T_generator_next_bf(void *);
-void *T_generator_next_po(void *);
 
 #endif /* TREE_H_ */
