@@ -6,7 +6,7 @@
  *     Version: $Id$
  */
 
-#include "mem.h"
+#include "static-mem.h"
 
 #ifdef MEM_DEBUG
 #include <stdio.h>

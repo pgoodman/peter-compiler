@@ -10,7 +10,7 @@
 #define TREE_H_
 
 #include <stdlib.h>
-#include <memory-management/mem.h>
+#include <memory-management/static-mem.h>
 #include "stack.h"
 #include "queue.h"
 #include "delegate.h"

@@ -10,7 +10,7 @@
 #define QUEUE_H_
 
 #include <stdlib.h>
-#include <memory-management/mem.h>
+#include <memory-management/static-mem.h>
 #include "list.h"
 #include "stack.h"
 #include "delegate.h"

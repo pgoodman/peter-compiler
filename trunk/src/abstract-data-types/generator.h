@@ -10,7 +10,7 @@
 #define GENERATOR_H_
 
 #include <stdlib.h>
-#include <memory-management/mem.h>
+#include <memory-management/static-mem.h>
 #include "delegate.h"
 #include "function.h"
 
