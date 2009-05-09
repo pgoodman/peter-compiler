@@ -11,11 +11,11 @@
 /**
  * Allocate a new linked list.
  */
-void *list_alloc(int struct_size) {
+void *list_alloc(size_t struct_size) {
     if(struct_size < sizeof(List))
         struct_size = sizeof(List);
 
-    void *L = mem_alloc(struct_size MEM_DEBUG_INFO);
+    void *L = mem_alloc(struct_size);
 
     if(NULL == L)
         mem_error("Unable to allocate a linked list on the heap.");
@@ -28,12 +28,12 @@ void *list_alloc(int struct_size) {
 /**
  * Free a list.
  */
-void list_free(void *L, D1 free_list_fnc) {
+void list_free(void *L, D1_t free_list_fnc) {
     List *next = NULL;
+	
+	assert(NULL != free_list_fnc);
 
-    if(NULL == free_list_fnc || (void *)free_list_fnc == (void *)&mem_free)
-        free_list_fnc = &mem_free_no_debug;
-
+	/* Free up the list. */
     while(NULL != L) {
         next = ((List *) L)->_next;
         free_list_fnc(L);
@@ -52,13 +52,15 @@ void list_set_next(void *L, void *N) {
  * Get the next element of a linked list.
  */
 List *list_get_next(void *L) {
-    return NULL != L ? ((List *) L)->_next : NULL;
+	assert(NULL != L);
+	
+    return ((List *) L)->_next;
 }
 
 /**
  * Allocate a generic list on the heap.
  */
-inline GenericList *gen_list_alloc(void) {
+GenericList *gen_list_alloc(void) {
     GenericList *L = list_alloc(sizeof(GenericList));
     L->_elm = NULL;
     return L;
@@ -67,19 +69,28 @@ inline GenericList *gen_list_alloc(void) {
 /**
  * Free the allocated space of a generic list.
  */
-void gen_list_free(GenericList *L, D1 free_elm_fnc) {
+void gen_list_free(GenericList *L, D1_t free_elm_fnc) {
     GenericList *next = NULL;
 
-    if(NULL == free_elm_fnc || (void *)free_elm_fnc == (void *)&mem_free)
-        free_elm_fnc = &mem_free_no_debug;
+    assert(NULL != free_elm_fnc);
 
+	/* Go through the chain and free the lists and their respective
+	 * elements. */
     while(NULL != L) {
         next = (GenericList *) list_get_next(L);
         free_elm_fnc(L->_elm);
         L->_elm = NULL;
-        mem_free(L MEM_DEBUG_INFO);
+        mem_free(L);
         L = next;
     }
+}
+
+/**
+ * Free only the element of a single list.
+ */
+void gen_list_free_elm(GenericList *L, D1_t free_elm_fnc) {
+	assert(NULL != L);
+    free_elm_fnc(L->_elm);
 }
 
 /**

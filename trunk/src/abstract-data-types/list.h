@@ -9,12 +9,11 @@
 #ifndef LIST_H_
 #define LIST_H_
 
-#include <stdlib.h>
-#include <memory-management/static-mem.h>
+#include <stdheader.h>
 #include "delegate.h"
 
 typedef struct List {
-    void *_next; // sketchy! :P
+    void *_next; /* sketchy! :P */
 } List;
 
 typedef struct GenericList {
@@ -22,15 +21,15 @@ typedef struct GenericList {
     void *_elm;
 } GenericList;
 
-void *list_alloc(int);
-void list_free(void *, D1);
+void *list_alloc(size_t);
+void list_free(void *, D1_t);
 
 List *list_get_next(void *);
 void list_set_next(void *, void *);
 
-inline GenericList *gen_list_alloc(void);
-void gen_list_free(GenericList *, D1);
-
+GenericList *gen_list_alloc(void);
+void gen_list_free(GenericList *, D1_t);
+void gen_list_free_elm(GenericList *, D1_t);
 void *gen_list_get_elm(GenericList *);
 void gen_list_set_elm(GenericList *, void *) ;
 

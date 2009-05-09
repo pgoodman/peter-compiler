@@ -11,18 +11,18 @@
 /**
  * Allocate a new generator on the heap.
  */
-void *generator_alloc(int size) {
+void *generator_alloc(size_t size) {
     void *G = NULL;
     Generator *g = NULL;
 
     if(size < sizeof(Generator))
         size = sizeof(Generator);
 
-    G = mem_alloc(size MEM_DEBUG_INFO);
+    G = mem_alloc(size);
     if(NULL == G)
         mem_error("Unable to allocate generator on the heap.");
 
-    // set the default values for these things
+    /* set the default values for these things */
     g = (Generator *) G;
     g->_free = NULL;
     g->_gen = NULL;
@@ -35,33 +35,30 @@ void *generator_alloc(int size) {
  * Free the memory allocated by the generator.
  */
 void generator_free(void *Cg) {
-    if(NULL == Cg)
-        return;
+	assert(NULL != Cg);
     ((Generator *) Cg)->_free(Cg);
 }
 
 /**
  * Initialize the generator.
  */
-void generator_init(void *gen, F1 gen_next, D1 gen_free) {
+void generator_init(void *gen, F1_t gen_next, D1_t gen_free_fnc) {
     Generator *G;
 
-    if(NULL == gen)
-        return;
+	assert(NULL != gen);
 
     G = (Generator *)gen;
     G->_gen = gen_next;
-    G->_free = gen_free;
+    G->_free = gen_free_fnc;
 }
 
 /**
  * Advance to the next node in the generator.
  */
-int generator_next(void *Cg) {
+char generator_next(void *Cg) {
     Generator *G = NULL;
 
-    if(NULL == Cg)
-        return 0;
+	assert(NULL != Cg);
 
     G = (Generator *) Cg;
     G->_curr = G->_gen(Cg);
@@ -73,8 +70,6 @@ int generator_next(void *Cg) {
  * Get the current node in the generator.
  */
 void *generator_current(void *Cg) {
-    if(NULL == Cg)
-        return NULL;
-
+	assert(NULL != Cg);
     return ((Generator *) Cg)->_curr;
 }

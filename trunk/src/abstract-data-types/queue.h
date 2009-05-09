@@ -9,8 +9,7 @@
 #ifndef QUEUE_H_
 #define QUEUE_H_
 
-#include <stdlib.h>
-#include <memory-management/static-mem.h>
+#include <stdheader.h>
 #include "list.h"
 #include "stack.h"
 #include "delegate.h"
@@ -21,9 +20,10 @@ typedef struct Queue {
                 *_unused;
 } Queue;
 
-void *queue_alloc(int);
-void queue_free(Queue *, D1);
-int queue_empty(const Queue * const);
+void *queue_alloc(size_t);
+void queue_free(Queue *, D1_t);
+void queue_empty(Queue *, D1_t);
+char queue_is_empty(const Queue * const);
 void *queue_pop(Queue * const);
 void *queue_peek(const Queue * const);
 void queue_push(Queue *, void *);

@@ -10,43 +10,37 @@
 
 #ifdef MEM_DEBUG
 #include <stdio.h>
-unsigned int num_loose_pointers = 0;
-#endif
+unsigned int num_allocated_pointers = 0;
 
-void *mem_alloc(const int s MEM_DEBUG_PARAMS) {
-#ifdef MEM_DEBUG
-    ++num_loose_pointers;
-    void *x = malloc(s);
-    printf("Allocated memory address 0x%X, loose pointers remaining: %d.\n", (int)x, num_loose_pointers);
+void *_mem_calloc(size_t s, size_t e, unsigned int line, char *file) {
+    ++num_allocated_pointers;
+    void *x = calloc(s, e);
+    printf("Allocated memory address 0x%X, line %d, file %s, loose pointers remaining: %d.\n", (int)x, line, file, num_allocated_pointers);
     fflush(stdout);
     return x;
-#else
-    return malloc(s);
-#endif
-
 }
 
-void mem_free(void *x MEM_DEBUG_PARAMS) {
-#ifdef MEM_DEBUG
-    --num_loose_pointers;
-    printf("Freeing memory address 0x%X, line %d, file %s, loose pointers remaining: %d.\n", (unsigned int)x, line, file, num_loose_pointers);
+void *_mem_alloc(size_t s, unsigned int line, char *file) {
+    ++num_allocated_pointers;
+    void *x = malloc(s);
+    printf("Allocated memory address 0x%X, line %d, file %s, loose pointers remaining: %d.\n", (int)x, line, file, num_allocated_pointers);
     fflush(stdout);
-#endif
+    return x;
+}
 
+void _mem_free(void *x, unsigned int line, char *file) {
+    --num_allocated_pointers;
+    printf("Freeing memory address 0x%X, line %d, file %s, loose pointers remaining: %d.\n", (int)x, line, file, num_allocated_pointers);
+    fflush(stdout);
     free(x);
 }
 
-void mem_free_no_debug(void *x) {
-#ifdef MEM_DEBUG
-    --num_loose_pointers;
-    printf("Freeing memory address 0x%X, loose pointers remaining: %d.\n", (unsigned int)x, num_loose_pointers);
+void _D1_mem_free(void *x) {
+    --num_allocated_pointers;
+    printf("Freeing memory address 0x%X, loose pointers remaining: %d.\n", (unsigned int)x, num_allocated_pointers);
     fflush(stdout);
-#endif
-
     free(x);
 }
 
-inline void mem_error(const char * const s) {
-    printf(s);
-    exit(1);
-}
+#endif
+

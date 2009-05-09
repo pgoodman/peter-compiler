@@ -9,8 +9,8 @@
 #ifndef DELEGATE_H_
 #define DELEGATE_H_
 
-typedef void (*D1)(void *);
-typedef void (*D2)(void *, void *);
+typedef void (*D1_t)(void *);
+typedef void (*D2_t)(void *, void *);
 
 void D1_ignore(void * const);
 

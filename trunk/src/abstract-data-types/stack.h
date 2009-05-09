@@ -9,8 +9,7 @@
 #ifndef STACK_H_
 #define STACK_H_
 
-#include <stdlib.h>
-#include <memory-management/static-mem.h>
+#include <stdheader.h>
 #include "list.h"
 #include "delegate.h"
 
@@ -19,9 +18,10 @@ typedef struct Stack {
                 *_unused;
 } Stack;
 
-void *stack_alloc(int);
-void stack_free(Stack *, D1);
-int stack_empty(const Stack * const);
+void *stack_alloc(size_t);
+void stack_free(Stack *, D1_t);
+void stack_empty(Stack *, D1_t);
+char stack_is_empty(const Stack * const);
 void stack_push(Stack * const, void *);
 void *stack_pop(Stack * const);
 void *stack_peek(const Stack * const);

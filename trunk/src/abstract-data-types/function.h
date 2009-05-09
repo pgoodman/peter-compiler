@@ -9,8 +9,8 @@
 #ifndef FUNCTION_H_
 #define FUNCTION_H_
 
-typedef void *(*F1)(void *);
-typedef void *(*F2)(void *, void *);
+typedef void *(*F1_t)(void *);
+typedef void *(*F2_t)(void *, void *);
 
 void *F1_identity(void *);
 
