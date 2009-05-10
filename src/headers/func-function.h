@@ -14,6 +14,6 @@
 typedef void *(*PFunction)(void * $$);
 typedef void *(*PFunction2)(void *, void * $$);
 
-void *F1_identity(void * $$);
+void *function_identity(void * $$);
 
 #endif /* FUNCTION_H_ */

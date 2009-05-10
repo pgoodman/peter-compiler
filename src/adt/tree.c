@@ -16,7 +16,7 @@
         G = (PTreeGenerator *) g; \
         A = (T *) (G->_adt); \
         G->_adt = NULL; \
-        F(A, D1_ignore $$A); \
+        F(A, delegate_do_nothing $$A); \
         mem_free(g); \
         G = NULL; \
         g = NULL; \
@@ -98,7 +98,7 @@ void tree_free(void *T, PDelegate free_tree_fnc $$) { $H
     free_tree_fnc = T_valid_free_callback(
         free_tree_fnc,
         &D1_mem_free, /* not allowed */
-        &D1_ignore $$A /* alternative to above */
+        &delegate_do_nothing $$A /* alternative to above */
     );
 
     /* traverse the tree in post order and free the tree nodes from the
@@ -129,7 +129,7 @@ void tree_free(void *T, PDelegate free_tree_fnc $$) { $H
  * A tree free with no callback.
  */
 void PDelegateree_free(void *T $$) { $H
-    tree_free(T, &D1_ignore $$A);
+    tree_free(T, &delegate_do_nothing $$A);
     return_with;
 }
 
