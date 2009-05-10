@@ -13,17 +13,17 @@
 #include "func-delegate.h"
 #include "adt-list.h"
 
-typedef struct Stack {
-    GenericList *_head,
+typedef struct PStack {
+    PGenericList *_head,
                 *_unused;
-} Stack;
+} PStack;
 
-void *stack_alloc(size_t $$);
-void stack_free(Stack *, D1_t $$);
-void stack_empty(Stack *, D1_t $$);
-char stack_is_empty(const Stack * const $$);
-void stack_push(Stack * const, void * $$);
-void *stack_pop(Stack * const $$);
-void *stack_peek(const Stack * const $$);
+void *stack_alloc(const size_t $$);
+void stack_free(PStack *, PDelegate $$);
+void stack_empty(PStack *, PDelegate $$);
+char stack_is_empty(const PStack * const $$);
+void stack_push(PStack * const, void * $$);
+void *stack_pop(PStack * const $$);
+void *stack_peek(const PStack * const $$);
 
 #endif /* STACK_H_ */

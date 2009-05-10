@@ -11,8 +11,8 @@
 
 #include "std-include.h"
 
-typedef void (*D1_t)(void * $$);
-typedef void (*D2_t)(void *, void * $$);
+typedef void (*PDelegate)(void * $$);
+typedef void (*PDelegate2)(void *, void * $$);
 
 void D1_ignore(void * const $$);
 

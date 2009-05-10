@@ -11,8 +11,8 @@
 
 #include "std-include.h"
 
-typedef void *(*F1_t)(void * $$);
-typedef void *(*F2_t)(void *, void * $$);
+typedef void *(*PFunction)(void * $$);
+typedef void *(*PFunction2)(void *, void * $$);
 
 void *F1_identity(void * $$);
 

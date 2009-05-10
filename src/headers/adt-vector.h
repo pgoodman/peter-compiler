@@ -13,27 +13,27 @@
 #include "func-delegate.h"
 #include "adt-generator.h"
 
-typedef struct Vector {
+typedef struct PVector {
     uint32_t _num_slots,
              _num_used_slots;
     void **_elms;
-} Vector;
+} PVector;
 
-typedef struct VectorGenerator {
-    Generator _;
-    Vector *vec;
+typedef struct PVectorGenerator {
+    PGenerator _;
+    PVector *vec;
     uint32_t pos;
-} VectorGenerator;
+} PVectorGenerator;
 
-void *gen_vector_alloc(size_t, const uint32_t $$);
-Vector *vector_alloc(const uint32_t $$);
-void vector_free(Vector *, D1_t $$);
-uint32_t vector_num_slots(Vector * $$);
-uint32_t vector_num_used_slots(Vector * $$);
-void vector_set(Vector *, uint32_t, void *, D1_t $$);
-void vector_unset(Vector *, uint32_t, D1_t $$);
-void *vector_get(Vector *, uint32_t $$);
+void *gen_vector_alloc(const size_t, const uint32_t $$);
+PVector *vector_alloc(const uint32_t $$);
+void vector_free(PVector *, PDelegate $$);
+uint32_t vector_num_slots(PVector * $$);
+uint32_t vector_num_used_slots(PVector * $$);
+void vector_set(PVector *, uint32_t, void *, PDelegate $$);
+void vector_unset(PVector *, uint32_t, PDelegate $$);
+void *vector_get(PVector *, uint32_t $$);
 
-VectorGenerator *vector_generator_alloc(Vector * $$);
+PVectorGenerator *vector_generator_alloc(PVector * $$);
 
 #endif /* VECTOR_H_ */

@@ -14,18 +14,18 @@
 #include "adt-list.h"
 #include "adt-stack.h"
 
-typedef struct Queue {
-    GenericList *_head,
+typedef struct PQueue {
+    PGenericList *_head,
                 *_tail,
                 *_unused;
-} Queue;
+} PQueue;
 
-void *queue_alloc(size_t $$);
-void queue_free(Queue *, D1_t $$);
-void queue_empty(Queue *, D1_t $$);
-char queue_is_empty(const Queue * const $$);
-void *queue_pop(Queue * const $$);
-void *queue_peek(const Queue * const $$);
-void queue_push(Queue *, void * $$);
+void *queue_alloc(const size_t $$);
+void queue_free(PQueue *, PDelegate $$);
+void queue_empty(PQueue *, PDelegate $$);
+char queue_is_empty(const PQueue * const $$);
+void *queue_pop(PQueue * const $$);
+void *queue_peek(const PQueue * const $$);
+void queue_push(PQueue *, void * $$);
 
 #endif /* QUEUE_H_ */

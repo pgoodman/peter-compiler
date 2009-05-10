@@ -13,15 +13,15 @@
 #include "func-delegate.h"
 #include "func-function.h"
 
-typedef struct Generator {
-    F1_t _gen;
-    D1_t _free;
+typedef struct PGenerator {
+    PFunction _gen;
+    PDelegate _free;
     void *_curr;
-} Generator;
+} PGenerator;
 
 void *generator_alloc(size_t $$);
 void generator_free(void * $$);
-void generator_init(void *, F1_t, D1_t $$);
+void generator_init(void *, PFunction, PDelegate $$);
 char generator_next(void * $$);
 void *generator_current(void * $$);
 
