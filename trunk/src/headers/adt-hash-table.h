@@ -12,25 +12,30 @@
 #include "std-include.h"
 #include "adt-list.h"
 #include "adt-vector.h"
+#include "vendor-murmur-hash.h"
 
 /* hash functions take in an object to hash as well as the
  * current size of the hash table.
  */
-typedef uint32_t (*hash_func_t)(void *, uint32_t);
+typedef uint32_t (*PHashFunction)(void * $$);
 
 /* Hash table / set implementation. */
-typedef struct HashTable {
+typedef struct PHashTable {
     void ** elms;
 
     uint32_t num_slots,
              num_used_slots;
 
-    hash_func_t hash_fnc;
-} HashTable;
+    PHashFunction hash_fnc;
+} PHashTable;
 
-void *gen_hash_table_alloc(size_t, const uint32_t $$);
-HashTable *hash_table_alloc(const uint32_t $$);
-void hash_table_set(HashTable *, void *, void *, D1_t $$);
-void hash_table_unset(HashTable *, void *, D1_t $$);
+void *gen_hash_table_alloc(const size_t, const uint32_t, PHashFunction $$);
+PHashTable *hash_table_alloc(const uint32_t, PHashFunction $$);
+void hash_table_free(PHashTable *, PDelegate $$);
+char hash_table_set(PHashTable *, void *, void *, PDelegate $$);
+void hash_table_unset(PHashTable *, void *, PDelegate $$);
+void *hash_table_get(PHashTable *, void * $$);
+
+uint32_t hash_table_hash_pointer(void * $$);
 
 #endif /* HASHSET_H_ */

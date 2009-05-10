@@ -10,31 +10,34 @@
 #include <adt-stack.h>
 #include <adt-tree.h>
 #include <adt-vector.h>
+#include <adt-hash-table.h>
 #include <func-delegate.h>
 
-typedef struct CharTree {
-    Tree _;
+typedef struct CharPTree {
+    PTree _;
     char letter;
 } CharTree;
+
+unsigned int __st_depth = 0;
 
 int main() { $MH
 
     size_t s = sizeof(CharTree);
-    TreeGenerator *gen = NULL;
-    Stack *S = NULL;
+    PTreeGenerator *gen = NULL;
+    PStack *S = NULL;
 
     printf("before alloc trees.\n");
 
-    CharTree *A = tree_alloc(s, 3 _$$),
-             *B = tree_alloc(s, 3 _$$),
-             *C = tree_alloc(s, 0 _$$),
-             *D = tree_alloc(s, 2 _$$),
-             *E = tree_alloc(s, 0 _$$),
-             *F = tree_alloc(s, 1 _$$),
-             *G = tree_alloc(s, 0 _$$),
-             *H = tree_alloc(s, 1 _$$),
-             *I = tree_alloc(s, 0 _$$),
-             *J = tree_alloc(s, 0 _$$),
+    CharTree *A = tree_alloc(s, 3 $$A),
+             *B = tree_alloc(s, 3 $$A),
+             *C = tree_alloc(s, 0 $$A),
+             *D = tree_alloc(s, 2 $$A),
+             *E = tree_alloc(s, 0 $$A),
+             *F = tree_alloc(s, 1 $$A),
+             *G = tree_alloc(s, 0 $$A),
+             *H = tree_alloc(s, 1 $$A),
+             *I = tree_alloc(s, 0 $$A),
+             *J = tree_alloc(s, 0 $$A),
              *curr = NULL;
 
     A->letter = 'A';
@@ -48,68 +51,91 @@ int main() { $MH
     I->letter = 'I';
     J->letter = 'J';
 
-    tree_add_branch(A, B _$$);
-        tree_add_branch(B, E _$$);
-        tree_add_branch(B, F _$$);
-            tree_add_branch(F, H _$$);
-        tree_add_branch(B, G _$$);
-    tree_add_branch(A, C _$$);
-    tree_add_branch(A, D _$$);
-        tree_add_branch(D, I _$$);
-        tree_add_branch(D, J _$$);
+    tree_add_branch(A, B $$A);
+        tree_add_branch(B, E $$A);
+        tree_add_branch(B, F $$A);
+            tree_add_branch(F, H $$A);
+        tree_add_branch(B, G $$A);
+    tree_add_branch(A, C $$A);
+    tree_add_branch(A, D $$A);
+        tree_add_branch(D, I $$A);
+        tree_add_branch(D, J $$A);
 
     /* try out the post-ordering generator */
     printf("Post-order:\n");
-    gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER _$$);
-    while(generator_next(gen _$$)) {
-        curr = generator_current(gen _$$);
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER $$A);
+    while(generator_next(gen $$A)) {
+        curr = generator_current(gen $$A);
         printf("\t%c\n", curr->letter);
     }
-    generator_free(gen _$$);
+    generator_free(gen $$A);
 
     /* try out the pre-ordering generator */
     printf("Pre-order (depth-first):\n");
-    gen = tree_generator_alloc(A, TREE_TRAVERSE_PREORDER _$$);
-    while(generator_next(gen _$$)) {
-        curr = generator_current(gen _$$);
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_PREORDER $$A);
+    while(generator_next(gen $$A)) {
+        curr = generator_current(gen $$A);
         printf("\t%c\n", curr->letter);
     }
-    generator_free(gen _$$);
+    generator_free(gen $$A);
 
     /* try out the level ordering generator */
     printf("Level-order (breadth-first):\n");
-    gen = tree_generator_alloc(A, TREE_TRAVERSE_LEVELORDER _$$);
-    while(generator_next(gen _$$)) {
-        curr = generator_current(gen _$$);
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_LEVELORDER $$A);
+    while(generator_next(gen $$A)) {
+        curr = generator_current(gen $$A);
         printf("\t%c\n", curr->letter);
     }
-    generator_free(gen _$$);
+    generator_free(gen $$A);
 
     /* try out tree trimming the branches of and internal node */
-    S = stack_alloc(0 _$$);
-    tree_trim(B, S _$$);
+    S = stack_alloc(sizeof(PStack) $$A);
+    tree_trim(B, S $$A);
 
     /* see what the post-order traversal looks like */
     printf("Post-order AFTER tree trimming the branches of B:\n");
-    gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER _$$);
-    while(generator_next(gen _$$)) {
-        curr = generator_current(gen _$$);
+    gen = tree_generator_alloc(A, TREE_TRAVERSE_POSTORDER $$A);
+    while(generator_next(gen $$A)) {
+        curr = generator_current(gen $$A);
         printf("\t%c\n", curr->letter);
     }
-    generator_free(gen _$$);
+    generator_free(gen $$A);
 
     printf("freeing resources..\n");
 
-    stack_free(S, &D1_tree_free _$$);
-    tree_free(A, &D1_ignore _$$);
+    stack_free(S, &PDelegateree_free $$A);
+    tree_free(A, &D1_ignore $$A);
 
     printf("resources freed, testing vector operations.\n");
 
-    Vector *V = vector_alloc(10 _$$);
-    vector_set(V, 0, tree_alloc(s, 4 _$$), D1_ignore _$$);
-    vector_free(V, D1_tree_free _$$);
+    PVector *V = vector_alloc(10 $$A);
+    vector_set(V, 0, tree_alloc(s, 4 $$A), D1_ignore $$A);
+    vector_free(V, PDelegateree_free $$A);
 
     printf("vector operations work.\n");
+    printf("trying hash table operations.\n");
+
+    PHashTable *table = hash_table_alloc(100, &hash_table_hash_pointer $$A);
+    int a = 10;
+
+    printf("adding/getting 100 hash table elements.\n");
+
+    for(; a < 100; ++a) {
+        hash_table_set(table, (void *) a, (void *) a, &D1_ignore $$A);
+        hash_table_get(table, (void *) a $$A);
+    }
+
+    printf("removing all 100 elements.\n");
+
+    for(a = 10; a < 100; ++a) {
+        hash_table_unset(table, (void *) a, &D1_ignore $$A);
+    }
+
+    printf("freeeing table.\n");
+
+    hash_table_free(table, &D1_ignore $$A);
+
+    printf("table freed.\n");
 
     return 0;
 }

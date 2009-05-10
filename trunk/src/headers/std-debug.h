@@ -9,21 +9,50 @@
 #ifndef DEBUG_H_
 #define DEBUG_H_
 
-typedef struct StackTrace {
-    struct StackTrace *next;
+typedef struct PStackTrace {
+    struct PStackTrace *next;
     char *file;
     unsigned int line;
-} StackTrace;
+} PStackTrace;
 
 #if defined(P_DEBUG) && P_DEBUG == 1
 
-#define $MH StackTrace __T,*_ST;{__T.next=NULL;__T.file=__FILE__;__T.line=__LINE__;_ST=&__T;}
-#define $H StackTrace __T;{__T.next=_ST;__T.file=__FILE__;__T.line=__LINE__;_ST=&__T;}
-#define $ StackTrace *_ST
+#if defined(P_DEBUG_PRINT_TRACE) && P_DEBUG_PRINT_TRACE == 1
+#define $push_trace printf("%*s%s:%d\n", (++__st_depth)<<1, "", __FILE__, __LINE__);
+#define $pop_trace printf("%*s%s:%d\n", (--__st_depth)<<1, "", __FILE__,__LINE__);
+#else
+#define $push_trace
+#define $pop_trace
+#endif
+
+#define $MH PStackTrace __T,*_ST;\
+    unsigned int __st_line=__LINE__;{\
+        __T.next=NULL;\
+        __T.file=__FILE__;\
+        __T.line=__st_line;\
+        _ST=&__T;}
+
+#define $H {\
+    PStackTrace __T; \
+    __T.next=_ST;\
+    __T.file=__FILE__; \
+    __T.line=__LINE__;\
+    _ST=&__T;\
+    $push_trace}
+
+#define $ PStackTrace *_ST, unsigned int __st_line
 #define $$ , $
-#define _$ _ST
-#define _$$ , _ST
-#define return_with {if(_ST!=NULL)_ST=_ST->next;}return
+#define $A _ST, __st_line
+#define $$A , $A
+
+/**
+ * !!! Be careful with this macro!!
+ */
+#define return_with {\
+    $pop_trace \
+    if(_ST!=NULL){\
+        _ST=_ST->next;\
+    }}return
 
 #define std_error(e) { \
     printf(e " in %s on line %d.", __FILE__, (unsigned int)__LINE__); \
@@ -36,8 +65,8 @@ typedef struct StackTrace {
 #define $H
 #define $ void
 #define $$
-#define _$
-#define _$$
+#define $A
+#define $$A
 #define return_with return
 #define std_error(e) exit(1);
 

@@ -15,7 +15,7 @@
  * 2. It will not produce the same results on little-endian and big-endian
  *    machines.
  */
-uint32_t murmur_hash( const void * key, int32_t len, uint32_t seed )
+uint32_t murmur_hash( const char * key, int32_t len, uint32_t seed )
 {
     /* 'm' and 'r' are mixing constants generated off line.
      * They're not really 'magic', they just happen to work well. */

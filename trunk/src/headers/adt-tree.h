@@ -19,38 +19,38 @@
 /**
  * Threaded tree type.
  */
-typedef struct Tree {
-	short _degree, /* number of allocated branches */
-          _fill, /* number of branches with children */
-          _parent_branch; /* which branch of the parent this tree is using */
+typedef struct PTree {
+	unsigned short _degree, /* number of allocated branches */
+                   _fill, /* number of branches with children */
+                   _parent_branch; /* which branch of the parent this tree is using */
 
-	struct Tree **_branches, /* array of branches */
+	struct PTree **_branches, /* array of branches */
                 *_parent; /* parent tree */
-} Tree;
+} PTree;
 
-typedef struct TreeGenerator {
-    Generator _;
+typedef struct PTreeGenerator {
+    PGenerator _;
     void *_adt;
-} TreeGenerator;
+} PTreeGenerator;
 
 /* in-order is not well-defined for N-ary trees, hence its exclusion */
 typedef enum {
     TREE_TRAVERSE_PREORDER,
     TREE_TRAVERSE_POSTORDER,
     TREE_TRAVERSE_LEVELORDER
-} TreeTraversal;
+} PTreeTraversal;
 
 /* tree operations */
-void *tree_alloc(size_t, const unsigned short $$);
-void tree_free(void *, D1_t $$);
-void D1_tree_free(void * $$);
-void tree_trim(void *, Stack * $$);
+void *tree_alloc(const size_t, const unsigned short $$);
+void tree_free(void *, PDelegate $$);
+void PDelegateree_free(void * $$);
+void tree_trim(void *, PStack * $$);
 char tree_add_branch(void *, void * $$);
 size_t tree_degree(void * $$);
 size_t tree_fill(void * $$);
 
 /* tree generator */
-TreeGenerator *tree_generator_alloc(void *, const TreeTraversal $$);
-TreeGenerator *tree_generator_init(TreeGenerator *, void *, const TreeTraversal $$);
+PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversal $$);
+PTreeGenerator *tree_generator_init(PTreeGenerator *, void *, const PTreeTraversal $$);
 
 #endif /* TREE_H_ */

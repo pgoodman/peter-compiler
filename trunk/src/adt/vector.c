@@ -13,25 +13,28 @@
  */
 static void **V_alloc_slots(uint32_t num_slots $$) { $H
     void **slots = mem_calloc(num_slots, sizeof(void *));
-    if(NULL == slots)
+
+    if(NULL == slots) {
         mem_error("Unable to allocate vector slots.");
+    }
     return_with slots;
 }
 
 /**
  * Resize the vector so that it has at least i slots in it.
  */
-static void V_resize(Vector *V, uint32_t i $$) { $H
+static void V_resize(PVector *V, uint32_t i $$) { $H
     void **slots;
     uint32_t new_size,
              j,
              max_size = 0x7FFFFFFF;
 
-    assert(NULL != V);
+    assert_not_null(V);
 
     /* don't perform any resize operation */
-    if(i < V->_num_slots)
+    if(i < V->_num_slots) {
         return_with;
+    }
 
     /* grow the capacity without allowing integer to overflow */
     for(new_size = V->_num_slots;
@@ -42,11 +45,12 @@ static void V_resize(Vector *V, uint32_t i $$) { $H
     if(new_size < i)
         new_size = 0xFFFFFFFF;
 
-    slots = V_alloc_slots(new_size _$$);
+    slots = V_alloc_slots(new_size $$A);
 
     /* add in the old slots */
-    for(j = 0; j < V->_num_slots; ++j)
+    for(j = 0; j < V->_num_slots; ++j) {
         slots[j] = V->_elms[j];
+    }
 
     /* free the old memory and update our vector */
     mem_free(V->_elms);
@@ -60,22 +64,22 @@ static void V_resize(Vector *V, uint32_t i $$) { $H
 /**
  * Allocate a generic vector on the heap.
  */
-void *gen_vector_alloc(size_t size, const uint32_t num_slots $$) { $H
+void *gen_vector_alloc(const size_t struct_size, const uint32_t num_slots $$) { $H
     void **elms,
          *vec;
-    Vector *V;
+    PVector *V;
 
-    if(size < sizeof(Vector))
-        size = sizeof(Vector);
+    assert(sizeof(PVector) <= struct_size);
 
-    vec = mem_alloc(size);
-    if(NULL == vec)
+    vec = mem_alloc(struct_size);
+    if(NULL == vec) {
         mem_error("Unable to allocate vector on the heap.");
+    }
 
-    elms = V_alloc_slots(num_slots _$$);
+    elms = V_alloc_slots(num_slots $$A);
 
     /* initialize the vector */
-    V = (Vector *) vec;
+    V = (PVector *) vec;
     V->_elms = elms;
     V->_num_slots = num_slots;
     V->_num_used_slots = 0;
@@ -86,22 +90,23 @@ void *gen_vector_alloc(size_t size, const uint32_t num_slots $$) { $H
 /**
  * Allocate a vector on the heap.
  */
-Vector *vector_alloc(const uint32_t num_slots $$) { $H
-    return_with (Vector *) gen_vector_alloc(sizeof(Vector), num_slots _$$);
+PVector *vector_alloc(const uint32_t num_slots $$) { $H
+    return_with (PVector *) gen_vector_alloc(sizeof(PVector), num_slots $$A);
 }
 
 /**
  * Free a vector and all of its elements.
  */
-void vector_free(Vector *V, D1_t free_elm_fnc $$) { $H
+void vector_free(PVector *V, PDelegate free_elm_fnc $$) { $H
     uint32_t i;
 
-    assert(NULL != V);
+    assert_not_null(V);
 
 	/* free up every non-null slot. */
     for(i = 0; i < V->_num_slots; ++i) {
-        if(NULL != V->_elms[i])
-            free_elm_fnc(V->_elms[i] _$$);
+        if(NULL != V->_elms[i]) {
+            free_elm_fnc(V->_elms[i] $$A);
+        }
     }
 
     mem_free(V->_elms);
@@ -116,16 +121,16 @@ void vector_free(Vector *V, D1_t free_elm_fnc $$) { $H
 /**
  * Return the size of a vector.
  */
-uint32_t vector_num_slots(Vector *V $$) { $H
-	assert(NULL != V);
+uint32_t vector_num_slots(PVector *V $$) { $H
+	assert_not_null(V);
     return_with V->_num_slots;
 }
 
 /**
  * Return the number of used slots in a vector.
  */
-uint32_t vector_num_used_slots(Vector *V $$) { $H
-	assert(NULL != V);
+uint32_t vector_num_used_slots(PVector *V $$) { $H
+	assert_not_null(V);
     return_with V->_num_used_slots;
 }
 
@@ -134,22 +139,24 @@ uint32_t vector_num_used_slots(Vector *V $$) { $H
  * can also be passed in so that we can choose to free what the slot pointed
  * too if we are overwriting it.
  */
-void vector_set(Vector *V, uint32_t i, void *elm, D1_t free_elm_fnc $$) { $H
+void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc $$) { $H
 
-    assert(NULL != V && NULL != elm);
+	assert_not_null(V);
+	assert_not_null(elm);
 
     char slot_increment = 1;
 
     /* are we overwriting an already used slot? */
     if(i <= V->_num_slots) {
-        vector_unset(V, i, free_elm_fnc _$$);
+        vector_unset(V, i, free_elm_fnc $$A);
 
-        if(NULL != V->_elms[i])
+        if(NULL != V->_elms[i]) {
             slot_increment = 0;
+        }
 
     /* resize the vector */
     } else {
-        V_resize(V, i _$$);
+        V_resize(V, i $$A);
     }
 
     /* update the stuff :) */
@@ -162,14 +169,14 @@ void vector_set(Vector *V, uint32_t i, void *elm, D1_t free_elm_fnc $$) { $H
 /**
  * Unset the value at a position in a vector.
  */
-void vector_unset(Vector *V, uint32_t i, D1_t free_elm_fnc $$) { $H
-	assert(NULL != V && i < V->_num_slots);
+void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc $$) { $H
+	assert_not_null(V);
+	assert(i < V->_num_slots);
 
-	if(NULL == V->_elms[i])
-        return_with;
-
-    V->_elms[i] = NULL;
-    free_elm_fnc(V->_elms[i] _$$);
+	if(NULL != (V->_elms[i])) {
+        V->_elms[i] = NULL;
+        free_elm_fnc(V->_elms[i] $$A);
+	}
 
     return_with;
 }
@@ -177,8 +184,10 @@ void vector_unset(Vector *V, uint32_t i, D1_t free_elm_fnc $$) { $H
 /**
  * Get an element from a slot in the vector.
  */
-void *vector_get(Vector *V, uint32_t i $$) { $H
-    assert(NULL != V && i < V->_num_slots);
+void *vector_get(PVector *V, uint32_t i $$) { $H
+	assert_not_null(V);
+	assert(i < V->_num_slots);
+	
     return_with V->_elms[i];
 }
 
@@ -186,23 +195,24 @@ void *vector_get(Vector *V, uint32_t i $$) { $H
  * Get the next element in a vector.
  */
 static void *V_generator_next(void *g $$) { $H
-    VectorGenerator *G = g;
-    Vector *V;
+    PVectorGenerator *G = g;
+    PVector *V;
     uint32_t i;
 
-    assert(NULL != G);
+    assert_not_null(G);
 
     V = G->vec;
     i = G->pos;
 
-	assert(NULL != V);
+	assert_not_null(V);
 
 	/* ignore empty vectors and index-out-of range. we don't assert the range
 	 * check because generator_next() expects this function to return_with null
 	 * if no next element exist and because we take advantage of the fact that
 	 * out of range doesn't exist to force null. */
-    if(V->_num_used_slots == 0 || V->_num_slots < i)
+    if(V->_num_used_slots == 0 || V->_num_slots < i) {
         return_with NULL;
+    }
 
 	/* loop through the vector until we find a non-null pointer. */
     for(i = G->pos; NULL == V->_elms[i]; ++i)
@@ -217,9 +227,9 @@ static void *V_generator_next(void *g $$) { $H
  * Free a vector generator.
  */
 static void V_generator_free(void *g $$) { $H
-	assert(NULL != g);
+	assert_not_null(g);
 
-    VectorGenerator *G = g;
+    PVectorGenerator *G = g;
     G->vec = NULL;
 
     mem_free(G);
@@ -233,16 +243,17 @@ static void V_generator_free(void *g $$) { $H
  * Allocate a new vector generator on the heap. Note: we are allowed to have
  * a generator over a NULL vector.
  */
-VectorGenerator *vector_generator_alloc(Vector *V $$) { $H
-    VectorGenerator *G = mem_alloc(sizeof(VectorGenerator));
+PVectorGenerator *vector_generator_alloc(PVector *V $$) { $H
+    PVectorGenerator *G = mem_alloc(sizeof(PVectorGenerator));
 
-    if(NULL == G)
+    if(NULL == G) {
         mem_error("Unable to allocate vector generator on the heap.");
+    }
 
     G->vec = V;
     G->pos = 0;
 
-    generator_init(G, &V_generator_next, &V_generator_free _$$);
+    generator_init(G, &V_generator_next, &V_generator_free $$A);
 
     return_with G;
 }

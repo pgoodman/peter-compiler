@@ -12,25 +12,25 @@
 #include "std-include.h"
 #include "func-delegate.h"
 
-typedef struct List {
+typedef struct PList {
     void *_next; /* sketchy! :P */
-} List;
+} PList;
 
-typedef struct GenericList {
-    List _;
+typedef struct PGenericList {
+    PList _;
     void *_elm;
-} GenericList;
+} PGenericList;
 
-void *list_alloc(size_t $$);
-void list_free(void *, D1_t $$);
+void *list_alloc(const size_t $$);
+void list_free(void *, PDelegate $$);
 
-List *list_get_next(void * $$);
+PList *list_get_next(void * $$);
 void list_set_next(void *, void * $$);
 
-GenericList *gen_list_alloc($);
-void gen_list_free(GenericList *, D1_t $$);
-void gen_list_free_elm(GenericList *, D1_t $$);
-void *gen_list_get_elm(GenericList * $$);
-void gen_list_set_elm(GenericList *, void * $$) ;
+PGenericList *gen_list_alloc($);
+void gen_list_free(PGenericList *, PDelegate $$);
+void gen_list_free_elm(PGenericList *, PDelegate $$);
+void *gen_list_get_elm(PGenericList * $$);
+void gen_list_set_elm(PGenericList *, void * $$) ;
 
 #endif /* LIST_H_ */
