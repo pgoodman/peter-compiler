@@ -68,7 +68,7 @@ void stack_free(PStack *S, PDelegate free_elm_fnc $$) { $H
 	assert_not_null(free_elm_fnc);
 	
     gen_list_free(S->_head, free_elm_fnc $$A);
-    gen_list_free(S->_unused, &D1_ignore $$A);
+    gen_list_free(S->_unused, &delegate_do_nothing $$A);
     mem_free(S);
     
 	S = NULL;

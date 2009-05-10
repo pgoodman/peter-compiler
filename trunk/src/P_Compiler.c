@@ -104,12 +104,12 @@ int main() { $MH
     printf("freeing resources..\n");
 
     stack_free(S, &PDelegateree_free $$A);
-    tree_free(A, &D1_ignore $$A);
+    tree_free(A, &delegate_do_nothing $$A);
 
     printf("resources freed, testing vector operations.\n");
 
     PVector *V = vector_alloc(10 $$A);
-    vector_set(V, 0, tree_alloc(s, 4 $$A), D1_ignore $$A);
+    vector_set(V, 0, tree_alloc(s, 4 $$A), delegate_do_nothing $$A);
     vector_free(V, PDelegateree_free $$A);
 
     printf("vector operations work.\n");
@@ -121,21 +121,33 @@ int main() { $MH
     printf("adding/getting 100 hash table elements.\n");
 
     for(; a < 100; ++a) {
-        hash_table_set(table, (void *) a, (void *) a, &D1_ignore $$A);
+        hash_table_set(table, (void *) a, (void *) a, &delegate_do_nothing $$A);
         hash_table_get(table, (void *) a $$A);
     }
 
     printf("removing all 100 elements.\n");
 
     for(a = 10; a < 100; ++a) {
-        hash_table_unset(table, (void *) a, &D1_ignore $$A);
+        hash_table_unset(table, (void *) a, &delegate_do_nothing $$A);
     }
 
     printf("freeeing table.\n");
 
-    hash_table_free(table, &D1_ignore $$A);
+    hash_table_free(table, &delegate_do_nothing $$A);
 
     printf("table freed.\n");
+
+    printf("testing string stuff.\n");
+
+    PString *X = string_alloc_char("hello world", 11 $$A),
+            *Y = string_alloc_char("hello world", 11 $$A);
+
+    printf("are these strings equal? %s\n", string_equal(X, Y $$A) ? "yes" : "no");
+
+    string_free(X $$A);
+    string_free(Y $$A);
+
+    printf("done.\n");
 
     return 0;
 }

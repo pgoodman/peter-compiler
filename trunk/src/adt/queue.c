@@ -72,7 +72,7 @@ void queue_free(PQueue *Q, PDelegate free_elm $$) { $H
     Q->_tail = NULL;
 
     gen_list_free(Q->_head, free_elm $$A);
-    gen_list_free(Q->_unused, &D1_ignore $$A);
+    gen_list_free(Q->_unused, &delegate_do_nothing $$A);
     mem_free(Q);
 
     Q = NULL;

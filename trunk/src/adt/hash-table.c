@@ -105,7 +105,7 @@ void hash_table_free(PHashTable *H, PDelegate free_elm_fnc $$) { $H
     uint32_t i;
 
     /* free the elements stored in the hash table. */
-    if(free_elm_fnc != D1_ignore) {
+    if(free_elm_fnc != delegate_do_nothing) {
         for(i = 0; i < H->num_slots; ++i) {
             if(NULL != H->elms[i]) {
                 free_elm_fnc(H->elms[i] $$A);
