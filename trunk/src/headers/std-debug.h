@@ -40,8 +40,15 @@ typedef struct PStackTrace {
     _ST=&__T;\
     $push_trace}
 
+/* argument for function definition */
 #define $ PStackTrace *_ST, unsigned int __st_line
 #define $$ , $
+
+/* arguments for macro definitions */
+#define $M _ST,__st_line
+#define $$M , $M
+
+/* parameter passing */
 #define $A _ST, __st_line
 #define $$A , $A
 

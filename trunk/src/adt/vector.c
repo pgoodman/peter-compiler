@@ -24,7 +24,6 @@ static void **V_alloc_slots(uint32_t num_slots $$) { $H
  * Resize the vector so that it has at least i slots in it.
  */
 static void V_resize(PVector *V, uint32_t i $$) { $H
-    void **slots;
     uint32_t new_size,
              j,
              max_size = 0x7FFFFFFF;
@@ -45,17 +44,21 @@ static void V_resize(PVector *V, uint32_t i $$) { $H
     if(new_size < i)
         new_size = 0xFFFFFFFF;
 
-    slots = V_alloc_slots(new_size $$A);
+    V->_elms = mem_realloc(V->_elms, (new_size * sizeof(void *)));
 
-    /* add in the old slots */
-    for(j = 0; j < V->_num_slots; ++j) {
-        slots[j] = V->_elms[j];
+    if(NULL == V->_elms) {
+        mem_error("Unable to resize the vector.");
     }
 
-    /* free the old memory and update our vector */
-    mem_free(V->_elms);
+    /* add in the old slots */
+    /*for(j = 0; j < V->_num_slots; ++j) {
+        slots[j] = V->_elms[j];
+    }*/
 
-    V->_elms = slots;
+    /* free the old memory and update our vector */
+    /*mem_free(V->_elms);
+
+    V->_elms = slots;*/
     V->_num_slots = new_size;
 
     return_with;
@@ -187,7 +190,7 @@ void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc $$) { $H
 void *vector_get(PVector *V, uint32_t i $$) { $H
 	assert_not_null(V);
 	assert(i < V->_num_slots);
-	
+
     return_with V->_elms[i];
 }
 

@@ -47,6 +47,32 @@ PString *string_alloc_char(const char * const str, const uint32_t len $$) { $H
 }
 
 /**
+ * Return the string length.
+ */
+uint32_t string_length(const PString * const S $$) { $H
+    assert_not_null(S);
+    return_with S->len;
+}
+
+/**
+ * This will convert the PString to ascii. It assumes a stack-allocated character
+ * array to put the ascii characters into that is of proper + 1 for terminating
+ * character.
+ */
+void string_convert_to_ascii(const PString * const S, char *ascii_version $$) { $H
+    assert_not_null(S);
+    assert_not_null(ascii_version);
+
+    uint32_t i;
+
+    for(i = 0; i < S->len; ++i)
+        ascii_version[i] = S->str[i];
+
+    ascii_version[S->len] = 0;
+    return_with;
+}
+
+/**
  * Increase the refcount on a string. TODO: overflow check?
  */
 void string_use(PString *S $$) { $H
@@ -71,14 +97,14 @@ void string_free(PString *S $$) { $H
 
 void delegate_string_free(void *str $$) { $H
     assert_not_null(str);
-    string_free((PString *) str);
+    string_free(((PString *) str) $$A);
     return_with;
 }
 
 /**
  * Check if two strings contain the same characters.
  */
-char string_equal(PString *A, PString *B $$) { $H
+char string_equal(const PString * const A, const PString * const B $$) { $H
     assert_not_null(A);
     assert_not_null(B);
 

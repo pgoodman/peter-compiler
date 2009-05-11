@@ -11,7 +11,7 @@
 
 #if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
 
-#include <adt-hash-table.h>
+#include <adt-dict.h>
 #include <func-delegate.h>
 
 unsigned int num_allocated_pointers = 0;
