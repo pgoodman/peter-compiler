@@ -20,22 +20,22 @@
 typedef uint32_t (*PHashFunction)(void * $$);
 
 /* Hash table / set implementation. */
-typedef struct PHashTable {
+typedef struct PDictionary {
     void ** elms;
 
     uint32_t num_slots,
              num_used_slots;
 
     PHashFunction hash_fnc;
-} PHashTable;
+} PDictionary;
 
-void *gen_hash_table_alloc(const size_t, const uint32_t, PHashFunction $$);
-PHashTable *hash_table_alloc(const uint32_t, PHashFunction $$);
-void hash_table_free(PHashTable *, PDelegate $$);
-char hash_table_set(PHashTable *, void *, void *, PDelegate $$);
-void hash_table_unset(PHashTable *, void *, PDelegate $$);
-void *hash_table_get(PHashTable *, void * $$);
+void *gen_dict_alloc(const size_t, const uint32_t, PHashFunction $$);
+PDictionary *dict_alloc(const uint32_t, PHashFunction $$);
+void dict_free(PDictionary *, PDelegate $$);
+char dict_set(PDictionary *, void *, void *, PDelegate $$);
+void dict_unset(PDictionary *, void *, PDelegate $$);
+void *dict_get(PDictionary *, void * $$);
 
-uint32_t hash_table_hash_pointer(void * $$);
+uint32_t dict_hash_pointer(void * $$);
 
 #endif /* HASHSET_H_ */

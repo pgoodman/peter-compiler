@@ -10,7 +10,7 @@
 #include <adt-stack.h>
 #include <adt-tree.h>
 #include <adt-vector.h>
-#include <adt-hash-table.h>
+#include <adt-dict.h>
 #include <func-delegate.h>
 
 typedef struct CharPTree {
@@ -115,25 +115,25 @@ int main() { $MH
     printf("vector operations work.\n");
     printf("trying hash table operations.\n");
 
-    PHashTable *table = hash_table_alloc(100, &hash_table_hash_pointer $$A);
+    PDictionary *table = dict_alloc(100, &dict_hash_pointer $$A);
     int a = 10;
 
     printf("adding/getting 100 hash table elements.\n");
 
     for(; a < 100; ++a) {
-        hash_table_set(table, (void *) a, (void *) a, &delegate_do_nothing $$A);
-        hash_table_get(table, (void *) a $$A);
+        dict_set(table, (void *) a, (void *) a, &delegate_do_nothing $$A);
+        dict_get(table, (void *) a $$A);
     }
 
     printf("removing all 100 elements.\n");
 
     for(a = 10; a < 100; ++a) {
-        hash_table_unset(table, (void *) a, &delegate_do_nothing $$A);
+        dict_unset(table, (void *) a, &delegate_do_nothing $$A);
     }
 
     printf("freeeing table.\n");
 
-    hash_table_free(table, &delegate_do_nothing $$A);
+    dict_free(table, &delegate_do_nothing $$A);
 
     printf("table freed.\n");
 

@@ -10,7 +10,7 @@
 #define TYPE_H_
 
 #include "std-include.h"
-#include "adt-hash-table.h"
+#include "adt-dict.h"
 
 /* types for types */
 #if 0
