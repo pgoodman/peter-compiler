@@ -18,7 +18,7 @@ typedef struct PFile {
     FILE _;
 } PFile;
 
-PFile *file_alloc(const char * const, const char * const $$);
-void file_free(PFile * $$);
+PFile *file_alloc($$ const char * const, const char * const );
+void file_free($$ PFile * );
 
 #endif /* HEADEER_H_ */

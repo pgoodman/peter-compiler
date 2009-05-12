@@ -18,12 +18,12 @@ typedef struct PStack {
                 *_unused;
 } PStack;
 
-void *stack_alloc(const size_t $$);
-void stack_free(PStack *, PDelegate $$);
-void stack_empty(PStack *, PDelegate $$);
-char stack_is_empty(const PStack * const $$);
-void stack_push(PStack * const, void * $$);
-void *stack_pop(PStack * const $$);
-void *stack_peek(const PStack * const $$);
+void *stack_alloc($$ const size_t );
+void stack_free($$ PStack *, PDelegate );
+void stack_empty($$ PStack *, PDelegate );
+char stack_is_empty($$ const PStack * const );
+void stack_push($$ PStack * const, void * );
+void *stack_pop($$ PStack * const );
+void *stack_peek($$ const PStack * const );
 
 #endif /* STACK_H_ */

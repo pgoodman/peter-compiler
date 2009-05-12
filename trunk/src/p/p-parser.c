@@ -6,8 +6,13 @@
  *     Version: $Id$
  */
 
-#include <stdarg.h>
 #include <p-parser.h>
+
+#define P_SIZE_OF_THUNK (0 \
+         + sizeof(PParserFunc *) \
+         + sizeof(PToken *) \
+         + sizeof(PParserTokenList *) \
+        ) / sizeof(char)
 
 /* type describing a type used to store a lazy result for a function */
 typedef struct PParserThunk {
@@ -21,13 +26,7 @@ typedef struct PParserThunk {
  */
 typedef union {
     P_Thunk thunk;
-    char thunk_as_chars[ \
-        (0
-         + sizeof(PParserFunc *) \
-         + sizeof(PToken *) \
-         + sizeof(PParserTokenList *) \
-        ) / sizeof(char) \
-    ];
+    char thunk_as_chars[P_SIZE_OF_THUNK];
 } P_ThunkPointer;
 
 /* call stack type. */
@@ -38,10 +37,10 @@ typedef struct P_CallStack {
 } P_CallStack;
 
 /* Hash function that converts a thunk to a char array */
-static uint32_t P_hash_thunk_fnc(void *pointer $$) { $H
+static uint32_t P_hash_thunk_fnc($$ void *pointer ) { $H
     P_ThunkPointer switcher;
-    switcher.thunk = pointer;
-    return_with murmur_hash(switcher.thunk_as_chars, 4, 73);
+    switcher.thunk = *((P_Thunk *) pointer);
+    return_with murmur_hash(switcher.thunk_as_chars, P_SIZE_OF_THUNK, 10);
 }
 
 /**
@@ -54,7 +53,7 @@ PParser *parser_alloc($) { $H
         mem_error("Unable to allocate a new parser on the heap.");
     }
 
-    P->rewrite_rules = gen_list_alloc();
+    P->rewrite_rules = gen_list_alloc($A);
 
     return_with P;
 }
@@ -68,6 +67,6 @@ PParser *parser_alloc($) { $H
  * !!! This function cannot use the stack trace macro functionality as it makes
  *     use of variadic arguments.
  */
-void parser_add_production(PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule rules[][] $$A) { $H
+void parser_add_production($$ PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule **rules, ...) { $H
 
 }

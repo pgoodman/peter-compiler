@@ -20,12 +20,12 @@ typedef struct PQueue {
                 *_unused;
 } PQueue;
 
-void *queue_alloc(const size_t $$);
-void queue_free(PQueue *, PDelegate $$);
-void queue_empty(PQueue *, PDelegate $$);
-char queue_is_empty(const PQueue * const $$);
-void *queue_pop(PQueue * const $$);
-void *queue_peek(const PQueue * const $$);
-void queue_push(PQueue *, void * $$);
+void *queue_alloc($$ const size_t );
+void queue_free($$ PQueue *, PDelegate );
+void queue_empty($$ PQueue *, PDelegate );
+char queue_is_empty($$ const PQueue * const );
+void *queue_pop($$ PQueue * const );
+void *queue_peek($$ const PQueue * const );
+void queue_push($$ PQueue *, void * );
 
 #endif /* QUEUE_H_ */

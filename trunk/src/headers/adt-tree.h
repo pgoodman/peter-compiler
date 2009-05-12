@@ -41,16 +41,16 @@ typedef enum {
 } PTreeTraversal;
 
 /* tree operations */
-void *tree_alloc(const size_t, const unsigned short $$);
-void tree_free(void *, PDelegate $$);
-void PDelegateree_free(void * $$);
-void tree_trim(void *, PStack * $$);
-char tree_add_branch(void *, void * $$);
-size_t tree_degree(void * $$);
-size_t tree_fill(void * $$);
+void *tree_alloc($$ const size_t, const unsigned short );
+void tree_free($$ void *, PDelegate );
+void PDelegateree_free($$ void * );
+void tree_trim($$ void *, PStack * );
+char tree_add_branch($$ void *, void * );
+size_t tree_degree($$ void * );
+size_t tree_fill($$ void * );
 
 /* tree generator */
-PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversal $$);
-PTreeGenerator *tree_generator_init(PTreeGenerator *, void *, const PTreeTraversal $$);
+PTreeGenerator *tree_generator_alloc($$ void *, const PTreeTraversal );
+PTreeGenerator *tree_generator_init($$ PTreeGenerator *, void *, const PTreeTraversal );
 
 #endif /* TREE_H_ */
