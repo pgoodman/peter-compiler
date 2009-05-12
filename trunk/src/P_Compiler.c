@@ -25,6 +25,10 @@ int main() { $MH
 
     PParser *P = parser_alloc($A);
 
+    parser_add_production(P, parser_production_rules(
+
+    ) $$A);
+
 #if 0
     size_t s = sizeof(CharTree);
     PTreeGenerator *gen = NULL;
