@@ -12,6 +12,7 @@
 #include "std-include.h"
 #include "adt-list.h"
 #include "adt-vector.h"
+#include "func-delegate.h"
 #include "vendor-murmur-hash.h"
 
 /* hash functions take in an object to hash as well as the
