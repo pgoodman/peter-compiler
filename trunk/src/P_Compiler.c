@@ -12,6 +12,7 @@
 #include <adt-vector.h>
 #include <adt-dict.h>
 #include <func-delegate.h>
+#include <p-parser.h>
 
 typedef struct CharPTree {
     PTree _;
@@ -22,6 +23,9 @@ unsigned int __st_depth = 0;
 
 int main() { $MH
 
+    PParser *P = parser_alloc($A);
+
+#if 0
     size_t s = sizeof(CharTree);
     PTreeGenerator *gen = NULL;
     PStack *S = NULL;
@@ -148,6 +152,6 @@ int main() { $MH
     string_free(Y $$A);
 
     printf("done.\n");
-
+#endif
     return 0;
 }

@@ -10,6 +10,11 @@
 
 #define HASH_TABLE_LOAD_FACTOR 0.7
 
+typedef union {
+    void *ptr;
+    char chars[sizeof(void *) / sizeof(char)];
+} pointer_to_char_t;
+
 /**
  * Allocate the slots used by a vector.
  */
@@ -62,16 +67,18 @@ static void H_grow(PDictionary *H $$) { $H
 }
 
 /**
- * Allocate a generic hash table on the heap.
+ * Allocate a generic hash table on the heap. A generic hash table allows the
+ * programmer to augment the base hash table data structure.
  */
-void *gen_dict_alloc(const size_t struct_size,
-                           const uint32_t num_slots,
-                           PHashFunction fnc $$) { $H
+void *gen_dict_alloc(const size_t dict_struct_size,
+                     const uint32_t num_slots,
+                     PHashFunction *hash_fnc $$) { $H
     PDictionary *H;
 
-    assert(sizeof(PDictionary) <= struct_size);
+    assert(sizeof(PDictionary) <= dict_struct_size);
+    assert_not_null(hash_fnc);
 
-    void *table = mem_alloc(struct_size);
+    void *table = mem_alloc(dict_struct_size);
     if(NULL == table) {
         mem_error("Unable to allocate vector on the heap.");
     }
@@ -83,7 +90,7 @@ void *gen_dict_alloc(const size_t struct_size,
     H->elms = elms;
     H->num_slots = num_slots;
     H->num_used_slots = 0;
-    H->hash_fnc = fnc;
+    H->hash_fnc = hash_fnc;
 
     return_with table;
 }
@@ -191,11 +198,7 @@ void *dict_get(PDictionary *H, void *key $$) { $H
  * Turn a pointer into an array of char and then hash it.
  */
 uint32_t dict_hash_pointer(void *pointer $$) { $H
-    union {
-        uint32_t i;
-        char c[4];
-    } switcher;
-    switcher.i = (uint32_t) pointer;
-
-    return_with murmur_hash(switcher.c, 4, 73);
+    pointer_to_char_t switcher;
+    switcher.ptr = pointer;
+    return_with murmur_hash(switcher.chars, 4, 73);
 }

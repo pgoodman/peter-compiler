@@ -25,7 +25,6 @@ static void **V_alloc_slots(uint32_t num_slots $$) { $H
  */
 static void V_resize(PVector *V, uint32_t i $$) { $H
     uint32_t new_size,
-             j,
              max_size = 0x7FFFFFFF;
 
     assert_not_null(V);
@@ -50,15 +49,6 @@ static void V_resize(PVector *V, uint32_t i $$) { $H
         mem_error("Unable to resize the vector.");
     }
 
-    /* add in the old slots */
-    /*for(j = 0; j < V->_num_slots; ++j) {
-        slots[j] = V->_elms[j];
-    }*/
-
-    /* free the old memory and update our vector */
-    /*mem_free(V->_elms);
-
-    V->_elms = slots;*/
     V->_num_slots = new_size;
 
     return_with;
