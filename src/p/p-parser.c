@@ -6,6 +6,7 @@
  *     Version: $Id$
  */
 
+#include <stdarg.h>
 #include <p-parser.h>
 
 /* type describing a type used to store a lazy result for a function */
@@ -34,7 +35,7 @@ typedef struct P_CallStack {
     PList _;
     short local_extent;
     PParserRewriteRule *rewrite_rule;
-};
+} P_CallStack;
 
 /* Hash function that converts a thunk to a char array */
 static uint32_t P_hash_thunk_fnc(void *pointer $$) { $H
@@ -43,8 +44,30 @@ static uint32_t P_hash_thunk_fnc(void *pointer $$) { $H
     return_with murmur_hash(switcher.thunk_as_chars, 4, 73);
 }
 
-PParser *parser_alloc($) {
-    PParser *P;
+/**
+ * Allocate a new parser on the heap.
+ */
+PParser *parser_alloc($) { $H
+    PParser *P = mem_alloc(sizeof(PParser));
+
+    if(NULL == P) {
+        mem_error("Unable to allocate a new parser on the heap.");
+    }
+
+    P->rewrite_rules = gen_list_alloc();
 
     return_with P;
+}
+
+/**
+ * Add a production to the parser's grammar. The production's name is the name
+ * (or rather the function pointer) of the parser function that handles semantic
+ * actions on the parse tree. This function pointer is used to reference this
+ * production in the rules.
+ *
+ * !!! This function cannot use the stack trace macro functionality as it makes
+ *     use of variadic arguments.
+ */
+void parser_add_production(PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule rules[][] $$A) { $H
+
 }

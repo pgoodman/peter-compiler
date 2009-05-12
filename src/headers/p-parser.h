@@ -58,4 +58,7 @@ typedef struct PParserRewriteToken {
     PToken *tok;
 } PParserRewriteToken;
 
+PParser *parser_alloc($);
+void parser_add_production(PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule rules[][] $$A);
+
 #endif /* PPARSER_H_ */
