@@ -8,7 +8,7 @@
 
 #include <adt-dict.h>
 
-#define HASH_TABLE_LOAD_FACTOR 0.7
+#define P_HASH_TABLE_LOAD_FACTOR 0.7
 
 typedef union {
     void *ptr;
@@ -72,15 +72,20 @@ static void H_grow($$ PDictionary *H ) { $H
  */
 void *gen_dict_alloc($$ const size_t dict_struct_size,
                      const uint32_t num_slots, PHashFunction hash_fnc) { $H
-    PDictionary *H;
-
     assert(sizeof(PDictionary) <= dict_struct_size);
     assert_not_null(hash_fnc);
+
+    PDictionary *H;
+    uint32_t actual_slots;
 
     void *table = mem_alloc(dict_struct_size);
     if(NULL == table) {
         mem_error("Unable to allocate vector on the heap.");
     }
+
+    /* find out the number of slots such that we can fill num_slots in O(1)
+     * time without needing to resize the hash table. */
+    actual_slots = (uint32_t) ((num_slots / P_HASH_TABLE_LOAD_FACTOR) + 1);
 
     void **elms = H_alloc_slots($$A num_slots );
 
@@ -144,7 +149,7 @@ char dict_set($$ PDictionary *H, void *key, void *val,
 	assert_not_null(free_on_overwrite_fnc);
 
 	/* we've gone past our load factor, grow the hash table. */
-    if(HASH_TABLE_LOAD_FACTOR < (H->num_used_slots / H->num_slots)) {
+    if(P_HASH_TABLE_LOAD_FACTOR < (H->num_used_slots / H->num_slots)) {
         H_grow($$A H );
     }
 

@@ -12,12 +12,27 @@
 #include <stdarg.h>
 #include "adt-tree.h"
 #include "adt-list.h"
+#include "adt-dict.h"
+#include "func-delegate.h"
 #include "p-lexer.h"
+
+#define $epsilon parser_rewrite_epsilon($A)
+#define $prod(func) parser_rewrite_function($$A (func))
+#define $tok(tok) parser_rewrite_token($$A (tok))
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PParser {
-    PGenericList *rewrite_rules;
+    /*PGenericList *parsing_grammar;*/
+    PDictionary *thunk_table;
 
+    char is_closed; /* on for when we no longer allow rules to be added. */
+
+    PDictionary *productions; /* keep track of all of the productions for the
+                               * parsing grammar. */
+
+    PDictionary *rules; /* keep track of rules used in productions, this does
+                         * not keep track of epsilon rules as that is statically
+                         * defined anyway. */
 } PParser;
 
 /* a full list of all of the tokens in a file. */
@@ -35,33 +50,29 @@ typedef struct PParseTree {
  * a particular node in a parse tree. These functions are called *after* the
  * entire and correct parse tree is generated.
  */
-typedef PParseTree *(*PParserFunc)(PParseTree *);
+typedef PParseTree *(*PParserFunc)($$ PParseTree *);
 
 /* types relating to how the internal call stack is re-written using these
  * rules.
  */
-typedef enum {
-    P_PARSER_REWRITE_FUNCTION,
-    P_PARSER_REWRITE_TOKEN
-} PParserRewriteRuleType;
-
 typedef struct PParserRewriteRule {
-    PParserRewriteRuleType type;
+    PParserFunc func;
+    PLexeme lexeme;
 } PParserRewriteRule;
 
-typedef struct PParserRewriteFunc {
-    PParserRewriteRule _;
-    PParserFunc *func;
-} PParserRewriteFunc;
-
-typedef struct PParserRewriteToken {
-    PParserRewriteRule _;
-    PToken *tok;
-} PParserRewriteToken;
+/* A sequence of parser rules. sequence is used as opposed to list to emphasize
+ * that order is important.
+ */
+typedef struct PParserRuleSequence {
+    PList _;
+    PParserRewriteRule *rule;
+} PParserRuleSequence;
 
 PParser *parser_alloc($);
-void parser_add_production($$ PParser *P, short num_rules,
-                           PParserFunc semantic_handler_fnc,
-                           PParserRewriteRule *arg1, ...);
+void parser_add_production($$ PParser *, PParserFunc, short, PParserRuleSequence *, ...);
+PParserRuleSequence *parser_rule_sequence($$ short, PParserRewriteRule *, ...);
+PParserRewriteRule *parser_rewrite_function($$ PParser *, PParserFunc);
+PParserRewriteRule *parser_rewrite_token($$ PParser *, PLexeme);
+PParserRewriteRule *parser_rewrite_epsilon($$ PParser *);
 
 #endif /* PPARSER_H_ */
