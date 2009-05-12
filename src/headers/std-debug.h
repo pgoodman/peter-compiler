@@ -42,7 +42,7 @@ typedef struct PStackTrace {
 
 /* argument for function definition */
 #define $ PStackTrace *_ST, unsigned int __st_line
-#define $$ , $
+#define $$ $,
 
 /* arguments for macro definitions */
 #define $M _ST,__st_line
@@ -50,7 +50,7 @@ typedef struct PStackTrace {
 
 /* parameter passing */
 #define $A _ST, __st_line
-#define $$A , $A
+#define $$A $A,
 
 /**
  * !!! Be careful with this macro!!

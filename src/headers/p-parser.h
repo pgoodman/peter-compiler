@@ -9,6 +9,7 @@
 #ifndef PPARSER_H_
 #define PPARSER_H_
 
+#include <stdarg.h>
 #include "adt-tree.h"
 #include "adt-list.h"
 #include "p-lexer.h"
@@ -59,6 +60,6 @@ typedef struct PParserRewriteToken {
 } PParserRewriteToken;
 
 PParser *parser_alloc($);
-void parser_add_production(PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule rules[][] $$A);
+void parser_add_production($$ PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule **rules, ...);
 
 #endif /* PPARSER_H_ */
