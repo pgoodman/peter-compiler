@@ -14,6 +14,10 @@
          + sizeof(PParserTokenList *) \
         ) / sizeof(char)
 
+#define P_SIZE_OF_REWRITE_RULE ((sizeof(PParserRewriteFunc) > sizeof(PParserRewriteToken)) \
+        ? sizeof(PParserRewriteFunc) \
+        : sizeof(PParserRewriteToken))
+
 /* type describing a type used to store a lazy result for a function */
 typedef struct PParserThunk {
     PParserFunc *func;
@@ -64,9 +68,40 @@ PParser *parser_alloc($) { $H
  * actions on the parse tree. This function pointer is used to reference this
  * production in the rules.
  *
- * !!! This function cannot use the stack trace macro functionality as it makes
- *     use of variadic arguments.
+ * !!! Rules *must* be null-terminated!
  */
-void parser_add_production($$ PParser *P, PParserFunc semantic_handler_fnc, PParserRewriteRule **rules, ...) { $H
+void parser_add_production($$ PParser *P, short num_rules,
+                           PParserFunc semantic_handler_fnc,
+                           PParserRewriteRule *arg1, ...) {
+    va_list rules;
 
+    $H
+    assert_not_null(P);
+    assert_not_null(semantic_handler_fnc);
+
+    PParserRewriteRule *curr_rule,
+                       *temp,
+                       *final_rules;
+
+    /* allocate heap space for this array of rules */
+    final_rules = mem_alloc(P_SIZE_OF_REWRITE_RULE);
+
+    if(NULL == final_rules) {
+        mem_error("Unable to allocate space for the production rules on the heap.");
+    }
+
+    va_start(rules, arg1);
+
+    for(curr_rule = arg1; \
+         num_rules > 0; \
+         --num_rules, curr_rule = va_arg(rules, PParserRewriteRule *)) {
+
+        /* figure out how many rules there are in this set */
+        for(temp = curr_rule; NULL != temp; ++temp)
+            ;
+
+        /* allocate some rules! */
+
+    }
+    va_end(rules);
 }
