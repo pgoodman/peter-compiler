@@ -14,6 +14,8 @@
          + sizeof(PParserTokenList *) \
         ) / sizeof(char)
 
+#define P_MAX_RECURSION_DEPTH 100
+
 /*
 #define P_SIZE_OF_REWRITE_RULE ((sizeof(PParserRewriteFunc) > sizeof(PParserRewriteToken)) \
         ? sizeof(PParserRewriteFunc) \
@@ -32,12 +34,6 @@ typedef struct PParserThunk {
     PParserTokenList *cdr;
 } P_Thunk;
 
-/* An ordered sequence of rule sequences for a production. */
-typedef struct P_RuleSequenceSequence {
-    PList _;
-    PParserRuleSequence *seq;
-} P_RuleSequenceSequence;
-
 
 /* call stack type. */
 typedef struct P_CallStack {
@@ -45,6 +41,13 @@ typedef struct P_CallStack {
     short local_extent;
     PParserRewriteRule *rewrite_rule;
 } P_CallStack;
+
+/* production info. */
+typedef struct P_Production {
+    PGenericList *alternatives;
+    PParserFunc production;
+    short num_alternatives;
+} P_Production;
 
 /* Hash function that converts a thunk to a char array */
 static uint32_t P_hash_thunk_fnc($$ void *pointer ) { $H
@@ -67,13 +70,16 @@ static uint32_t P_hash_rewrite_rule_fnc($$ void *rewrite_fnc) { $H
 }
 
 /* Hash function that converts a parser function pointer into a char array. */
-static uint32_t P_hash_production_fnc($$ void *production) {
+static uint32_t P_key_hash_production_fnc($$ void *production) {
     union {
         PParserFunc prod;
         char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
     } switcher;
     switcher.prod = production;
     return_with murmur_hash(switcher.prod_as_chars, P_SIZE_OF_REWRITE_RULE, 73);
+}
+static uint32_t P_val_hash_production_fnc($$ void *production) {
+    return_with P_key_hash_production_fnc($$A ((P_Production *) production)->production);
 }
 
 /**
@@ -86,8 +92,8 @@ PParser *parser_alloc($) { $H
         mem_error("Unable to allocate a new parser on the heap.");
     }
 
-    P->productions = dict_alloc($$A 10, &P_hash_production_fnc);
-    P->rules = dict_alloc($$A 15, &P_hash_rewrite_rule_fnc);
+    P->productions = dict_alloc($$A 10, &P_key_hash_production_fnc, &P_val_hash_production_fnc);
+    P->rules = dict_alloc($$A 15, &P_hash_rewrite_rule_fnc, &P_hash_rewrite_rule_fnc);
 
     return_with P;
 }
@@ -103,7 +109,7 @@ PParser *parser_alloc($) { $H
 void parser_add_production($$ PParser *P,
                            PParserFunc semantic_handler_fnc, /* the production name */
                            short num_seqs, /* number of rewrite sequences */
-                           PParserRuleSequence *arg1, ...) { /* rewrite rules */
+                           PGenericList *arg1, ...) { /* rewrite rules */
     va_list seqs;
 
     $H
@@ -112,20 +118,28 @@ void parser_add_production($$ PParser *P,
     assert(0 < num_seqs);
     assert_not_null(arg1);
     assert(0 == P->is_closed);
-    assert(NULL == dict_get($$A P->productions, semantic_handler_fnc));
+    assert(!dict_is_set($$A P->productions, semantic_handler_fnc));
 
-    PParserRuleSequence *curr_seq;
-    P_RuleSequenceSequence *S = NULL,
-                           *curr = NULL,
-                           *tail = NULL;
+    PGenericList *curr_seq;
+    PGenericList *S = NULL,
+                 *curr = NULL,
+                 *tail = NULL;
+
+    P_Production *prod = mem_alloc(sizeof(P_Production));
+    if(NULL == prod) {
+        mem_error("Unable to allocate new production on the heap.");
+    }
+
+    prod->num_alternatives = num_seqs;
+    prod->production = semantic_handler_fnc;
 
     va_start(seqs, arg1);
     for(curr_seq = arg1; \
         num_seqs > 0; \
-        --num_seqs, curr_seq = va_arg(seqs, PParserRuleSequence *)) {
+        --num_seqs, curr_seq = va_arg(seqs, PGenericList *)) {
 
-        curr = (P_RuleSequenceSequence *) list_alloc($$A sizeof(P_RuleSequenceSequence));
-        curr->seq = curr_seq;
+        curr = gen_list_alloc($A);
+        gen_list_set_elm($$A curr, curr_seq);
 
         /* add this into the sequence */
         if(NULL != tail) {
@@ -139,8 +153,10 @@ void parser_add_production($$ PParser *P,
         tail = curr;
     }
 
+    prod->alternatives = S;
+
     /* add in this production */
-    dict_set($$A P->productions, semantic_handler_fnc, S, &delegate_do_nothing);
+    dict_set($$A P->productions, semantic_handler_fnc, prod, &delegate_do_nothing);
 
     return_with;
 }
@@ -148,7 +164,7 @@ void parser_add_production($$ PParser *P,
 /**
  * Create one of the rule sequences needed for a production.
  */
-PParserRuleSequence *parser_rule_sequence($$ short num_rules, PParserRewriteRule *arg1, ...) { $H
+PGenericList *parser_rule_sequence($$ short num_rules, PParserRewriteRule *arg1, ...) { $H
     va_list rules;
 
     $H;
@@ -156,17 +172,17 @@ PParserRuleSequence *parser_rule_sequence($$ short num_rules, PParserRewriteRule
     assert_not_null(arg1);
 
     PParserRewriteRule *curr_rule;
-    PParserRuleSequence *S = NULL,
-                        *curr = NULL,
-                        *tail = NULL;
+    PGenericList *S = NULL,
+                 *curr = NULL,
+                 *tail = NULL;
 
     va_start(rules, arg1);
     for(curr_rule = arg1; \
         num_rules > 0; \
         --num_rules, curr_rule = va_arg(rules, PParserRewriteRule *)) {
 
-        curr = (PParserRuleSequence *) list_alloc($$A sizeof(PParserRuleSequence));
-        curr->rule = curr_rule;
+        curr = gen_list_alloc($A);
+        gen_list_set_elm(curr, curr_rule);
 
         /* add this into the sequence */
         if(NULL != tail) {
@@ -193,19 +209,17 @@ static PParserRewriteRule *P_parser_rewrite_tule($$ PParser *P, PLexeme tok, PPa
     assert_not_null(P);
 
     /* make a thunk out of it to search for in the hash table */
-    PParserRewriteRule rewrite_rule,
-                       *R;
+    PParserRewriteRule rewrite_rule;
 
     rewrite_rule.func = func;
     rewrite_rule.lexeme = tok;
 
-    R = dict_get($$A P->rules, &rewrite_rule);
-    if(NULL != R) {
-        return_with R;
+    if(dict_is_set($$A P->rules, &rewrite_rule)) {
+        return_with ((PParserRewriteRule *) dict_get($$A P->rules, &rewrite_rule));
     }
 
     // nope, need to allocate it :(
-    R = mem_alloc(sizeof(PParserRewriteRule));
+    PParserRewriteRule *R = mem_alloc(sizeof(PParserRewriteRule));
     if(NULL == R) {
         mem_error("Unable to allocate rewrite rule on the heap.");
     }
@@ -238,3 +252,105 @@ PParserRewriteRule *parser_rewrite_epsilon($$ PParser *P) { $H
     assert_not_null(P);
     return_with P_parser_rewrite_tule($$A P, P_LEXEME_EPSILON, NULL);
 }
+
+/* Return a linked list of all tokens in the current file being parsed */
+static PGenericList *P_get_all_tokens($$ PTokenGenerator *G) { $H
+    assert_not_null(G);
+
+    PGenericList *token_list = NULL,
+                 *prev = NULL,
+                 *curr = NULL;
+
+    /* build up a list of all of the tokens. */
+    if(!generator_next($$A G)) {
+        return_with NULL;
+    }
+
+    /* generate the first token */
+    token_list = gen_list_alloc($A);
+    gen_list_set_elm($$A token_list, generator_current($$A G));
+    prev = token_list;
+
+    /* generate the rest of the tokens */
+    while(generator_next($$A G)) {
+        curr = gen_list_alloc($A);
+        gen_list_set_next(prev, curr);
+        gen_list_set_elm($$A curr, generator_current(G));
+        prev = curr;
+    }
+
+    return_with token_list;
+}
+
+static void P_run_parser($$ PParser *P, PTokenGenerator *G) { $H
+    assert_not_null(P);
+    assert_not_null(G);
+
+    short current_return_point = -1;
+
+    PStack *call_stack = stack_alloc($$A sizeof(PStack)),
+           *backtrack_stack = stack_alloc($$A sizeof(PStack)),
+           *backtrack_points = stack_alloc($$A sizeof(PStack));
+
+    PToken *curr_token = NULL,
+           *next_token = NULL;
+
+    /* list of tokens available for backtracking. */
+    PGenericList *token_list = P_get_all_tokens($$A G),
+
+                 /* list of tokens that we no longer need for backtracking
+                  * purposes */
+                 *cut_list = NULL,
+
+                 /* the list with the token in it */
+                 *curr = token_list,
+
+                 /* rewrite rule from the top of stack being used. */
+                 *curr_rewrite_rule = NULL;
+
+    if(NULL == curr) {
+        return_with NULL;
+    }
+
+    do {
+
+    } while(NULL != curr);
+
+#if 0
+    /* start everything off */
+    curr = gen_list_alloc();
+    active_list = curr;
+    gen_list_set_elm(active_list, generator_get());
+
+    while(NULL != curr) {
+
+        curr_token = (PToken *) gen_list_get_elm(curr);
+
+
+        /* we need to generate the next token and set it to the tail of our
+         * list.
+         */
+        if(!list_has_next($$A curr)) {
+
+            /* no more tokens available. */
+            if(!generator_next(G)) {
+                break;
+            }
+
+            curr_token = (PToken *) generator_current(G);
+            temp = gen_list_alloc($A);
+            gen_list_set_elm($$A temp, curr_token);
+            gen_list_set_next($$A tail, curr_token);
+
+            tail = temp;
+
+        /* we have already lexed the next token, recover it from memory. */
+        } else {
+            tail = list_get_next($$A tail);
+            curr_token = (PToken *) gen_list_get_elm($$A tail);
+        }
+    }
+#endif
+    return_with;
+}
+

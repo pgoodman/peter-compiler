@@ -60,17 +60,9 @@ typedef struct PParserRewriteRule {
     PLexeme lexeme;
 } PParserRewriteRule;
 
-/* A sequence of parser rules. sequence is used as opposed to list to emphasize
- * that order is important.
- */
-typedef struct PParserRuleSequence {
-    PList _;
-    PParserRewriteRule *rule;
-} PParserRuleSequence;
-
 PParser *parser_alloc($);
 void parser_add_production($$ PParser *, PParserFunc, short, PParserRuleSequence *, ...);
-PParserRuleSequence *parser_rule_sequence($$ short, PParserRewriteRule *, ...);
+PGenericList *parser_rule_sequence($$ short, PParserRewriteRule *, ...);
 PParserRewriteRule *parser_rewrite_function($$ PParser *, PParserFunc);
 PParserRewriteRule *parser_rewrite_token($$ PParser *, PLexeme);
 PParserRewriteRule *parser_rewrite_epsilon($$ PParser *);

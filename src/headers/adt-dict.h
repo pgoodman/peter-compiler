@@ -27,15 +27,17 @@ typedef struct PDictionary {
     uint32_t num_slots,
              num_used_slots;
 
-    PHashFunction hash_fnc;
+    PHashFunction key_hash_fnc,
+                  val_hash_fnc;
 } PDictionary;
 
-void *gen_dict_alloc($$ const size_t, const uint32_t, PHashFunction );
-PDictionary *dict_alloc($$ const uint32_t, PHashFunction );
+void *gen_dict_alloc($$ const size_t, const uint32_t, PHashFunction, PHashFunction);
+PDictionary *dict_alloc($$ const uint32_t, PHashFunction, PHashFunction);
 void dict_free($$ PDictionary *, PDelegate );
 char dict_set($$ PDictionary *, void *, void *, PDelegate );
 void dict_unset($$ PDictionary *, void *, PDelegate );
 void *dict_get($$ PDictionary *, void * );
+char dict_is_set($$ PDictionary *, void *);
 
 uint32_t dict_hash_pointer($$ void * );
 

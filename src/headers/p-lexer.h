@@ -9,6 +9,8 @@
 #ifndef PLEXER_H_
 #define PLEXER_H_
 
+#include "adt-generator.h"
+
 typedef enum {
     P_LEXEME_EPSILON,
 
@@ -17,7 +19,8 @@ typedef enum {
     P_LEXEME_PAREN_OPEN,
     P_LEXEME_PAREN_CLOSE,
     P_LEXEME_NUMBER
-/*    P_LEXEME_EMPTY_STRING,
+/*
+    P_LEXEME_EMPTY_STRING,
     P_LEXEME_TERMINAL,
     P_LEXEME_NON_TERMINAL,
     P_LEXEME_SEQUENCE_OPEN,
@@ -27,12 +30,20 @@ typedef enum {
     P_LEXEME_GREEDY_POSITIVE_REPETITION,
     P_LEXEME_OPTIONAL,
     P_LEXEME_FOLLOWED_BY,
-    P_NOT_FOLLOWED_BY */
+    P_NOT_FOLLOWED_BY
+*/
 } PLexeme;
 
 typedef struct PToken {
     PLexeme _;
     PString *val;
+    uint32_t line,
+             start_column,
+             end_column;
 } PToken;
+
+typedef struct PTokenGenerator {
+    PGenerator _;
+} PTokenGenerator;
 
 #endif /* PLEXER_H_ */

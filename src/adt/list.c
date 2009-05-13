@@ -62,6 +62,14 @@ PList *list_get_next($$ void *L ) { $H
 }
 
 /**
+ * Check if a list has a next element.
+ */
+char list_has_next($$ void *L) { $H
+    assert_not_null(L);
+    return_with (NULL != ((Plist *L) L)->_next);
+}
+
+/**
  * Allocate a generic list on the heap.
  */
 PGenericList *gen_list_alloc($) { $H
@@ -74,7 +82,7 @@ PGenericList *gen_list_alloc($) { $H
  * Free the allocated space of a generic list.
  */
 void gen_list_free($$ PGenericList *L, PDelegate free_elm_fnc ) { $H
-	
+
     assert_not_null(free_elm_fnc);
 
     PGenericList *next = NULL;
