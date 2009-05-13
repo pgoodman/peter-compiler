@@ -88,7 +88,6 @@ static PDelegate T_valid_free_callback(void * ft, PDelegate disallowed, PDelegat
  */
 void tree_free(void *T, PDelegate free_tree_fnc ) { $H
 
-    PTreeGenerator *G = NULL;
     PTree *node = NULL;
     void *elm = NULL;
 
@@ -103,23 +102,33 @@ void tree_free(void *T, PDelegate free_tree_fnc ) { $H
 
     /* traverse the tree in post order and free the tree nodes from the
      * bottom up. */
-    G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
+    if(0 < node->_fill) {
+        PTreeGenerator *G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
 
-    while(generator_next(G)) {
-        elm = generator_current(G );
-        node = (PTree *)elm;
+        while(generator_next(G)) {
+            elm = generator_current(G );
+            node = (PTree *)elm;
 
-        if(0 < node->_degree) {
-            mem_free(node->_branches);
+            if(0 < node->_degree) {
+                mem_free(node->_branches);
+            }
+
+            free_tree_fnc(elm);
+            mem_free(elm);
         }
 
-        free_tree_fnc(elm );
-        mem_free(elm);
+        /* free the generator */
+        generator_free(G);
+        G = NULL;
+
+    /* task is simple, just free the tree. */
+    } else {
+        mem_free(node->_branches);
+        free_tree_fnc(node);
+        mem_free(node);
     }
 
-    /* free the generator */
-    generator_free(G );
-    G = NULL;
+
     T = NULL;
 
     return_with;
