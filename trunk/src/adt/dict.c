@@ -21,7 +21,7 @@ typedef union {
 static void **H_alloc_slots(uint32_t num_slots ) { $H
     void **slots = mem_calloc(num_slots, sizeof(void *));
 
-    if(NULL == slots) {
+    if(is_null(slots)) {
         mem_error("Unable to allocate hash table slots.");
     }
 
@@ -84,7 +84,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
     uint32_t actual_slots;
 
     void *table = mem_alloc(dict_struct_size);
-    if(NULL == table) {
+    if(is_null(table)) {
         mem_error("Unable to allocate vector on the heap.");
     }
 
@@ -132,7 +132,7 @@ void dict_free(PDictionary *H, PDelegate free_elm_fnc ) { $H
     /* free the elements stored in the hash table. */
     if(free_elm_fnc != delegate_do_nothing) {
         for(i = 0; i < H->num_slots; ++i) {
-            if(NULL != H->elms[i]) {
+            if(is_not_null(H->elms[i])) {
                 free_elm_fnc(H->elms[i] );
             }
         }
@@ -167,7 +167,7 @@ char dict_set(PDictionary *H, void *key, void *val,
     char did_overwrite = 0;
 
     /* add in our object */
-    if(NULL != H->elms[hashed_key]) {
+    if(is_not_null(H->elms[hashed_key])) {
         free_on_overwrite_fnc(H->elms[hashed_key] );
         did_overwrite = 1;
     }
@@ -188,7 +188,7 @@ void dict_unset(PDictionary *H, void *key, PDelegate free_fnc ) { $H
 
     /* remove it if it is there and decrement the number of slots
      * that we're using. */
-    if(NULL != H->elms[h]) {
+    if(is_not_null(H->elms[h])) {
         free_fnc(H->elms[h] );
         H->elms[h] = NULL;
         --(H->num_used_slots);

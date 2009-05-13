@@ -19,7 +19,7 @@ void *stack_alloc(const size_t struct_size ) { $H
 
     stack = mem_alloc(struct_size);
 
-    if(NULL == stack) {
+    if(is_null(stack)) {
         mem_error("Unable to allocate a new stack on the heap.");
     }
 
@@ -40,7 +40,7 @@ void stack_empty(PStack *S, PDelegate free_elm_fnc ) { $H
 	assert_not_null(S);
 	assert_not_null(free_elm_fnc);
 
-	if(NULL == S->_head) {
+	if(is_null(S->_head)) {
         return_with;
 	}
 
@@ -48,7 +48,7 @@ void stack_empty(PStack *S, PDelegate free_elm_fnc ) { $H
 
     /* free up the elements in the stack and move the slots onto the unused
      * list */
-    while(NULL != L) {
+    while(is_not_null(L)) {
         gen_list_free_elm(L, free_elm_fnc );
         next = (PGenericList *) list_get_next(L);
         list_set_next(L, S->_unused );
@@ -66,11 +66,11 @@ void stack_empty(PStack *S, PDelegate free_elm_fnc ) { $H
 void stack_free(PStack *S, PDelegate free_elm_fnc ) { $H
 	assert_not_null(S);
 	assert_not_null(free_elm_fnc);
-	
+
     gen_list_free(S->_head, free_elm_fnc );
     gen_list_free(S->_unused, &delegate_do_nothing );
     mem_free(S);
-    
+
 	S = NULL;
     return_with;
 }
@@ -80,7 +80,7 @@ void stack_free(PStack *S, PDelegate free_elm_fnc ) { $H
  */
 char stack_is_empty(const PStack * const S ) { $H
 	assert_not_null(S);
-    return_with (NULL == S->_head);
+    return_with is_null(S->_head);
 }
 
 /**
@@ -92,7 +92,7 @@ void stack_push(PStack * const S, void * E ) { $H
     assert_not_null(S);
 
     /* allocate a slot if needed */
-    if(NULL == S->_unused) {
+    if(is_null(S->_unused)) {
         L = gen_list_alloc();
 
     /* take the first unused one otherwise */

@@ -18,7 +18,7 @@ void *generator_alloc(const size_t size ) { $H
     assert(sizeof(PGenerator) <= size);
 
     G = mem_alloc(size);
-    if(NULL == G) {
+    if(is_null(G)) {
         mem_error("Unable to allocate generator on the heap.");
     }
 

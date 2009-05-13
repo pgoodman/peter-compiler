@@ -18,7 +18,7 @@ void *queue_alloc(const size_t struct_size ) { $H
     assert(sizeof(PQueue) <= struct_size);
 
     queue = mem_alloc(struct_size);
-    if(NULL == queue) {
+    if(is_null(queue)) {
         mem_error("Unable to allocate a new queue on the heap.");
     }
 
@@ -40,7 +40,7 @@ void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) { $H
 	assert_not_null(Q);
 	assert_not_null(free_elm_fnc);
 
-	if(NULL == Q->_head) {
+	if(is_null(Q->_head)) {
 		return_with;
 	}
 
@@ -48,7 +48,7 @@ void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) { $H
 
     /* free up the elements in the queue and move the slots onto the unused
      * list */
-    while(NULL != L) {
+    while(is_not_null(L)) {
         gen_list_free_elm(L, free_elm_fnc );
         next = (PGenericList *) list_get_next(L);
         list_set_next(L, Q->_unused );
@@ -85,19 +85,19 @@ void queue_free(PQueue *Q, PDelegate free_elm ) { $H
  */
 char queue_is_empty(const PQueue * const Q ) { $H
 	assert_not_null(Q);
-    return_with NULL == Q->_head;
+    return_with is_null(Q->_head);
 }
 
 /**
  * Push an element onto the queue.
  */
 void queue_push(PQueue * const Q, void * E ) { $H
+    assert_not_null(Q);
+
     PGenericList *L = NULL;
 
-	assert_not_null(Q);
-
     /* allocate a slot if needed */
-    if(NULL == Q->_unused) {
+    if(is_null(Q->_unused)) {
         L = gen_list_alloc();
 
     /* take the first unused one otherwise */
@@ -107,7 +107,7 @@ void queue_push(PQueue * const Q, void * E ) { $H
     }
 
     /* add in the slot to the tail of the queue */
-    if(NULL != Q->_tail) {
+    if(is_not_null(Q->_tail)) {
         list_set_next(Q->_tail, L );
 
     /* the tail is null <==> the head is null */

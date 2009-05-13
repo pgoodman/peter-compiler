@@ -12,12 +12,10 @@
  * Allocate a new linked list.
  */
 void *list_alloc(const size_t struct_size ) { $H
-
     assert(sizeof(PList) <= struct_size);
 
     void *L = mem_alloc(struct_size);
-
-    if(NULL == L) {
+    if(is_null(L)) {
         mem_error("Unable to allocate a linked list on the heap.");
     }
 
@@ -35,7 +33,7 @@ void list_free(void *L, PDelegate free_list_fnc ) { $H
 	assert_not_null(free_list_fnc);
 
 	/* Free up the list. */
-    while(NULL != L) {
+    while(is_not_null(L)) {
         next = ((PList *) L)->_next;
         free_list_fnc(L );
         L = next;
@@ -89,7 +87,7 @@ void gen_list_free(PGenericList *L, PDelegate free_elm_fnc ) { $H
 
 	/* Go through the chain and free the lists and their respective
 	 * elements. */
-    while(NULL != L) {
+    while(is_not_null(L)) {
         next = (PGenericList *) list_get_next(L);
         free_elm_fnc(L->_elm );
         L->_elm = NULL;
