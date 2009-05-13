@@ -35,7 +35,7 @@ typedef enum {
 } PLexeme;
 
 typedef struct PToken {
-    PLexeme _;
+    PLexeme lexeme;
     PString *val;
     uint32_t line,
              start_column,

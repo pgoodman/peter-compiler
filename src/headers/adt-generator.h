@@ -19,10 +19,10 @@ typedef struct PGenerator {
     void *_curr;
 } PGenerator;
 
-void *generator_alloc($$ size_t );
-void generator_free($$ void * );
-void generator_init($$ void *, PFunction, PDelegate );
-char generator_next($$ void * );
-void *generator_current($$ void * );
+void *generator_alloc(size_t );
+void generator_free(void * );
+void generator_init(void *, PFunction, PDelegate );
+char generator_next(void * );
+void *generator_current(void * );
 
 #endif /* GENERATOR_H_ */

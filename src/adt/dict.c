@@ -18,7 +18,7 @@ typedef union {
 /**
  * Allocate the slots used by a vector.
  */
-static void **H_alloc_slots($$ uint32_t num_slots ) { $H
+static void **H_alloc_slots(uint32_t num_slots ) { $H
     void **slots = mem_calloc(num_slots, sizeof(void *));
 
     if(NULL == slots) {
@@ -31,7 +31,7 @@ static void **H_alloc_slots($$ uint32_t num_slots ) { $H
 /**
  * Double the size of the hash table and re-hash all the values.
  */
-static void H_grow($$ PDictionary *H ) { $H
+static void H_grow(PDictionary *H ) { $H
     assert_not_null(H);
 
     void **slots,
@@ -50,11 +50,11 @@ static void H_grow($$ PDictionary *H ) { $H
     PHashFunction hash_fnc = H->val_hash_fnc;
 
     /* don't perform any resize operation */
-    slots = H_alloc_slots($$A new_size );
+    slots = H_alloc_slots(new_size );
 
     /* re-hash the old objects into the new table */
     for(j = 0; j < old_size; ++j) {
-        slots[hash_fnc($$A elms[j] ) % new_size] = elms[j];
+        slots[hash_fnc(elms[j] ) % new_size] = elms[j];
     }
 
     /* free the old memory and update our hash table */
@@ -70,7 +70,7 @@ static void H_grow($$ PDictionary *H ) { $H
  * Allocate a generic hash table on the heap. A generic hash table allows the
  * programmer to augment the base hash table data structure.
  */
-void *gen_dict_alloc($$ const size_t dict_struct_size,
+void *gen_dict_alloc(const size_t dict_struct_size,
                      const uint32_t num_slots,
                      PHashFunction key_hash_fnc,
                      PHashFunction val_hash_fnc) {
@@ -92,7 +92,7 @@ void *gen_dict_alloc($$ const size_t dict_struct_size,
      * time without needing to resize the hash table. */
     actual_slots = (uint32_t) ((num_slots / P_HASH_TABLE_LOAD_FACTOR) + 1);
 
-    void **elms = H_alloc_slots($$A num_slots );
+    void **elms = H_alloc_slots(num_slots );
 
     /* initialize the vector */
     H = (PDictionary *) table;
@@ -108,11 +108,11 @@ void *gen_dict_alloc($$ const size_t dict_struct_size,
 /**
  * Allocate a hash table on the heap.
  */
-PDictionary *dict_alloc($$ const uint32_t num_slots,
+PDictionary *dict_alloc(const uint32_t num_slots,
                         PHashFunction key_hash_fnc,
                         PHashFunction val_hash_fnc) {
     $H
-    return_with (PDictionary *) gen_dict_alloc($$A
+    return_with (PDictionary *) gen_dict_alloc(
         sizeof(PDictionary),
         num_slots,
         key_hash_fnc,
@@ -123,7 +123,7 @@ PDictionary *dict_alloc($$ const uint32_t num_slots,
 /**
  * Free a hash table.
  */
-void dict_free($$ PDictionary *H, PDelegate free_elm_fnc ) { $H
+void dict_free(PDictionary *H, PDelegate free_elm_fnc ) { $H
     assert_not_null(H);
     assert_not_null(free_elm_fnc);
 
@@ -133,7 +133,7 @@ void dict_free($$ PDictionary *H, PDelegate free_elm_fnc ) { $H
     if(free_elm_fnc != delegate_do_nothing) {
         for(i = 0; i < H->num_slots; ++i) {
             if(NULL != H->elms[i]) {
-                free_elm_fnc($$A H->elms[i] );
+                free_elm_fnc(H->elms[i] );
             }
         }
     }
@@ -150,7 +150,7 @@ void dict_free($$ PDictionary *H, PDelegate free_elm_fnc ) { $H
  * Set a record into a hash table. This will return 1 if a previous element
  * existed, 0 if it did not. In any case, the value will be set.
  */
-char dict_set($$ PDictionary *H, void *key, void *val,
+char dict_set(PDictionary *H, void *key, void *val,
               PDelegate free_on_overwrite_fnc) { $H
 
     assert_not_null(H);
@@ -160,15 +160,15 @@ char dict_set($$ PDictionary *H, void *key, void *val,
 
 	/* we've gone past our load factor, grow the hash table. */
     if(P_HASH_TABLE_LOAD_FACTOR < (H->num_used_slots / H->num_slots)) {
-        H_grow($$A H );
+        H_grow(H );
     }
 
-    uint32_t hashed_key = H->key_hash_fnc($$A key ) % H->num_slots;
+    uint32_t hashed_key = H->key_hash_fnc(key ) % H->num_slots;
     char did_overwrite = 0;
 
     /* add in our object */
     if(NULL != H->elms[hashed_key]) {
-        free_on_overwrite_fnc($$A H->elms[hashed_key] );
+        free_on_overwrite_fnc(H->elms[hashed_key] );
         did_overwrite = 1;
     }
 
@@ -180,16 +180,16 @@ char dict_set($$ PDictionary *H, void *key, void *val,
 /**
  * Delete a record from a hash table.
  */
-void dict_unset($$ PDictionary *H, void *key, PDelegate free_fnc ) { $H
+void dict_unset(PDictionary *H, void *key, PDelegate free_fnc ) { $H
 	assert_not_null(H);
 	assert_not_null(key);
 
-    uint32_t h = H->key_hash_fnc($$A key) % H->num_slots;
+    uint32_t h = H->key_hash_fnc(key) % H->num_slots;
 
     /* remove it if it is there and decrement the number of slots
      * that we're using. */
     if(NULL != H->elms[h]) {
-        free_fnc($$A H->elms[h] );
+        free_fnc(H->elms[h] );
         H->elms[h] = NULL;
         --(H->num_used_slots);
     }
@@ -200,24 +200,24 @@ void dict_unset($$ PDictionary *H, void *key, PDelegate free_fnc ) { $H
 /**
  * Get a record from a hash table.
  */
-void *dict_get($$ PDictionary *H, void *key ) { $H
+void *dict_get(PDictionary *H, void *key ) { $H
     assert_not_null(H);
-    void *X = H->elms[(H->key_hash_fnc($$A key ) % H->num_slots)];
+    void *X = H->elms[(H->key_hash_fnc(key ) % H->num_slots)];
     return_with (NULL == X ? NULL : X);
 }
 
 /**
  * Check if a record exists in a hash table.
  */
-char dict_is_set($$ PDictionary *H, void *key) { $H
+char dict_is_set(PDictionary *H, void *key) { $H
     assert_not_null(H);
-    return_with (NULL != (H->elms[(H->key_hash_fnc($$A key) % H->num_slots)]));
+    return_with (NULL != (H->elms[(H->key_hash_fnc(key) % H->num_slots)]));
 }
 
 /**
  * Turn a pointer into an array of char and then hash it.
  */
-uint32_t dict_hash_pointer($$ void *pointer ) { $H
+uint32_t dict_hash_pointer(void *pointer ) { $H
     pointer_to_char_t switcher;
     switcher.ptr = pointer;
     return_with murmur_hash(switcher.chars, 4, 73);

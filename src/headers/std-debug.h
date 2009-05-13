@@ -9,6 +9,8 @@
 #ifndef DEBUG_H_
 #define DEBUG_H_
 
+#include "std-include.h"
+
 typedef struct PStackTrace {
     struct PStackTrace *next;
     char *file;
@@ -17,13 +19,7 @@ typedef struct PStackTrace {
 
 #if defined(P_DEBUG) && P_DEBUG == 1
 
-#if defined(P_DEBUG_PRINT_TRACE) && P_DEBUG_PRINT_TRACE == 1
-#define $push_trace printf("%*s%s:%d\n", (++__st_depth)<<1, "", __FILE__, __LINE__);
-#define $pop_trace printf("%*s%s:%d\n", (--__st_depth)<<1, "", __FILE__,__LINE__);
-#else
-#define $push_trace
-#define $pop_trace
-#endif
+#if 0
 
 #define $MH PStackTrace __T,*_ST;\
     unsigned int __st_line=__LINE__;{\
@@ -40,17 +36,6 @@ typedef struct PStackTrace {
     _ST=&__T;\
     $push_trace}
 
-/* argument for function definition */
-#define $ PStackTrace *_ST, unsigned int __st_line
-#define $$ $,
-
-/* arguments for macro definitions */
-#define $M _ST,__st_line
-#define $$M , $M
-
-/* parameter passing */
-#define $A _ST, __st_line
-#define $$A $A,
 
 /**
  * !!! Be careful with this macro!!
@@ -60,6 +45,13 @@ typedef struct PStackTrace {
     if(_ST!=NULL){\
         _ST=_ST->next;\
     }}return
+
+#endif
+
+#define $MH
+#define $H
+
+#define return_with return
 
 #define std_error(e) { \
     printf(e " in %s on line %d.", __FILE__, (unsigned int)__LINE__); \
@@ -72,8 +64,8 @@ typedef struct PStackTrace {
 #define $H
 #define $ void
 #define $$
-#define $A
-#define $$A
+#define
+#define
 #define return_with return
 #define std_error(e) exit(1);
 

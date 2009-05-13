@@ -13,12 +13,9 @@
 #include "adt-tree.h"
 #include "adt-list.h"
 #include "adt-dict.h"
+#include "adt-tree.h"
 #include "func-delegate.h"
 #include "p-lexer.h"
-
-#define $epsilon parser_rewrite_epsilon($A)
-#define $prod(func) parser_rewrite_function($$A (func))
-#define $tok(tok) parser_rewrite_token($$A (tok))
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PParser {
@@ -35,22 +32,11 @@ typedef struct PParser {
                          * defined anyway. */
 } PParser;
 
-/* a full list of all of the tokens in a file. */
-typedef struct PParserTokenList {
-    PList _;
-    PToken token;
-} PParserTokenList;
-
-/* a parse tree, constructed by the parser automatically */
-typedef struct PParseTree {
-    PTree _;
-} PParseTree;
-
 /* a parser function. a parser function deals with the *semantic* meaning of
  * a particular node in a parse tree. These functions are called *after* the
  * entire and correct parse tree is generated.
  */
-typedef PParseTree *(*PParserFunc)($$ PParseTree *);
+typedef PTree *(*PParserFunc)(PTree *);
 
 /* types relating to how the internal call stack is re-written using these
  * rules.
@@ -60,11 +46,19 @@ typedef struct PParserRewriteRule {
     PLexeme lexeme;
 } PParserRewriteRule;
 
-PParser *parser_alloc($);
-void parser_add_production($$ PParser *, PParserFunc, short, PParserRuleSequence *, ...);
-PGenericList *parser_rule_sequence($$ short, PParserRewriteRule *, ...);
-PParserRewriteRule *parser_rewrite_function($$ PParser *, PParserFunc);
-PParserRewriteRule *parser_rewrite_token($$ PParser *, PLexeme);
-PParserRewriteRule *parser_rewrite_epsilon($$ PParser *);
+/* the result of creating a parser rewrite rule. */
+typedef struct PParserRuleResult {
+    PGenericList *rule;
+    short num_elms;
+} PParserRuleResult;
+
+PParser *parser_alloc(void);
+void parser_add_production(PParser *, PParserFunc, short, PParserRuleResult, ...);
+PParserRuleResult parser_rule_sequence(short, PParserRewriteRule *, ...);
+PParserRewriteRule *parser_rewrite_function(PParser *, PParserFunc);
+PParserRewriteRule *parser_rewrite_token(PParser *, PLexeme);
+PParserRewriteRule *parser_rewrite_epsilon(PParser *);
+
+void *parser_parse_file(PParser *, PTokenGenerator *, PParserFunc);
 
 #endif /* PPARSER_H_ */

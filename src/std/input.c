@@ -12,7 +12,7 @@
 /**
  * Allocate and return pointer to a file.
  */
-PFile *file_alloc($$ const char * const path, const char * const how_to_open ) { $H
+PFile *file_alloc(const char * const path, const char * const how_to_open ) { $H
     assert_not_null(path);
     assert_not_null(how_to_open);
 
@@ -28,7 +28,7 @@ PFile *file_alloc($$ const char * const path, const char * const how_to_open ) {
 /**
  * Free a file pointer.
  */
-void file_free($$ PFile *F ) { $H
+void file_free(PFile *F ) { $H
     fclose((FILE *) F);
     return_with;
 }

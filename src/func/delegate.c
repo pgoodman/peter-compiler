@@ -11,6 +11,6 @@
 /**
  * An empty delegate on one variable.
  */
-void delegate_do_nothing($$ void * const E ) { $H
+void delegate_do_nothing(void * const E ) { $H
     return_with;
 }
