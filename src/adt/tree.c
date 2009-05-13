@@ -37,15 +37,14 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree ) { $H
 
     tree = mem_alloc(struct_size);
 
-    if(NULL == tree) {
+    if(is_null(tree)) {
         mem_error("Unable to allocate a tree on the heap.");
     }
 
     T = (PTree *) tree;
     if(0 < degree) {
         B = mem_alloc(struct_size * degree);
-
-        if(NULL == B) {
+        if(is_null(B)) {
             mem_error("Unable to allocate the branches for a tree on the heap.");
         }
     }
@@ -69,11 +68,13 @@ static PDelegate T_valid_free_callback(void * ft, PDelegate disallowed, PDelegat
     /* make sure we don't over free */
     assert_not_null(ft);
 
-    if((void *)disallowed == ft)
+    if((void *)disallowed == ft) {
         free_tree = allowed;
+    }
 
-    if(NULL == free_tree)
+    if(is_null(free_tree)) {
         free_tree = (PDelegate) ft;
+    }
 
     return_with free_tree;
 }
@@ -87,11 +88,10 @@ static PDelegate T_valid_free_callback(void * ft, PDelegate disallowed, PDelegat
  *     seen as a black box and not touched.
  */
 void tree_free(void *T, PDelegate free_tree_fnc ) { $H
+    assert_not_null(T);
 
     PTree *node = NULL;
     void *elm = NULL;
-
-    assert_not_null(T);
 
     /* get a valid memory free callback for this context */
     free_tree_fnc = T_valid_free_callback(
@@ -128,7 +128,6 @@ void tree_free(void *T, PDelegate free_tree_fnc ) { $H
         mem_free(node);
     }
 
-
     T = NULL;
 
     return_with;
@@ -162,18 +161,17 @@ size_t tree_fill(void *t ) { $H
  * Trim off all of the branches, and push each of them into the garbage stack.
  */
 void tree_trim(void *tree, PStack *garbage_stack ) { $H
-
 	assert_not_null(tree);
 	assert_not_null(garbage_stack);
 
     PTree *T = (PTree *) tree,
-         *branch = NULL;
+          *branch = NULL;
 
     unsigned short i;
 
     /* none of the branches have been filled, or no branches were allocated,
      * so we have nothing to do.. yay! */
-    if(T->_fill == 0 || NULL == T->_branches) {
+    if(T->_fill == 0 || is_null(T->_branches)) {
         return_with;
     }
 
@@ -204,7 +202,7 @@ void tree_trim_free(void *tree, PDelegate free_tree_fnc) { $H
 
     PTreeGenerator *G = NULL;
     PTree *T = (PTree *) tree,
-               *node = NULL;
+          *node = NULL;
 
     unsigned short i;
     void *elm = NULL;
@@ -217,14 +215,14 @@ void tree_trim_free(void *tree, PDelegate free_tree_fnc) { $H
 
     /* none of the branches have been filled, or no branches were allocated,
      * so we have nothing to do.. yay! */
-    if(T->_fill == 0 || NULL == T->_branches) {
+    if(T->_fill == 0 || is_null(T->_branches)) {
         return_with;
     }
 
     for(i = 0; i < T->_fill; ++i) {
 
         /* allocate or reuse the tree generator */
-        if(NULL == G) {
+        if(is_null(G)) {
             G = tree_generator_alloc(T->_branches[i], TREE_TRAVERSE_POSTORDER);
         } else {
             tree_generator_reuse(G, T->_branches[i]);
@@ -293,8 +291,9 @@ static void *T_generator_next_df(void *g ) { $H
         ret = stack_pop(S );
         curr = (PTree *)ret;
 
-        if(NULL == curr)
+        if(is_null(curr)) {
             continue;
+        }
 
         /* push the branches onto the stack */
         for(i = curr->_fill; i > 0; ) {
@@ -303,7 +302,6 @@ static void *T_generator_next_df(void *g ) { $H
 
         return_with ret;
     }
-
     return_with NULL;
 }
 
@@ -326,8 +324,9 @@ static void *T_generator_next_bf(void *g ) { $H
         ret = queue_pop(Q );
         curr = (PTree *)ret;
 
-        if(NULL == curr)
+        if(is_null(curr)) {
             continue;
+        }
 
         /* push the branches onto the queue */
         for(i = 0; i < curr->_fill; ++i) {
@@ -336,7 +335,6 @@ static void *T_generator_next_bf(void *g ) { $H
 
         return_with ret;
     }
-
     return_with NULL;
 }
 
@@ -346,7 +344,7 @@ static void *T_generator_next_bf(void *g ) { $H
 static void *T_generator_next_po(void *g ) { $H
     PStack *S = NULL;
     PTree *curr = NULL,
-         *top;
+          *top = NULL;
     void *ret = NULL;
     unsigned short i;
     PTreeGenerator *G = NULL;

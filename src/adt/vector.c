@@ -14,7 +14,7 @@
 static void **V_alloc_slots(uint32_t num_slots) { $H
     void **slots = mem_calloc(num_slots, sizeof(void *));
 
-    if(NULL == slots) {
+    if(is_null(slots)) {
         mem_error("Unable to allocate vector slots.");
     }
     return_with slots;
@@ -24,10 +24,10 @@ static void **V_alloc_slots(uint32_t num_slots) { $H
  * Resize the vector so that it has at least i slots in it.
  */
 static void V_resize(PVector *V, uint32_t i) { $H
+    assert_not_null(V);
+
     uint32_t new_size,
              max_size = 0x7FFFFFFF;
-
-    assert_not_null(V);
 
     /* don't perform any resize operation */
     if(i < V->_num_slots) {
@@ -44,13 +44,11 @@ static void V_resize(PVector *V, uint32_t i) { $H
         new_size = 0xFFFFFFFF;
 
     V->_elms = mem_realloc(V->_elms, (new_size * sizeof(void *)));
-
-    if(NULL == V->_elms) {
+    if(is_null(V->_elms)) {
         mem_error("Unable to resize the vector.");
     }
 
     V->_num_slots = new_size;
-
     return_with;
 }
 
@@ -65,7 +63,7 @@ void *gen_vector_alloc(const size_t struct_size, const uint32_t num_slots) { $H
     assert(sizeof(PVector) <= struct_size);
 
     vec = mem_alloc(struct_size);
-    if(NULL == vec) {
+    if(is_null(vec)) {
         mem_error("Unable to allocate vector on the heap.");
     }
 
@@ -97,7 +95,7 @@ void vector_free(PVector *V, PDelegate free_elm_fnc) { $H
 
 	/* free up every non-null slot. */
     for(i = 0; i < V->_num_slots; ++i) {
-        if(NULL != V->_elms[i]) {
+        if(is_not_null(V->_elms[i])) {
             free_elm_fnc(V->_elms[i] );
         }
     }
@@ -143,7 +141,7 @@ void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc) { $H
     if(i <= V->_num_slots) {
         vector_unset(V, i, free_elm_fnc );
 
-        if(NULL != V->_elms[i]) {
+        if(is_not_null(V->_elms[i])) {
             slot_increment = 0;
         }
 
@@ -166,7 +164,7 @@ void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc) { $H
 	assert_not_null(V);
 	assert(i < V->_num_slots);
 
-	if(NULL != (V->_elms[i])) {
+	if(is_not_null(V->_elms[i])) {
         V->_elms[i] = NULL;
         free_elm_fnc(V->_elms[i] );
 	}
@@ -208,7 +206,7 @@ static void *V_generator_next(void *g) { $H
     }
 
 	/* loop through the vector until we find a non-null pointer. */
-    for(i = G->pos; NULL == V->_elms[i]; ++i)
+    for(i = G->pos; is_null(V->_elms[i]); ++i)
         ;
 
     ++(G->pos);
@@ -237,16 +235,16 @@ static void V_generator_free(void *g) { $H
  * a generator over a NULL vector.
  */
 PVectorGenerator *vector_generator_alloc(PVector *V) { $H
-    PVectorGenerator *G = mem_alloc(sizeof(PVectorGenerator));
 
-    if(NULL == G) {
+    PVectorGenerator *G = mem_alloc(sizeof(PVectorGenerator));
+    if(is_null(G)) {
         mem_error("Unable to allocate vector generator on the heap.");
     }
 
     G->vec = V;
     G->pos = 0;
 
-    generator_init(G, &V_generator_next, &V_generator_free );
+    generator_init(G, &V_generator_next, &V_generator_free);
 
     return_with G;
 }
