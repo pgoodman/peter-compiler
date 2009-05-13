@@ -9,22 +9,11 @@
 #include <p-parser.h>
 
 #define P_SIZE_OF_THUNK (0 \
-         + sizeof(PParserFunc *) \
+         + sizeof(PParserFunc) \
          + sizeof(PGenericList *) \
         ) / sizeof(char)
 
-#define P_MAX_RECURSION_DEPTH 100
-
 #define P_PRODUCTION_FAILED ((void *)(((int) NULL)+1))
-
-/*
-#define P_SIZE_OF_REWRITE_RULE ((sizeof(PParserRewriteFunc) > sizeof(PParserRewriteToken)) \
-        ? sizeof(PParserRewriteFunc) \
-        : sizeof(PParserRewriteToken))
-
-#define P_SIZE_OF_CANONICAL_REWRITE_RULE sizeof(P_CanonincalRewriteRule) / sizeof(char)
-*/
-
 #define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
 #define P_SIZE_OF_PARSER_FUNC (sizeof(PParserFunc) / sizeof(char))
 
@@ -430,7 +419,7 @@ static PParseTree *P_parse_tokens(PParser *P, \
             /* this production has failed by virtue of having no more rules
              * to try. we need to record this failure, pop off the stack, and
              * cascade our failure upward. */
-            if(NULL == frame->alternative_rules) {
+            if(is_null(frame->alternative_rules)) {
 
                 /* record the thunk for future reference */
                 thunk.production = (frame->production)->production;
@@ -515,7 +504,7 @@ static PParseTree *P_parse_tokens(PParser *P, \
          * is a recursive call to another production and we must push that
          * production onto the stack.
          */
-        if(NULL != curr_rule->func) {
+        if(!is_null(curr_rule->func)) {
 
             /* check if we have a memoized this result. */
             thunk.list = curr;
