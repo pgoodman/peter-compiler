@@ -249,11 +249,13 @@ char tree_add_branch(void *tree, void *branch ) { $H
 	assert_not_null(branch);
 
     PTree *parent = (PTree *) tree,
-         *child = (PTree *) branch;
+          *child = (PTree *) branch;
 
     assert(parent->_fill < parent->_degree);
 
     parent->_branches[parent->_fill] = child;
+    child->_parent = parent;
+
     ++(parent->_fill);
 
     return_with 1;
