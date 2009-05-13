@@ -18,7 +18,7 @@
 /* hash functions take in an object to hash as well as the
  * current size of the hash table.
  */
-typedef uint32_t (*PHashFunction)($$ void * );
+typedef uint32_t (*PHashFunction)(void * );
 
 /* Hash table / set implementation. */
 typedef struct PDictionary {
@@ -31,14 +31,14 @@ typedef struct PDictionary {
                   val_hash_fnc;
 } PDictionary;
 
-void *gen_dict_alloc($$ const size_t, const uint32_t, PHashFunction, PHashFunction);
-PDictionary *dict_alloc($$ const uint32_t, PHashFunction, PHashFunction);
-void dict_free($$ PDictionary *, PDelegate );
-char dict_set($$ PDictionary *, void *, void *, PDelegate );
-void dict_unset($$ PDictionary *, void *, PDelegate );
-void *dict_get($$ PDictionary *, void * );
-char dict_is_set($$ PDictionary *, void *);
+void *gen_dict_alloc(const size_t, const uint32_t, PHashFunction, PHashFunction);
+PDictionary *dict_alloc(const uint32_t, PHashFunction, PHashFunction);
+void dict_free(PDictionary *, PDelegate );
+char dict_set(PDictionary *, void *, void *, PDelegate );
+void dict_unset(PDictionary *, void *, PDelegate );
+void *dict_get(PDictionary *, void * );
+char dict_is_set(PDictionary *, void *);
 
-uint32_t dict_hash_pointer($$ void * );
+uint32_t dict_hash_pointer(void * );
 
 #endif /* HASHSET_H_ */

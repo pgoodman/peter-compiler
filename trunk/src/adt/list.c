@@ -11,7 +11,7 @@
 /**
  * Allocate a new linked list.
  */
-void *list_alloc($$ const size_t struct_size ) { $H
+void *list_alloc(const size_t struct_size ) { $H
 
     assert(sizeof(PList) <= struct_size);
 
@@ -29,7 +29,7 @@ void *list_alloc($$ const size_t struct_size ) { $H
 /**
  * Free a list.
  */
-void list_free($$ void *L, PDelegate free_list_fnc ) { $H
+void list_free(void *L, PDelegate free_list_fnc ) { $H
     PList *next = NULL;
 
 	assert_not_null(free_list_fnc);
@@ -37,7 +37,7 @@ void list_free($$ void *L, PDelegate free_list_fnc ) { $H
 	/* Free up the list. */
     while(NULL != L) {
         next = ((PList *) L)->_next;
-        free_list_fnc($$A L );
+        free_list_fnc(L );
         L = next;
     }
 
@@ -47,7 +47,7 @@ void list_free($$ void *L, PDelegate free_list_fnc ) { $H
 /**
  * Set the next element in a linked list.
  */
-void list_set_next($$ void *L, void *N ) { $H
+void list_set_next(void *L, void *N ) { $H
     assert_not_null(L);
     ((PList *) L)->_next = (PList *) N;
     return_with;
@@ -56,7 +56,7 @@ void list_set_next($$ void *L, void *N ) { $H
 /**
  * Get the next element of a linked list.
  */
-PList *list_get_next($$ void *L ) { $H
+PList *list_get_next(void *L ) { $H
 	assert_not_null(L);
     return_with ((PList *) L)->_next;
 }
@@ -64,16 +64,16 @@ PList *list_get_next($$ void *L ) { $H
 /**
  * Check if a list has a next element.
  */
-char list_has_next($$ void *L) { $H
+char list_has_next(void *L) { $H
     assert_not_null(L);
-    return_with (NULL != ((Plist *L) L)->_next);
+    return_with (NULL != ((PList *) L)->_next);
 }
 
 /**
  * Allocate a generic list on the heap.
  */
-PGenericList *gen_list_alloc($) { $H
-    PGenericList *L = list_alloc($$A sizeof(PGenericList));
+PGenericList *gen_list_alloc(void) { $H
+    PGenericList *L = list_alloc(sizeof(PGenericList));
     L->_elm = NULL;
     return_with L;
 }
@@ -81,7 +81,7 @@ PGenericList *gen_list_alloc($) { $H
 /**
  * Free the allocated space of a generic list.
  */
-void gen_list_free($$ PGenericList *L, PDelegate free_elm_fnc ) { $H
+void gen_list_free(PGenericList *L, PDelegate free_elm_fnc ) { $H
 
     assert_not_null(free_elm_fnc);
 
@@ -90,8 +90,8 @@ void gen_list_free($$ PGenericList *L, PDelegate free_elm_fnc ) { $H
 	/* Go through the chain and free the lists and their respective
 	 * elements. */
     while(NULL != L) {
-        next = (PGenericList *) list_get_next($$A L);
-        free_elm_fnc($$A L->_elm );
+        next = (PGenericList *) list_get_next(L);
+        free_elm_fnc(L->_elm );
         L->_elm = NULL;
         mem_free(L);
         L = next;
@@ -103,16 +103,16 @@ void gen_list_free($$ PGenericList *L, PDelegate free_elm_fnc ) { $H
 /**
  * Free only the element of a single list.
  */
-void gen_list_free_elm($$ PGenericList *L, PDelegate free_elm_fnc ) { $H
+void gen_list_free_elm(PGenericList *L, PDelegate free_elm_fnc ) { $H
 	assert_not_null(L);
-    free_elm_fnc($$A L->_elm );
+    free_elm_fnc(L->_elm );
     return_with;
 }
 
 /**
  * Get the list element from a generic list.
  */
-void *gen_list_get_elm($$ PGenericList *L ) { $H
+void *gen_list_get_elm(PGenericList *L ) { $H
     assert_not_null(L);
     return_with L->_elm;
 }
@@ -120,7 +120,7 @@ void *gen_list_get_elm($$ PGenericList *L ) { $H
 /**
  * Set the list element from a generic list.
  */
-void gen_list_set_elm($$ PGenericList *L, void *elm ) { $H
+void gen_list_set_elm(PGenericList *L, void *elm ) { $H
     assert_not_null(L);
     L->_elm = elm;
     return_with;

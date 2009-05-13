@@ -11,7 +11,7 @@
 /**
  * Allocate space a new string on the heap.
  */
-static PString *string_alloc($$ uint32_t len ) { $H
+static PString *string_alloc(uint32_t len ) { $H
     assert(len > 0);
 
     PString *S = mem_alloc(sizeof(PString)+(sizeof(PChar) * len));
@@ -26,22 +26,22 @@ static PString *string_alloc($$ uint32_t len ) { $H
     return_with S;
 }
 
-static PChar S_char_to_pchar($$ char c ) { $H
+static PChar S_char_to_pchar(char c ) { $H
     return_with (PChar) c;
 }
 
 /**
  * Allocate a new string on the heap by using a stack-allocated array of char.
  */
-PString *string_alloc_char($$ const char * const str, const uint32_t len ) { $H
+PString *string_alloc_char(const char * const str, const uint32_t len ) { $H
     PString *S;
 
-    S = string_alloc($$A len );
+    S = string_alloc(len );
     int i;
 
     // copy the old characters into the heap-allocated chars
     for(i = 0; i < len; ++i)
-        S->str[i] = S_char_to_pchar($$A str[i] );
+        S->str[i] = S_char_to_pchar(str[i] );
 
     return_with S;
 }
@@ -49,7 +49,7 @@ PString *string_alloc_char($$ const char * const str, const uint32_t len ) { $H
 /**
  * Return the string length.
  */
-uint32_t string_length($$ const PString * const S ) { $H
+uint32_t string_length(const PString * const S ) { $H
     assert_not_null(S);
     return_with S->len;
 }
@@ -59,7 +59,7 @@ uint32_t string_length($$ const PString * const S ) { $H
  * array to put the ascii characters into that is of proper + 1 for terminating
  * character.
  */
-void string_convert_to_ascii($$ const PString * const S, char *ascii_version ) { $H
+void string_convert_to_ascii(const PString * const S, char *ascii_version ) { $H
     assert_not_null(S);
     assert_not_null(ascii_version);
 
@@ -75,7 +75,7 @@ void string_convert_to_ascii($$ const PString * const S, char *ascii_version ) {
 /**
  * Increase the refcount on a string. TODO: overflow check?
  */
-void string_use($$ PString *S ) { $H
+void string_use(PString *S ) { $H
     assert_not_null(S);
     ++(S->ref_count);
     return_with;
@@ -84,7 +84,7 @@ void string_use($$ PString *S ) { $H
 /**
  * Either free a string or decrease its reference counter.
  */
-void string_free($$ PString *S ) { $H
+void string_free(PString *S ) { $H
     assert_not_null(S);
 
     if(S->ref_count <= 1) {
@@ -95,16 +95,16 @@ void string_free($$ PString *S ) { $H
     return_with;
 }
 
-void delegate_string_free($$ void *str ) { $H
+void delegate_string_free(void *str ) { $H
     assert_not_null(str);
-    string_free($$A ((PString *) str) );
+    string_free(((PString *) str) );
     return_with;
 }
 
 /**
  * Check if two strings contain the same characters.
  */
-char string_equal($$ const PString * const A, const PString * const B ) { $H
+char string_equal(const PString * const A, const PString * const B ) { $H
     assert_not_null(A);
     assert_not_null(B);
 
@@ -127,7 +127,7 @@ char string_equal($$ const PString * const A, const PString * const B ) { $H
 }
 
 #if 0
-PStringHeap *string_heap_alloc($) { $H
+PStringHeap *string_heap_alloc(void) { $H
 
     /* try to allocate the object with which we will use to store different sets
      * of strings. */
@@ -164,13 +164,13 @@ PStringHeap *string_heap_alloc($) { $H
     return_with heap;
 }
 
-static PInternalString *string_internal_alloc($$ PStringHeap *H ) { $H
+static PInternalString *string_internal_alloc(PStringHeap *H ) { $H
     PInternalString *IS;
 
     return_with IS;
 }
 
-static PString *string_external_alloc($$ PStringHeap *H ) { $H
+static PString *string_external_alloc(PStringHeap *H ) { $H
     PString *S;
 
     // try to either re-allocate space.
@@ -190,7 +190,7 @@ static PString *string_external_alloc($$ PStringHeap *H ) { $H
     return_with S;
 }
 
-static PInternalChar *string_char_alloc($$ uint32_t len ) { $H
+static PInternalChar *string_char_alloc(uint32_t len ) { $H
     PInternalChar C = mem_alloc(sizeof(PInternalChar) * len);
 
     if(NULL == C) {
@@ -200,7 +200,7 @@ static PInternalChar *string_char_alloc($$ uint32_t len ) { $H
     return_with C;
 }
 
-PString *string_alloc($$ PStringHeap *H, int str_len ) { $H
+PString *string_alloc(PStringHeap *H, int str_len ) { $H
     PString *S;
     PInternalString *IS;
 

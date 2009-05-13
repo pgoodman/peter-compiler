@@ -11,9 +11,9 @@
 
 #include "std-include.h"
 
-typedef void (*PDelegate)($$ void * );
-typedef void (*PDelegate2)($$ void *, void * );
+typedef void (*PDelegate)(void * );
+typedef void (*PDelegate2)(void *, void * );
 
-void delegate_do_nothing($$ void * const);
+void delegate_do_nothing(void * const);
 
 #endif /* DELEGATE_H_ */
