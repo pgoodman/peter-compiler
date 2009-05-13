@@ -26,6 +26,7 @@ void list_free($$ void *, PDelegate );
 
 PList *list_get_next($$ void * );
 void list_set_next($$ void *, void * );
+char list_has_next($$ void *);
 
 PGenericList *gen_list_alloc($);
 void gen_list_free($$ PGenericList *, PDelegate );
