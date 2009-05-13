@@ -25,7 +25,7 @@ typedef struct PTree {
                    _parent_branch; /* which branch of the parent this tree is using */
 
 	struct PTree **_branches, /* array of branches */
-                *_parent; /* parent tree */
+                 *_parent; /* parent tree */
 } PTree;
 
 typedef void (*PTreeGeneratorReclaimFunction)(void *, PDelegate);

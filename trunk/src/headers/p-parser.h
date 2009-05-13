@@ -30,13 +30,22 @@ typedef struct PParser {
     PDictionary *rules; /* keep track of rules used in productions, this does
                          * not keep track of epsilon rules as that is statically
                          * defined anyway. */
+
+    PStack *temp_parse_trees; /* unused or cached parsed trees. */
 } PParser;
+
+/* parse tree, only used for productions, leaves are tokens :) */
+typedef struct PParseTree {
+    PTree _;
+    struct PParseTree *(*production)(struct PParseTree *);
+    short rule;
+} PParseTree;
 
 /* a parser function. a parser function deals with the *semantic* meaning of
  * a particular node in a parse tree. These functions are called *after* the
  * entire and correct parse tree is generated.
  */
-typedef PTree *(*PParserFunc)(PTree *);
+typedef PParseTree *(*PParserFunc)(PParseTree *);
 
 /* types relating to how the internal call stack is re-written using these
  * rules.

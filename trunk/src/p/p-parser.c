@@ -30,16 +30,18 @@
 
 /* type describing a type used to store a lazy result for a function */
 typedef struct P_Thunk {
-    PParserFunc func;
+    PParserFunc production;
     PGenericList *list;
 } P_Thunk;
 
+typedef struct P_CachedResult {
+    PGenericList *start,
+                 *next;
+    PParserFunc production;
+    PParseTree *tree;
+} P_CachedResult;
+
 /* call stack type. */
-typedef struct P_CallStack {
-    PList _;
-    short local_extent;
-    PParserRewriteRule *rewrite_rule;
-} P_CallStack;
 
 /* production info. */
 typedef struct P_Production {
@@ -59,7 +61,7 @@ typedef struct P_StackFrame {
                  *alternative_rules,
                  *backtrack_point;
     char do_backtrack;
-    PTree *parse_tree;
+    PParseTree *parse_tree;
 } P_StackFrame;
 
 /* Hash function that converts a thunk to a char array */
@@ -71,8 +73,16 @@ static uint32_t P_key_hash_thunk_fnc(void *pointer) { $H
     switcher.thunk = *((P_Thunk *) pointer);
     return_with murmur_hash(switcher.thunk_as_chars, P_SIZE_OF_THUNK, 73);
 }
+
+/* Hash what the cache for thunks points to back into the hash value. */
 static uint32_t P_val_hash_thunk_fnc(void *pointer) { $H
-    return_with 0;
+    P_CachedResult *res = pointer;
+
+    P_Thunk thunk;
+    thunk.list = res->start;
+    thunk.production = res->production;
+
+    return_with P_key_hash_thunk_fnc(&thunk);
 }
 
 /* Hash function that converts a token to a char array */
@@ -86,15 +96,16 @@ static uint32_t P_hash_rewrite_rule_fnc(void *rewrite_fnc) { $H
 }
 
 /* Hash function that converts a parser function pointer into a char array. */
-static uint32_t P_key_hash_production_fnc(void *production) {
+static uint32_t P_key_hash_production_fnc(void *production) { $H
     union {
         PParserFunc prod;
         char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
     } switcher;
     switcher.prod = production;
+
     return_with murmur_hash(switcher.prod_as_chars, P_SIZE_OF_REWRITE_RULE, 73);
 }
-static uint32_t P_val_hash_production_fnc(void *production) {
+static uint32_t P_val_hash_production_fnc(void *production) { $H
     return_with P_key_hash_production_fnc(((P_Production *) production)->production);
 }
 
@@ -111,6 +122,7 @@ PParser *parser_alloc(void) { $H
     P->productions = dict_alloc(10, &P_key_hash_production_fnc, &P_val_hash_production_fnc);
     P->rules = dict_alloc(15, &P_hash_rewrite_rule_fnc, &P_hash_rewrite_rule_fnc);
     P->thunk_table = NULL;
+    P->temp_parse_trees = stack_alloc(sizeof(PStack));
 
     return_with P;
 }
@@ -277,7 +289,27 @@ PParserRewriteRule *parser_rewrite_epsilon(PParser *P) { $H
     return_with P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
 }
 
-static P_StackFrame *P_alloc_stack_frame(P_Production *prod, PGenericList *backtrack_point) { $H
+static P_CachedResult *P_alloc_cache(PGenericList *start,
+                                     PGenericList *end,
+                                     PParserFunc production,
+                                     PParseTree *tree) { $H
+
+    P_CachedResult *R = mem_alloc(sizeof(P_CachedResult));
+    if(NULL == R) {
+        mem_error("Unable to cache the result of a production on the heap.");
+    }
+
+    R->start = start;
+    R->next = (PGenericList *) list_get_next(end);
+    R->production = production;
+    R->tree = tree;
+
+    return_with R;
+}
+
+static P_StackFrame *P_alloc_stack_frame(P_Production *prod,
+                                         PGenericList *backtrack_point) { $H
+
     P_StackFrame *frame = mem_alloc(sizeof(P_StackFrame));
     if(NULL == frame) {
         mem_error("Unable to allocate new parser stack frame on the heap.");
@@ -291,12 +323,12 @@ static P_StackFrame *P_alloc_stack_frame(P_Production *prod, PGenericList *backt
 
     /* make the parse tree */
     frame->parse_tree = tree_alloc(
-        sizeof(PProductionTree),
+        sizeof(PParseTree),
         (unsigned short) ((frame->production)->max_rule_elms)
     );
+    frame->parse_tree->rule = 1;
 
-    ((PProductionTree *) frame->parse_tree)->production = prod->production;
-    ((PParseTree *) frame->parse_tree)->tree_type = P_PARSE_TREE_PRODUCTION;
+    ((PParseTree *) frame->parse_tree)->production = prod->production;
 
     return frame;
 }
@@ -338,7 +370,9 @@ static P_TokenList P_get_all_tokens(PTokenGenerator *G) { $H
 /**
  * Parse the tokens from a token generator.
  */
-static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_production) { $H
+static PParseTree *P_parse_tokens(PParser *P, \
+                            PTokenGenerator *G, \
+                            PParserFunc start_production) { $H
 
     assert_not_null(P);
     assert_not_null(G);
@@ -352,11 +386,11 @@ static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_pr
     P_Production *curr_production = NULL;
     P_Thunk thunk;
     P_TokenList token_result = P_get_all_tokens(G);
-    PTree *parse_tree = NULL;
+    PParseTree *parse_tree = NULL;
 
     /* no tokens were lexed */
     if(0 == token_result.num_tokens) {
-        return_with;
+        return_with parse_tree;
     }
 
     /* list of tokens available for backtracking. */
@@ -385,7 +419,7 @@ static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_pr
     stack_push(parser_stack, P_alloc_stack_frame(curr_production, token_list));
 
 
-    while(!stack_is_empty(parser_stack)) {
+    while(!stack_is_empty(parser_stack) && !is_null(curr)) {
 
         frame = stack_peek(parser_stack);
 
@@ -399,7 +433,7 @@ static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_pr
             if(NULL == frame->alternative_rules) {
 
                 /* record the thunk for future reference */
-                thunk.func = (frame->production)->production;
+                thunk.production = (frame->production)->production;
                 thunk.list = frame->backtrack_point;
                 dict_set(
                    P->thunk_table, &thunk,
@@ -427,28 +461,49 @@ static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_pr
             frame->curr_rule_list = (PGenericList *) gen_list_get_elm(frame->alternative_rules);
             frame->alternative_rules = (PGenericList *) list_get_next(frame->alternative_rules);
             frame->do_backtrack = 0;
+            ++(frame->parse_tree->rule);
 
-            /* clear the parse tree and free any built up children */
-            tree_trim_free(frame->parse_tree, &delegate_do_nothing);
+            /* clear the parse tree and store the unused trees elsewhere */
+            tree_trim(frame->parse_tree, P->temp_parse_trees);
 
         /* the production on the top of the stack succeeded. merge it into the
-         * parent tree or return the parse tree. */
-        } else if(!list_has_next(frame->curr_rule_list)) {
+         * parent tree or return the parse tree. Also, cache the production as
+         * a thunk. */
+        } else if(is_null(frame->curr_rule_list) || !list_has_next(frame->curr_rule_list)) {
+
             stack_pop(parser_stack);
 
+            /* done parsing, yay! */
             if(stack_is_empty(parser_stack)) {
                 parse_tree = frame->parse_tree;
                 mem_free(frame);
                 return_with parse_tree;
             }
 
+            thunk.list = frame->backtrack_point;
+            thunk.production = (frame->production)->production;
+
+            /* cache the result of this production */
+            dict_set(
+                P->thunk_table,
+                &thunk,
+                P_alloc_cache(
+                    frame->backtrack_point,
+                    curr,
+                    (frame->production)->production,
+                    frame->parse_tree
+                ),
+                &delegate_do_nothing
+            );
+
+            /* add the parse tree to the parent tree's derivation */
             tree_add_branch(
                 ((P_StackFrame *) stack_peek(parser_stack))->parse_tree,
                 frame->parse_tree
             );
 
+            /* free the frame and continue. */
             mem_free(frame);
-
             continue;
         }
 
@@ -464,18 +519,23 @@ static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_pr
 
             /* check if we have a memoized this result. */
             thunk.list = curr;
-            thunk.func = curr_rule->func;
+            thunk.production = curr_rule->func;
 
-            /* yes we have! */
+            /* yes we have! take the resulting parse tree, add it in to our
+             * frame and then advance to after all of the parsed tokens. */
             if(dict_is_set(P->thunk_table, &thunk)) {
-                /* TODO */
-            }
+
+                P_CachedResult *result = dict_get(P->thunk_table, &thunk);
+                tree_add_branch(frame->parse_tree, result->tree);
+                curr = result->next;
 
             /* nope, we need to perform the parse. */
-            stack_push(parser_stack, P_alloc_stack_frame(
-                dict_get(P->productions, curr_rule->func),
-                curr
-            ));
+            } else {
+                stack_push(parser_stack, P_alloc_stack_frame(
+                    dict_get(P->productions, curr_rule->func),
+                    curr
+                ));
+            }
 
             continue;
 
@@ -493,12 +553,28 @@ static void *P_parse_tokens(PParser *P, PTokenGenerator *G, PParserFunc start_pr
             /* we have matched the token. */
             tree_add_branch(frame->parse_tree, curr_token);
 
+            /* advance things :) */
+            frame->curr_rule_list = (PGenericList *) list_get_next(frame->curr_rule_list);
+            curr = (PGenericList *) list_get_next(curr);
+
         /* we have found an epsilon token, i.e. an empty character. we accept it
          * automatically and advance to the next rule.
          */
         } else {
             frame->curr_rule_list = (PGenericList *) list_get_next(frame->curr_rule_list);
+
+            /* TODO: record? */
         }
+    }
+
+    /* we've run out of tokens but there is still stuff to parse, i.e. parse
+     * error.
+     *
+     * TODO
+     */
+    if(!stack_is_empty(parser_stack)) {
+        printf("parse error, not enough tokens!\n");
+        exit(1);
     }
 
     return_with parse_tree;
