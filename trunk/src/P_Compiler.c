@@ -37,8 +37,6 @@ PParseTree *Decimal(PParseTree *x) { $H
 
 int main() { $MH
 
-    PParser *P = parser_alloc();
-
     /*
      * Additive  <-- Multitive '+' Additive
      *            /  Multitive
@@ -49,6 +47,8 @@ int main() { $MH
      * Primary   <-- '(' Additive ')'
      *            /  *number*
      */
+
+    PParser *P = parser_alloc(&Additive);
 
     parser_add_production(P, &Additive, 2,
         parser_rule_sequence(3,
