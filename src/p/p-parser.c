@@ -17,12 +17,31 @@
 #define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
 #define P_SIZE_OF_PARSER_FUNC (sizeof(PParserFunc) / sizeof(char))
 
-/* type describing a type used to store a lazy result for a function */
+/* Type representing the necessary information to uniquely identify the result
+ * of a production after being applied to a particular suffix of tokens. In this
+ * case, list is some pointer to a generic list of tokens that the production was
+ * applied to. The token list is ordered and never changes order and so the
+ * result of a production to some part in the token list can be meaningfully
+ * cached.
+ */
 typedef struct P_Thunk {
     PParserFunc production;
     PGenericList *list;
 } P_Thunk;
 
+/**
+ * Type representing the cached result of the application of a production to
+ * some part in the token list 'start'. This type is only used on successful
+ * parse, the P_PRODUCTION_FAILED pointer is instead cached to indicate a failed
+ * application of a production to some part of the token list.
+ *
+ * 'next' points to somewhere in the token list for the parser to pick up after
+ * accepting the cached parse tree, 'tree', from the application of this production.
+ *
+ * 'start' and 'production' indicate what production was used and to what part
+ * of the token list. This information is required in the event of resizing the
+ * thunk hash table.
+ */
 typedef struct P_CachedResult {
     PGenericList *start,
                  *next;
@@ -30,20 +49,68 @@ typedef struct P_CachedResult {
     PParseTree *tree;
 } P_CachedResult;
 
-/* call stack type. */
-
-/* production info. */
+/**
+ * Type representing a single production and all of its rules 'alternatives'
+ * from a top-down parsing grammar. The list is of rules is explicitly ordered.
+ *
+ * The 'max_rule_elms' is maximum number of non/terminals in all of its rules.
+ * This is used to allocate one and only one parse tree with max_rule_elms
+ * branch pointers.
+ */
 typedef struct P_Production {
     PGenericList *alternatives;
     PParserFunc production;
     short max_rule_elms;
 } P_Production;
 
+/**
+ * Type holding a pointer to the ordered list of *all* tokens from whatever text
+ * is currently being parsed, as well as the number of tokens in that list.
+ */
 typedef struct P_TokenList {
     PGenericList *list;
     uint32_t num_tokens;
 } P_TokenList;
 
+/**
+ * In a sense this parser is recursive-descent; however, it maintains its own
+ * heap-allocated stack frames, as opposed to calling production functions
+ * recursively.
+ *
+ * The choice to manage stack frames explicitly has a few very nice benefits:
+ *   i) it allows for the functions that perform the actual parsing to be
+ *      isolated and for the operations of the parser to be clearly defined and
+ *      predictable.
+ *   ii) it allows for the actual parser to be defined entirely in terms of
+ *       primitive pattern matching against the grammar as opposed to requiring
+ *       independent functions to be constructed to perform the actual parsing.
+ *   iii) it allows for a one-to-one correspondence between the definition of
+ *        the parser in C and the top-down parsing language grammar.
+ *
+ * A stack frame holds important information, namely:
+ *    a) the current production in being executed.
+ *    b) a list of the remaining non/terminals to match against tokens in the
+ *       token list. When this list is NULL it implies that we have reached the
+ *       end of it and thus have matched all of the non/terminals of this
+ *       particular production's rule.
+ *    c) the alternative rules if any non/terminal in the curr_rule_list fails
+ *       to match. If the alternative_rules list is null and the 'do_backtrack'
+ *       flag is set then it implies that all of the rules for the current
+ *       production have failed to match the tokens.
+ *    d) the backtrack_point points to where in the token list the parser was
+ *       when it attempted to start matching this production. This is the point
+ *       where it will return to on failure in order to try matching another
+ *       rule.
+ *    e) a do_backtrack flag indicating that a non/terminal in curr_rule_list
+ *       has failed to match a token and so we must backtrack to the
+ *       backtrack_point and try another rule, or upon full failure of the
+ *       production, cascade the failure to the calling production.
+ *    f) the parse tree as it is being constructed.
+ *    g) the calling stack frame. This is used for two reasons, it lets us
+ *       manually manage the call stack without the overhead of the generic
+ *       stack data structure and it also lets us reclaim stack frames for
+ *       future use.
+ */
 typedef struct P_StackFrame {
     P_Production *production;
     PGenericList *curr_rule_list,
@@ -51,9 +118,13 @@ typedef struct P_StackFrame {
                  *backtrack_point;
     char do_backtrack;
     PParseTree *parse_tree;
+    struct P_StackFrame *caller;
 } P_StackFrame;
 
-/* Hash function that converts a thunk to a char array */
+/**
+ * Hash function that converts a thunk to a char array. Thunks are used as the
+ * keys into a hash table for cached parse results.
+ */
 static uint32_t P_key_hash_thunk_fnc(void *pointer) { $H
     union {
         P_Thunk thunk;
@@ -63,7 +134,9 @@ static uint32_t P_key_hash_thunk_fnc(void *pointer) { $H
     return_with murmur_hash(switcher.thunk_as_chars, P_SIZE_OF_THUNK, 73);
 }
 
-/* Hash what the cache for thunks points to back into the hash value. */
+/**
+ * Hash function to extract a thunk from a cached parse result and then hash it.
+ */
 static uint32_t P_val_hash_thunk_fnc(void *pointer) { $H
     P_CachedResult *res = pointer;
 
@@ -99,7 +172,9 @@ static uint32_t P_val_hash_production_fnc(void *production) { $H
 }
 
 /**
- * Allocate a new parser on the heap.
+ * Allocate a new parser on the heap. A parser, in this case, is a container
+ * linking to all of top-down-parsing language data structures as well as to
+ * helping deal with garbage.
  */
 PParser *parser_alloc(void) { $H
     PParser *P = mem_alloc(sizeof(PParser));
@@ -108,10 +183,29 @@ PParser *parser_alloc(void) { $H
         mem_error("Unable to allocate a new parser on the heap.");
     }
 
+    /* hash table mapping production function (PParserFunc) to the information
+     * that corresponds with them (P_Production). */
     P->productions = dict_alloc(10, &P_key_hash_production_fnc, &P_val_hash_production_fnc);
+
+    /* hash table mapping parser rewrite rules to themselves. This is used
+     * in order to not repeatedly heap allocate the same rule twice. A rewrite
+     * rule identifies a token to match, a production to call, or nothing
+     * (epsilon rule) that is a blind accept.
+     */
     P->rules = dict_alloc(15, &P_hash_rewrite_rule_fnc, &P_hash_rewrite_rule_fnc);
+
+    /* the cache table, this will be allocated when we know how many tokens we
+     * are working with.
+     */
     P->thunk_table = NULL;
+
+    /* a place to put unused/temporary/garbage parse trees. */
     P->temp_parse_trees = stack_alloc(sizeof(PStack));
+
+    /* signal that this parser is open to have productions and their rules added
+     * to it.
+     */
+    P->is_closed = 0;
 
     return_with P;
 }
@@ -182,7 +276,10 @@ void parser_add_production(PParser *P,
 }
 
 /**
- * Create one of the rule sequences needed for a production.
+ * Create one of the rule sequences needed for a production. Each production
+ * must have one or more rule sequence, where each rule sequence is a list of
+ * PParserRewriteRule telling the parser to either match a particular token or
+ * to recursively call and match a production.
  */
 PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) { $H
     va_list rules;
@@ -225,12 +322,16 @@ PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1
 }
 
 /**
- * A generic parser rewrite rule. This encompasses all three types:
- * 1) production (function) rules
- * 2) token rules
- * 3) epsilon rules.
+ * A generic parser rewrite rule. This encompasses all three types of things that
+ * we want to match:
+ *   1) production (function) rules
+ *   2) token rules
+ *   3) epsilon rules.
  */
-static PParserRewriteRule *P_parser_rewrite_rule(PParser *P, PLexeme tok, PParserFunc func) { $H
+static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
+                                                 PLexeme tok,
+                                                 PParserFunc func) {
+    $H
     assert_not_null(P);
 
     /* make a thunk out of it to search for in the hash table */
@@ -257,14 +358,18 @@ static PParserRewriteRule *P_parser_rewrite_rule(PParser *P, PLexeme tok, PParse
     return_with R;
 }
 
-/* Rewrite rule for a single function */
+/**
+ * Rewrite rule for a single production function
+ */
 PParserRewriteRule *parser_rewrite_function(PParser *P, PParserFunc func) { $H
     assert_not_null(P);
     assert_not_null(func);
     return_with P_parser_rewrite_rule(P, P_LEXEME_EPSILON, func);
 }
 
-/* Rewrite rule for a single token */
+/**
+ * Rewrite rule for a single token
+ */
 PParserRewriteRule *parser_rewrite_token(PParser *P, PLexeme tok) { $H
     assert_not_null(P);
     return_with P_parser_rewrite_rule(P, tok, NULL);
@@ -278,6 +383,9 @@ PParserRewriteRule *parser_rewrite_epsilon(PParser *P) { $H
     return_with P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
 }
 
+/**
+ * Allocate a new cached result of parsing on the heap.
+ */
 static P_CachedResult *P_alloc_cache(PGenericList *start,
                                      PGenericList *end,
                                      PParserFunc production,
@@ -296,12 +404,23 @@ static P_CachedResult *P_alloc_cache(PGenericList *start,
     return_with R;
 }
 
-static P_StackFrame *P_alloc_stack_frame(P_Production *prod,
+/**
+ * Allocate a new production stack frame on the heap.
+ */
+static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
+                                         P_Production *prod,
                                          PGenericList *backtrack_point) { $H
 
-    P_StackFrame *frame = mem_alloc(sizeof(P_StackFrame));
-    if(NULL == frame) {
-        mem_error("Unable to allocate new parser stack frame on the heap.");
+    P_StackFrame *frame;
+
+    if(is_null(*unused)) {
+        frame = mem_alloc(sizeof(P_StackFrame));
+        if(NULL == frame) {
+            mem_error("Unable to allocate new parser stack frame on the heap.");
+        }
+    } else {
+        frame = (*unused);
+        (*unused) = frame->caller;
     }
 
     frame->production = prod;
@@ -319,7 +438,22 @@ static P_StackFrame *P_alloc_stack_frame(P_Production *prod,
 
     ((PParseTree *) frame->parse_tree)->production = prod->production;
 
-    return frame;
+    return_with frame;
+}
+
+static void P_frame_stack_push(P_StackFrame **stack, P_StackFrame *frame) { $H
+    frame->caller = (*stack);
+    (*stack) = frame;
+    return_with;
+}
+
+static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) { $H
+    P_StackFrame *frame = (*stack);
+
+    (*stack) = frame->caller;
+    frame->caller = (*unused);
+    (*unused) = frame;
+    return_with;
 }
 
 /* Return a linked list of all tokens in the current file being parsed */
@@ -370,7 +504,7 @@ static PParseTree *P_parse_tokens(PParser *P, \
     /* close the parser to updates on its grammar. */
     P->is_closed = 1;
 
-    PStack *parser_stack = stack_alloc(sizeof(PStack));
+    /*PStack *parser_stack = stack_alloc(sizeof(PStack)); */
     PToken *curr_token = NULL;
     P_Production *curr_production = NULL;
     P_Thunk thunk;
@@ -389,7 +523,9 @@ static PParseTree *P_parse_tokens(PParser *P, \
                  *curr = token_list;
 
     PParserRewriteRule *curr_rule;
-    P_StackFrame *frame = NULL;
+
+    P_StackFrame *frame = NULL,
+                 *unused = NULL;
 
     /* allocate enough space for a single perfect pass through the text for
      * thunks.
@@ -405,12 +541,15 @@ static PParseTree *P_parse_tokens(PParser *P, \
      * we can backtrack.
      */
     curr_production = dict_get(P->productions, start_production);
-    stack_push(parser_stack, P_alloc_stack_frame(curr_production, token_list));
+    P_frame_stack_push(
+        &frame,
+        P_frame_stack_alloc(&unused, curr_production, token_list)
+    );
 
+    while(!is_null(frame) && !is_null(curr)) {
 
-    while(!stack_is_empty(parser_stack) && !is_null(curr)) {
-
-        frame = stack_peek(parser_stack);
+        /*frame = stack_peek(parser_stack);*/
+        curr_production = frame->production;
 
         /* the production on the top of the stack has been signalled to
          * backtrack. */
@@ -422,25 +561,23 @@ static PParseTree *P_parse_tokens(PParser *P, \
             if(is_null(frame->alternative_rules)) {
 
                 /* record the thunk for future reference */
-                thunk.production = (frame->production)->production;
+                thunk.production = curr_production->production;
                 thunk.list = frame->backtrack_point;
                 dict_set(
                    P->thunk_table, &thunk,
                    P_PRODUCTION_FAILED, &delegate_do_nothing
                 );
 
+                /* free this frame's parse tree
+                 * TODO: it seems like I should not be freeing the children.. */
+                /*tree_free(frame->parse_tree, &delegate_do_nothing); */
+
                 /* pop off this frame and continue on. */
-                stack_pop(parser_stack);
-
-                /* free this frame's parse tree */
-                tree_free(frame->parse_tree, &delegate_do_nothing);
-
-                /* free the frame. */
-                mem_free(frame);
+                P_frame_stack_pop(&unused, &frame);
 
                 /* cascade this failure to the next stack frame. */
-                if(!stack_is_empty(parser_stack)) {
-                    ((P_StackFrame *) stack_peek(parser_stack))->do_backtrack = 1;
+                if(!is_null(frame)) {
+                    frame->do_backtrack = 1;
                 }
 
                 continue;
@@ -460,39 +597,36 @@ static PParseTree *P_parse_tokens(PParser *P, \
          * a thunk. */
         } else if(is_null(frame->curr_rule_list) || !list_has_next(frame->curr_rule_list)) {
 
-            stack_pop(parser_stack);
+            P_frame_stack_pop(&unused, &frame);
 
             /* done parsing, yay! */
-            if(stack_is_empty(parser_stack)) {
-                parse_tree = frame->parse_tree;
-                mem_free(frame);
-                return_with parse_tree;
+            if(!is_null(frame)) {
+                parse_tree = unused->parse_tree;
+                goto done_parsing;
             }
 
-            thunk.list = frame->backtrack_point;
-            thunk.production = (frame->production)->production;
+            thunk.list = unused->backtrack_point;
+            thunk.production = curr_production->production;
 
             /* cache the result of this production */
             dict_set(
                 P->thunk_table,
                 &thunk,
                 P_alloc_cache(
-                    frame->backtrack_point,
+                    unused->backtrack_point,
                     curr,
-                    (frame->production)->production,
-                    frame->parse_tree
+                    curr_production->production,
+                    unused->parse_tree
                 ),
                 &delegate_do_nothing
             );
 
             /* add the parse tree to the parent tree's derivation */
             tree_add_branch(
-                ((P_StackFrame *) stack_peek(parser_stack))->parse_tree,
-                frame->parse_tree
+                frame->parse_tree,
+                unused->parse_tree
             );
 
-            /* free the frame and continue. */
-            mem_free(frame);
             continue;
         }
 
@@ -520,7 +654,8 @@ static PParseTree *P_parse_tokens(PParser *P, \
 
             /* nope, we need to perform the parse. */
             } else {
-                stack_push(parser_stack, P_alloc_stack_frame(
+                P_frame_stack_push(&frame, P_alloc_stack_frame(
+                    &unused,
                     dict_get(P->productions, curr_rule->func),
                     curr
                 ));
@@ -561,10 +696,13 @@ static PParseTree *P_parse_tokens(PParser *P, \
      *
      * TODO
      */
-    if(!stack_is_empty(parser_stack)) {
+    if(!is_null(frame)) {
         printf("parse error, not enough tokens!\n");
         exit(1);
     }
+
+    done_parsing:
+    printf("parsed successfully!\n");
 
     return_with parse_tree;
 }
