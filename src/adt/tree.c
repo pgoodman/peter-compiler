@@ -87,10 +87,10 @@ static PDelegate T_valid_free_callback(void * ft, PDelegate disallowed, PDelegat
  *     which are not part of the PTree structure. The PTree structure should be
  *     seen as a black box and not touched.
  */
-void tree_free(void *T, PDelegate free_tree_fnc ) { $H
+void tree_free(void *T, PDelegate free_tree_fnc) { $H
     assert_not_null(T);
 
-    PTree *node = NULL;
+    PTree *node = (PTree *) T;
     void *elm = NULL;
 
     /* get a valid memory free callback for this context */
@@ -103,7 +103,7 @@ void tree_free(void *T, PDelegate free_tree_fnc ) { $H
     /* traverse the tree in post order and free the tree nodes from the
      * bottom up. */
     if(0 < node->_fill) {
-        PTreeGenerator *G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
+        PTreeGenerator *G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
 
         while(generator_next(G)) {
             elm = generator_current(G );
@@ -251,7 +251,6 @@ void tree_trim_free(void *tree, PDelegate free_tree_fnc) { $H
  * Set a tree C as one of the branches of T. Return 1 if successful, 0 on failure.
  */
 char tree_add_branch(void *tree, void *branch ) { $H
-
 	assert_not_null(tree);
 	assert_not_null(branch);
 
@@ -259,7 +258,6 @@ char tree_add_branch(void *tree, void *branch ) { $H
           *child = (PTree *) branch;
 
     assert(parent->_fill < parent->_degree);
-
     parent->_branches[parent->_fill] = child;
     child->_parent = parent;
 

@@ -18,11 +18,26 @@
 #include "p-lexer.h"
 
 /* parse tree, only used for productions, leaves are tokens :) */
+typedef enum {
+    P_PARSE_TREE_PRODUCTION,
+    P_PARSE_TREE_TERMINAL
+} PParseTreeType;
+
 typedef struct PParseTree {
     PTree _;
-    struct PParseTree *(*production)(struct PParseTree *);
-    short rule;
+    PParseTreeType type;
 } PParseTree;
+
+typedef struct PProductionTree {
+    PParseTree _;
+    struct PParseTree *(*production)(struct PParseTree *);
+    short rule; /* the rule from the production's definition that was matched */
+} PProductionTree;
+
+typedef struct PTerminalTree {
+    PParseTree _;
+    PToken *token;
+} PTerminalTree;
 
 /* a parser function. a parser function deals with the *semantic* meaning of
  * a particular node in a parse tree. These functions are called *after* the
@@ -70,6 +85,6 @@ PParserRewriteRule *parser_rewrite_function(PParser *, PParserFunc);
 PParserRewriteRule *parser_rewrite_token(PParser *, PLexeme);
 PParserRewriteRule *parser_rewrite_epsilon(PParser *);
 
-void *parser_parse_file(PParser *, PTokenGenerator *, PParserFunc);
+PParseTree *parser_parse_tokens(PParser *, PTokenGenerator *);
 
 #endif /* PPARSER_H_ */

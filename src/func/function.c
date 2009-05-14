@@ -8,6 +8,6 @@
 
 #include <func-function.h>
 
-void *function_identity(void *X ) {
+void *function_identity(void *X) {
     return_with X;
 }

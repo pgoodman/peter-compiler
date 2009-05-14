@@ -10,6 +10,8 @@
 #define PLEXER_H_
 
 #include "adt-generator.h"
+#include "adt-dict.h"
+#include "std-string.h"
 
 typedef enum {
     P_LEXEME_EPSILON,
@@ -38,12 +40,13 @@ typedef struct PToken {
     PLexeme lexeme;
     PString *val;
     uint32_t line,
-             start_column,
-             end_column;
+             column;
 } PToken;
 
 typedef struct PTokenGenerator {
     PGenerator _;
 } PTokenGenerator;
+
+PTokenGenerator *token_generator_alloc(void);
 
 #endif /* PLEXER_H_ */
