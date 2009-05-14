@@ -49,6 +49,8 @@ int main() { $MH
      */
 
     PParser *P = parser_alloc(&Additive);
+    PParseTree *T = NULL;
+    PTokenGenerator *G = token_generator_alloc();
 
     parser_add_production(P, &Additive, 2,
         parser_rule_sequence(3,
@@ -82,6 +84,28 @@ int main() { $MH
             parser_rewrite_token(P, P_LEXEME_NUMBER)
         )
     );
+
+    T = parser_parse_tokens(P, G);
+
+    printf("bottom-up traversal of the parse tree:\n");
+    PTreeGenerator *gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
+    PParseTree *curr;
+    PParserFunc f;
+    while(generator_next(gen)) {
+        curr = generator_current(gen);
+        if(P_PARSE_TREE_PRODUCTION == curr->type) {
+            f = ((PProductionTree *) curr)->production;
+            if(f == &Additive)
+                printf("Additive\n");
+            else if(f == &Multitive)
+                printf("Multitive\n");
+            else
+                printf("Primary\n");
+        } else {
+            printf("%d\n", ((PTerminalTree *) curr)->token->lexeme);
+        }
+    }
+    generator_free(gen);
 
     return 0;
 }
