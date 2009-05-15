@@ -934,13 +934,13 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
     j++;
 
-    PARSER_DEBUG(printf(
+    printf(
         "\ncompleted parse with:\n\t %d token comparisons\n\t %d recursive function "
         "calls\n\t %d cache_uses.\n\t %d backtracks\n\t %d cached succeses\n\t %d cached "
         "failures\n\t %d tokens\n\n",
         num_tok_comparisons, num_func_calls, num_cache_uses, num_backtracks,
         num_cached_successes, num_cached_failures, token_result.num_tokens
-    );)
+    );
 
     if(is_not_null(curr)) {
         printf("parse error.\n");
