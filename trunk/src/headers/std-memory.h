@@ -46,7 +46,7 @@ void _D1_mem_free(void * );
 #define mem_realloc realloc
 
 #define mem_error(e) { \
-    printf(e " in %s on line %d.", __FILE__, (unsigned int)__LINE__); \
+    printf(e " in %s on line %d.\n", __FILE__, (unsigned int)__LINE__); \
     fflush(stdout); \
     exit(1);}
 

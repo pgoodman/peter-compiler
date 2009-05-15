@@ -39,8 +39,9 @@ PString *string_alloc_char(const char * const str, const uint32_t len ) { $H
     S = string_alloc(len );
     int i;
 
-    // copy the old characters into the heap-allocated chars
-    for(i = 0; i < len; ++i)
+    // copy the old characters, including null character, into the
+    // heap-allocated chars
+    for(i = 0; i < len+1; ++i)
         S->str[i] = S_char_to_pchar(str[i] );
 
     return_with S;

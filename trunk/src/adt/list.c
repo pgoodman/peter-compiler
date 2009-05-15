@@ -54,7 +54,7 @@ void list_set_next(void *L, void *N ) { $H
 /**
  * Get the next element of a linked list.
  */
-PList *list_get_next(void *L ) { $H
+PList *list_get_next(void *L) { $H
 	assert_not_null(L);
     return_with ((PList *) L)->_next;
 }
