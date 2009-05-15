@@ -109,5 +109,7 @@ int main() { $MH
     }
     generator_free(gen);
 
+    printf("done.\n");
+
     return 0;
 }
