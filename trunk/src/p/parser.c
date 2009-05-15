@@ -140,7 +140,6 @@ static uint32_t P_key_hash_thunk_fnc(void *pointer) { $H
 static char P_hash_thunk_collision_fnc(void *thunk1, void *thunk2) {
     P_Thunk *t1 = thunk1,
             *t2 = thunk2;
-    printf("\tchecking thunk collision...\n");
     return ((t1->list != t2->list) || (t1->production != t2->production));
 }
 
@@ -165,7 +164,6 @@ static uint32_t P_hash_rewrite_rule_fnc(void *rewrite_rule) { $H
 static char P_hash_rewrite_collision_fnc(void *rule1, void *rule2) {
     PParserRewriteRule *r1 = rule1,
                        *r2 = rule2;
-    printf("\tchecking rewrite collision...\n");
     return ((r1->func != r2->func) || (r1->lexeme != r2->lexeme));
 }
 
@@ -188,7 +186,6 @@ static uint32_t P_key_hash_production_fnc(void *production) { $H
  * Check for a hash collision.
  */
 static char P_hash_production_collision_fnc(void *fnc1, void *fnc2) { $H
-    printf("\tchecking production collision...\n");
     return_with fnc1 != fnc2;
 }
 
@@ -497,6 +494,15 @@ static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) { $H
     (*stack) = frame->caller;
     frame->caller = (*unused);
     (*unused) = frame;
+
+    frame->alternative_rules = NULL;
+    frame->backtrack_point = NULL;
+    frame->caller = NULL;
+    frame->curr_rule_list = NULL;
+    frame->do_backtrack = 0;
+    frame->parse_tree = NULL;
+    frame->production = NULL;
+
     return_with;
 }
 
@@ -651,6 +657,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
              */
             if(is_null(frame->alternative_rules)) {
 
+                printf("cascading.\n");
+
                 /* dump the parse tree */
                 tree_free(frame->parse_tree, &delegate_do_nothing);
                 frame->parse_tree = NULL;
@@ -681,6 +689,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
             /* there is at least one rule to backtrack to. */
             } else {
 
+                printf("backtracking.\n");
+
                 /* switch rules */
                 frame->curr_rule_list = (PGenericList *) gen_list_get_elm(
                     frame->alternative_rules
@@ -710,6 +720,9 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
             /* we have parsed all of the tokens. there is no need to do any
              * work on the stack or the cache. */
             if(is_null(frame->caller)) {
+
+                printf("done parsing.\n");
+
                 break;
 
             /* we can't prove that this is a successful parse of all of the
@@ -718,6 +731,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
              * and yeild control to the parent frame.
              */
             } else {
+
+                printf("production succeeded.\n");
 
                 /* cache the successful application of this production. */
                 dict_set(
@@ -770,6 +785,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
                     /* the cached result is a failure. time to backtrack. */
                     if(cached_result == P_PRODUCTION_FAILED) {
 
+                        printf("cached production failed.\n");
+
                         frame->do_backtrack = 1;
 
                     /* the cached result was a success, we need to merge the
@@ -780,6 +797,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
                      */
                     } else {
 
+                        printf("cached production succeeded.\n");
+
                         /* merge the trees */
                         tree_add_branch(frame->parse_tree, cached_result->tree);
 
@@ -789,13 +808,15 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
                         );
 
                         /* advance to a future token. */
-                        curr = (PGenericList *) list_get_next(cached_result->end);
+                        curr = cached_result->end;
                     }
 
                 /* we do not have a cached result and so we will need to push a
                  * new frame onto the stack.
                  */
                 } else {
+
+                    printf("pushing production onto stack.\n");
 
                     P_frame_stack_push(&frame, P_frame_stack_alloc(
                         &unused,
@@ -833,6 +854,9 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
 
                 /* the tokens do not match, backtrack. */
                 } else {
+
+                    printf("didn't match, expected:%d got:%d\n", curr_rule->lexeme, curr_token->lexeme);
+
                     frame->do_backtrack = 1;
                 }
 
@@ -849,259 +873,5 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
     }
 
     return parse_tree;
-
-#if 0
-    while(is_not_null(frame)) {
-
-        sleep(1);
-
-        parse_tree = frame->parse_tree;
-        curr_production = frame->production;
-
-        /* the production on the top of the stack has been signaled to
-         * backtrack. */
-        if(frame->do_backtrack) {
-
-            printf("rule failure, backtracking..\n");
-
-            /* this production has failed by virtue of having no more rules
-             * to try. we need to record this failure, pop off the stack, and
-             * cascade our failure upward. */
-            if(is_null(frame->alternative_rules)) {
-
-                printf("\tnothing to backtrack to, production failed.\n");
-
-                /* record the thunk for future reference */
-                dict_set(
-                   P->thunk_table,
-                   P_alloc_thunk(
-                       curr_production->production,
-                       frame->backtrack_point
-                   ),
-                   P_PRODUCTION_FAILED,
-                   &delegate_do_nothing
-                );
-
-                printf("\tcached failure to thunk table\n");
-
-                /* trim off the branches of this frame's parse tree, then free
-                 * the tree. We do a trim because productions called in/directly
-                 * through this production might have succeeded and hence might
-                 * be future useful results. */
-                tree_trim(frame->parse_tree, P->temp_parse_trees);
-                tree_free(frame->parse_tree, &delegate_do_nothing);
-                frame->parse_tree = NULL;
-
-                /* pop off this frame and continue on. */
-                P_frame_stack_pop(&unused, &frame);
-
-                /* we've backtracked all the way to the top, i.e. parse error. */
-                if(is_null(frame)) { /* TODO? */
-                    goto parse_error;
-                }
-
-                /* cascade this failure to the next stack frame. */
-                frame->do_backtrack = 1;
-                continue;
-            }
-
-            /* go back to the backtrack point */
-            printf("\t\tbacking up to next token.\n");
-            curr = frame->backtrack_point;
-
-            /* try the next rule in this production */
-            frame->curr_rule_list = (PGenericList *) gen_list_get_elm(
-                frame->alternative_rules
-            );
-            frame->alternative_rules = (PGenericList *) list_get_next(
-                frame->alternative_rules
-            );
-
-            frame->do_backtrack = 0;
-
-            ++(((PProductionTree *) (frame->parse_tree))->rule);
-
-            /* clear the parse tree and store the unused trees elsewhere */
-            tree_trim(frame->parse_tree, P->temp_parse_trees);
-
-            printf("\tbacktracked to next rule.\n");
-
-        /* the production on the top of the stack succeeded. merge it into the
-         * parent tree or return the parse tree. Also, cache the production as
-         * a thunk. */
-        } else if(is_null(frame->curr_rule_list)) {
-
-            printf("production succeeded...\n");
-
-            P_frame_stack_pop(&unused, &frame);
-
-            /* done parsing, yay! */
-            if(is_null(frame)) {
-                goto done_parsing;
-            }
-
-            /* cache the result of this production */
-            dict_set(
-                P->thunk_table,
-                P_alloc_thunk(
-                    curr_production->production,
-                    unused->backtrack_point
-                ),
-                P_alloc_cache(
-                    unused->backtrack_point,
-                    curr,
-                    curr_production->production,
-                    unused->parse_tree
-                ),
-                &delegate_do_nothing
-            );
-
-            printf("\tcached success to thunk table\n");
-
-            /* add the parse tree to the parent tree's derivation */
-            tree_add_branch(
-                frame->parse_tree,
-                unused->parse_tree
-            );
-
-            /* move the curr rule list of the caller forward. */
-            curr = (PGenericList *) list_get_next(curr); /* TODO? */
-            /*frame->curr_rule_list = (PGenericList *) list_get_next(
-                frame->curr_rule_list
-            );*/
-
-            printf("\tmerged into caller.\n");
-
-            continue;
-        }
-
-        if(is_null(curr)) {
-            break;
-        }
-
-        /* get the rewrite rule and the current token we are looking at. */
-        curr_rule = gen_list_get_elm(frame->curr_rule_list);
-        curr_token = gen_list_get_elm(curr);
-
-        /* if the current rewrite rule's function pointer is not null then it
-         * is a recursive call to another production and we must push that
-         * production onto the stack.
-         */
-        if(is_not_null(curr_rule->func)) {
-
-            printf("calling production...\n");
-
-            /* check if we have a memoized this result. */
-            thunk.production = curr_rule->func;
-            thunk.list = curr;
-            cached_result = dict_get(P->thunk_table, &thunk);
-
-            printf("\tchecking thunk table for cached result\n");
-
-            frame->curr_rule_list = (PGenericList *) list_get_next(
-                frame->curr_rule_list
-            );
-
-            /* yes we have! take the resulting parse tree, add it in to our
-             * frame and then advance to after all of the parsed tokens. */
-            if(is_not_null(cached_result)) {
-
-                /* the cached result is a failure, thus this rule fails. */
-                if(cached_result == P_PRODUCTION_FAILED) {
-                    printf("\tcached result is a failure.\n");
-
-                    frame->do_backtrack = 1;
-                    continue;
-                }
-
-                printf("\tcached result is a success.\n");
-
-                tree_add_branch(frame->parse_tree, cached_result->tree);
-
-                printf("\t\tgoing to future token.\n");
-                curr = cached_result->next;/*(PGenericList *) list_get_next(cached_result->next);*/
-
-
-            /* nope, we need to perform the parse. */
-            } else {
-
-                printf("\tpushing stack frame.\n");
-
-                P_frame_stack_push(&frame, P_frame_stack_alloc(
-                    &unused,
-                    dict_get(P->productions, curr_rule->func),
-                    curr
-                ));
-            }
-
-            continue;
-
-        /* we need to try to match the current token against the token expected
-         * in this production's current rule.
-         */
-        } else if(P_LEXEME_EPSILON != curr_rule->lexeme) {
-
-            ++num_comparisons;
-            printf("checking token...\n");
-
-            /* ugh. we failed to match and so we must backtrack. */
-            if(curr_rule->lexeme != curr_token->lexeme) {
-
-                printf("\ttoken failed to match, expected:%d got:%d.\n", curr_rule->lexeme, curr_token->lexeme);
-
-                frame->do_backtrack = 1;
-                continue;
-            }
-
-            printf("\ttoken matched, expected:%d got:%d.\n", curr_rule->lexeme, curr_token->lexeme);
-
-            printf("\n%s\n", curr_token->val->str);
-
-            /* we have matched the token. */
-            terminal_tree = tree_alloc(sizeof(PTerminalTree), 0);
-            terminal_tree->token = curr_token;
-            tree_add_branch(frame->parse_tree, terminal_tree);
-
-            /* advance things :) */
-            printf("\t\tgoing to next token.\n");
-            curr = (PGenericList *) list_get_next(curr);
-            frame->curr_rule_list = (PGenericList *) list_get_next(
-                frame->curr_rule_list
-            );
-
-        /* we have found an epsilon token, i.e. an empty character. we accept it
-         * automatically and advance to the next rule.
-         */
-        } else {
-            frame->curr_rule_list = (PGenericList *) list_get_next(
-                frame->curr_rule_list
-            );
-
-            /* TODO: record? */
-        }
-    }
-
-
-    /* we've run out of tokens but there is still stuff to parse, i.e. parse
-     * error.
-     *
-     * TODO
-     */
-    if(is_not_null(frame) || is_not_null(curr)) {
-parse_error:
-        printf("total token comparisons performed; %d\n", num_comparisons);
-        printf("parse error, ran out of tokens or backtracked into infinity!\n");
-        return_with NULL;
-    } else {
-
-    }
-
-    /* TODO */
-done_parsing:
-    printf("parsed successfully! 0x%X\n", (unsigned int) curr);
-    printf("total token comparisons performed; %d\n", num_comparisons);
-
-    return_with parse_tree;
-#endif
 }
 
