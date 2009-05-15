@@ -20,27 +20,31 @@
  */
 typedef uint32_t (*PHashFunction)(void *);
 
-/* hash collision checker. first parameter is a key of one element, the other is
- * the value of another. */
+/* hash collision checker, compares two keys. */
 typedef char (*PHashCollisionFunction)(void *, void *);
+
+/* hash table entry. */
+typedef struct PDictEntry {
+    void *entry,
+         *key;
+} PDictEntry;
 
 /* Hash table / set implementation. */
 typedef struct PDictionary {
-    void ** elms;
+    PDictEntry ** elms;
 
     uint32_t num_slots,
              num_used_slots;
 
-    PHashFunction key_hash_fnc,
-                  val_hash_fnc;
+    PHashFunction key_hash_fnc;
 
     PHashCollisionFunction collision_fnc;
 
     int prime_index;
 } PDictionary;
 
-void *gen_dict_alloc(const size_t, const uint32_t, PHashFunction, PHashFunction, PHashCollisionFunction);
-PDictionary *dict_alloc(const uint32_t, PHashFunction, PHashFunction, PHashCollisionFunction);
+void *gen_dict_alloc(const size_t, const uint32_t, PHashFunction, PHashCollisionFunction);
+PDictionary *dict_alloc(const uint32_t, PHashFunction, PHashCollisionFunction);
 void dict_free(PDictionary *, PDelegate );
 char dict_set(PDictionary *, void *, void *, PDelegate );
 void dict_unset(PDictionary *, void *, PDelegate );

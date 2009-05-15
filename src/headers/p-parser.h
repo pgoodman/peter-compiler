@@ -17,6 +17,8 @@
 #include "func-delegate.h"
 #include "p-lexer.h"
 
+#include <unistd.h>
+
 /* parse tree, only used for productions, leaves are tokens :) */
 typedef enum {
     P_PARSE_TREE_PRODUCTION,

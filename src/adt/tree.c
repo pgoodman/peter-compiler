@@ -413,7 +413,7 @@ static void *T_generator_next_po(void *g ) { $H
  * Allocate a tree generator on the heap and initialize that generator.
  */
 PTreeGenerator *tree_generator_alloc(void *tree,
-                                    const PTreeTraversal traverse_type) { $H
+                                     const PTreeTraversal traverse_type) { $H
 	assert_not_null(tree);
 
     /* allocate the generator */

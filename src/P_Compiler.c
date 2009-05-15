@@ -91,16 +91,18 @@ int main() { $MH
     PTreeGenerator *gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
     PParseTree *curr;
     PParserFunc f;
+    int n;
     while(generator_next(gen)) {
         curr = generator_current(gen);
         if(P_PARSE_TREE_PRODUCTION == curr->type) {
             f = ((PProductionTree *) curr)->production;
+            n = ((PProductionTree *) curr)->rule;
             if(f == &Additive)
-                printf("Additive\n");
+                printf("Additive %d\n", n);
             else if(f == &Multitive)
-                printf("Multitive\n");
+                printf("Multitive %d\n", n);
             else
-                printf("Primary\n");
+                printf("Primary %d\n", n);
         } else {
             printf("%d\n", ((PTerminalTree *) curr)->token->lexeme);
         }
