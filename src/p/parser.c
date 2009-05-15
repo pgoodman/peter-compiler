@@ -446,7 +446,8 @@ static P_CachedResult *P_alloc_cache(PTerminalTree *start,
  */
 static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
                                          P_Production *prod,
-                                         PTerminalTree *backtrack_point) {
+                                         PTerminalTree *backtrack_point,
+                                         char record_tree) {
     P_StackFrame *frame = NULL;
 
     if(is_null(*unused)) {
@@ -465,16 +466,20 @@ static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
     frame->alternative_rules = (PGenericList *) list_get_next(prod->alternatives);
     frame->backtrack_point = backtrack_point;
     frame->do_backtrack = 0;
+    frame->parse_tree = NULL;
 
     /* make the parse tree */
-    frame->parse_tree = tree_alloc(
-        sizeof(PProductionTree),
-        (unsigned short) prod->max_rule_elms
-    );
+    if(record_tree) {
 
-    frame->parse_tree->type = P_PARSE_TREE_PRODUCTION;
-    ((PProductionTree *) (frame->parse_tree))->rule = 1;
-    ((PProductionTree *) (frame->parse_tree))->production = prod->production;
+        frame->parse_tree = tree_alloc(
+            sizeof(PProductionTree),
+            (unsigned short) prod->max_rule_elms
+        );
+
+        frame->parse_tree->type = P_PARSE_TREE_PRODUCTION;
+        ((PProductionTree *) (frame->parse_tree))->rule = 1;
+        ((PProductionTree *) (frame->parse_tree))->production = prod->production;
+    }
 
     return frame;
 }
@@ -499,6 +504,7 @@ static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) {
     frame->caller = (*unused);
     (*unused) = frame;
 
+    /*
     frame->alternative_rules = NULL;
     frame->backtrack_point = NULL;
     frame->caller = NULL;
@@ -506,6 +512,7 @@ static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) {
     frame->do_backtrack = 0;
     frame->parse_tree = NULL;
     frame->production = NULL;
+    */
 
     return;
 }
@@ -609,10 +616,12 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     PParseTree *parse_tree = NULL;
     PParserRewriteRule *curr_rule;
     P_StackFrame *frame = NULL,
-                 *unused = NULL;
+                 *unused = NULL,
+                 *recovery = NULL; /* used for error recovery */
     PTerminalTree *curr = NULL;
     P_CachedResult *cached_result = NULL;
     P_Thunk thunk;
+    char record_tree = 1;
 
     /* stats */
     int num_tok_comparisons = 0,
@@ -656,11 +665,12 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     curr_production = prod_dict_get(P->productions, P->start_production);
     P_frame_stack_push(
         &frame,
-        P_frame_stack_alloc(&unused, curr_production, curr)
+        P_frame_stack_alloc(&unused, curr_production, curr, record_tree)
     );
 
     parse_tree = frame->parse_tree;
 
+    parse_tokens:
     while(is_not_null(frame)) {
 
         PARSER_DEBUG(if(++j > 150) break;)
@@ -680,7 +690,9 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * successful derivations and as such be part of the final parse
              * tree.
              */
-            tree_trim(frame->parse_tree, P->temp_parse_trees);
+            if(record_tree) {
+                tree_trim(frame->parse_tree, P->temp_parse_trees);
+            }
 
             /* there are no rules to backtrack to, we need to cascade the
              * failure upward, dump the tree, and cache the failure.
@@ -690,8 +702,10 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 PARSER_DEBUG(printf("cascading.\n");)
 
                 /* dump the parse tree */
-                tree_free(frame->parse_tree, &delegate_do_nothing);
-                frame->parse_tree = NULL;
+                if(record_tree) {
+                    tree_free(frame->parse_tree, &delegate_do_nothing);
+                    frame->parse_tree = NULL;
+                }
 
                 ++num_cached_failures;
 
@@ -793,7 +807,12 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 );
 
                 /* merge the parse trees */
-                tree_add_branch(frame->caller->parse_tree, frame->parse_tree);
+                if(record_tree) {
+                    tree_add_branch(
+                        frame->caller->parse_tree,
+                        frame->parse_tree
+                    );
+                }
 
                 /* pop the frame */
                 P_frame_stack_pop(&unused, &frame);
@@ -847,7 +866,12 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                         PARSER_DEBUG(printf("cached production succeeded.\n");)
 
                         /* merge the trees */
-                        tree_add_branch(frame->parse_tree, cached_result->tree);
+                        if(record_tree) {
+                            tree_add_branch(
+                                frame->parse_tree,
+                                cached_result->tree
+                            );
+                        }
 
                         /* advance to the next rewrite rule */
                         frame->curr_rule_list = (PGenericList *) list_get_next(
@@ -869,7 +893,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     P_frame_stack_push(&frame, P_frame_stack_alloc(
                         &unused,
                         prod_dict_get(P->productions, curr_rule->func),
-                        curr
+                        curr,
+                        record_tree
                     ));
                 }
 
@@ -892,7 +917,9 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     PARSER_DEBUG(printf("matched: %s\n", curr_token->val->str);)
 
                     /* store the match as a parse tree */
-                    tree_add_branch(frame->parse_tree, curr);
+                    if(record_tree) {
+                        tree_add_branch(frame->parse_tree, curr);
+                    }
 
                     /* advance the token and rewrite rule */
                     curr = curr->next;
@@ -930,19 +957,41 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         }
     }
 
-    /*printf("frame 0x%X \ncurr 0x%X\n", (unsigned int)frame, (unsigned int)curr);*/
+    j++; /* get gcc to not do an infinite loop. WTF */
 
-    j++;
-
-    printf(
+    PARSER_DEBUG(printf(
         "\ncompleted parse with:\n\t %d token comparisons\n\t %d recursive function "
         "calls\n\t %d cache_uses.\n\t %d backtracks\n\t %d cached succeses\n\t %d cached "
         "failures\n\t %d tokens\n\n",
         num_tok_comparisons, num_func_calls, num_cache_uses, num_backtracks,
         num_cached_successes, num_cached_failures, token_result.num_tokens
-    );
+    );)
 
+    /* a parse error occurred. see if we can unwind the stack to where the
+     * error occurred, record the error, and then attempt to move ahead in the
+     * tokens to try to continue parsing. */
     if(is_not_null(curr)) {
+
+        /* unwind the stack and go back to where the error occurred */
+        while(is_not_null(unused) && (1 == unused->do_backtrack)) {
+            recovery = unused->caller;
+            unused->caller = frame;
+            frame = unused;
+            unused = recovery;
+        }
+
+        /* there was something to recover from */
+        if(is_not_null(recovery)) {
+
+
+
+            /* continue parsing without recording the parse tree. */
+            record_tree = 0;
+            /*goto parse_tokens; */
+        }
+
+        recovery = NULL;
+
         printf("parse error.\n");
         exit(1);
     } else {
