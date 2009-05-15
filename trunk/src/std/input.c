@@ -12,7 +12,7 @@
 /**
  * Allocate and return pointer to a file.
  */
-PFile *file_alloc(const char * const path, const char * const how_to_open ) { $H
+PFile *file_alloc(const char * const path, const char * const how_to_open ) {
     assert_not_null(path);
     assert_not_null(how_to_open);
 
@@ -22,13 +22,13 @@ PFile *file_alloc(const char * const path, const char * const how_to_open ) { $H
         mem_error("Unable to allocate new file pointer.");
     }
 
-    return_with (PFile *) F;
+    return (PFile *) F;
 }
 
 /**
  * Free a file pointer.
  */
-void file_free(PFile *F ) { $H
+void file_free(PFile *F ) {
     fclose((FILE *) F);
-    return_with;
+    return;
 }

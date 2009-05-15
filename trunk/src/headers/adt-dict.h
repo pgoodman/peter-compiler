@@ -50,7 +50,7 @@ char dict_set(PDictionary *, void *, void *, PDelegate );
 void dict_unset(PDictionary *, void *, PDelegate );
 
 void *dict_get(const PDictionary * const H, const void * const key);
-inline char dict_is_set(const PDictionary * const H, const void * const key);
+char dict_is_set(const PDictionary * const H, const void * const key);
 
 uint32_t dict_hash_pointer(void * );
 

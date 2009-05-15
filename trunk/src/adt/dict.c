@@ -35,34 +35,35 @@ static const int num_primes = sizeof(primes)/sizeof(primes[0]);
 /**
  * Allocate the slots used by a vector.
  */
-static PDictEntry **H_alloc_slots(uint32_t num_slots ) { $H
+static PDictEntry **H_alloc_slots(uint32_t num_slots ) {
     PDictEntry **slots = mem_calloc(num_slots, sizeof(PDictEntry *));
-
     if(is_null(slots)) {
         mem_error("Unable to allocate hash table slots.");
     }
-
-    return_with slots;
+    return slots;
 }
 
 /**
  * Double the size of the hash table and re-hash all the values.
  */
-static void H_grow(PDictionary *H ) { $H
-    assert_not_null(H);
+static void H_grow(PDictionary *H ) {
 
-    PDictEntry **slots,
-               **elms = H->elms;
+    PDictEntry **slots;
+    PDictEntry **elms;
+
+    uint32_t old_size,
+             new_size,
+             j;
+
+    assert_not_null(H);
 
     if(num_primes < ++(H->prime_index)) {
         std_error("Error: Unable to grow hash table further.");
     }
 
-    uint32_t old_size = H->num_slots,
-             new_size = primes[H->prime_index],
-             j;
-
-    /* don't perform any resize operation */
+    elms = H->elms;
+    old_size = H->num_slots;
+    new_size = primes[H->prime_index];
     slots = H_alloc_slots(new_size);
 
     /* re-hash the old objects into the new table */
@@ -76,7 +77,7 @@ static void H_grow(PDictionary *H ) { $H
     H->elms = slots;
     H->num_slots = new_size;
 
-    return_with;
+    return;
 }
 
 /**
@@ -87,15 +88,16 @@ void *gen_dict_alloc(const size_t dict_struct_size,
                      uint32_t num_slots,
                      PHashFunction key_hash_fnc,
                      PHashCollisionFunction val_collision_fnc) {
-    $H
+    PDictionary *H;
+    PDictEntry **elms;
+    int i;
+    void *table;
+
     assert(sizeof(PDictionary) <= dict_struct_size);
     assert_not_null(key_hash_fnc);
     assert_not_null(val_collision_fnc);
 
-    PDictionary *H;
-    int i;
-
-    void *table = mem_alloc(dict_struct_size);
+    table = mem_alloc(dict_struct_size);
     if(is_null(table)) {
         mem_error("Unable to allocate vector on the heap.");
     }
@@ -112,7 +114,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
         std_error("Error, the hash table size given is too large.");
     }
 
-    PDictEntry **elms = H_alloc_slots(num_slots);
+    elms = H_alloc_slots(num_slots);
 
     /* initialize the vector */
     H = (PDictionary *) table;
@@ -123,7 +125,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
     H->collision_fnc = val_collision_fnc;
     H->prime_index = i;
 
-    return_with table;
+    return table;
 }
 
 /**
@@ -132,8 +134,8 @@ void *gen_dict_alloc(const size_t dict_struct_size,
 PDictionary *dict_alloc(const uint32_t num_slots,
                         PHashFunction key_hash_fnc,
                         PHashCollisionFunction collision_fnc) {
-    $H
-    return_with (PDictionary *) gen_dict_alloc(
+
+    return (PDictionary *) gen_dict_alloc(
         sizeof(PDictionary),
         num_slots,
         key_hash_fnc,
@@ -144,11 +146,11 @@ PDictionary *dict_alloc(const uint32_t num_slots,
 /**
  * Free a hash table.
  */
-void dict_free(PDictionary *H, PDelegate free_elm_fnc ) { $H
+void dict_free(PDictionary *H, PDelegate free_elm_fnc ) {
+    uint32_t i;
+
     assert_not_null(H);
     assert_not_null(free_elm_fnc);
-
-    uint32_t i;
 
     /* free the elements stored in the hash table. */
     if(free_elm_fnc != delegate_do_nothing) {
@@ -164,7 +166,7 @@ void dict_free(PDictionary *H, PDelegate free_elm_fnc ) { $H
 
     H = NULL;
 
-    return_with;
+    return;
 }
 
 /**
@@ -172,11 +174,14 @@ void dict_free(PDictionary *H, PDelegate free_elm_fnc ) { $H
  * existed, 0 if it did not. In any case, the value will be set.
  */
 char dict_set(PDictionary *H, void *key, void *val,
-              PDelegate free_on_overwrite_fnc) { $H
+              PDelegate free_on_overwrite_fnc) {
+
+    uint32_t hash_key;
+    char did_overwrite;
+    PDictEntry *entry;
 
     assert_not_null(H);
     assert_not_null(key);
-    assert_not_null(val);
     assert_not_null(free_on_overwrite_fnc);
 
     /* we've gone past our load factor, grow the hash table. */
@@ -184,89 +189,107 @@ char dict_set(PDictionary *H, void *key, void *val,
         H_grow(H);
     }
 
-    uint32_t hash_key = (H->key_hash_fnc(key) % H->num_slots);
-    char did_overwrite = 0;
-    PDictEntry *X = H->elms[hash_key];
+    hash_key = (H->key_hash_fnc(key) % H->num_slots);
+    did_overwrite = 0;
+    entry = H->elms[hash_key];
 
     /* overwrite with our object, but only if the keys match! */
-    if(is_not_null(X)) {
+    if(is_not_null(entry)) {
 
         /* linear probing */
-        while(is_not_null(X) && H->collision_fnc(X->key, key)) {
+        while(is_not_null(entry) && H->collision_fnc(entry->key, key)) {
             hash_key = (hash_key+1) % H->num_slots;
-            X = H->elms[hash_key];
+            entry = H->elms[hash_key];
         }
 
-        if(is_not_null(X)) {
+        if(is_not_null(entry)) {
             free_on_overwrite_fnc(H->elms[hash_key]);
             did_overwrite = 1;
         }
     }
 
-    X = mem_alloc(sizeof(PDictEntry));
-    if(is_null(X)) {
+    entry = mem_alloc(sizeof(PDictEntry));
+    if(is_null(entry)) {
         mem_error("Unable to allocate dictionary entry on the heap.");
     }
 
-    X->entry = val;
-    X->key = key;
+    entry->entry = val;
+    entry->key = key;
 
-    H->elms[hash_key] = X;
+    H->elms[hash_key] = entry;
 
-    return_with did_overwrite;
+    return did_overwrite;
 }
 
 /**
  * Delete a record from a hash table.
  */
-void dict_unset(PDictionary *H, void *key, PDelegate free_fnc ) { $H
-	assert_not_null(H);
-	assert_not_null(key);
+void dict_unset(PDictionary *H, void *key, PDelegate free_fnc ) {
+    uint32_t hash_key;
+    PDictEntry *entry;
 
-    uint32_t h = H->key_hash_fnc(key) % H->num_slots;
+    assert_not_null(H);
+    assert_not_null(key);
+
+    hash_key = H->key_hash_fnc((void *) key) % H->num_slots;
+    entry = H->elms[hash_key];
+
+    /* re-apply the hash function until we find what we're looking for. */
+    while(is_not_null(entry) && H->collision_fnc((void *) key, entry->key)) {
+        hash_key = (hash_key+1) % H->num_slots;
+        entry = H->elms[hash_key];
+    }
 
     /* remove it if it is there and decrement the number of slots
      * that we're using. */
-    if(is_not_null(H->elms[h])) {
-        free_fnc(H->elms[h] );
-        H->elms[h] = NULL;
+    if(is_not_null(entry)) {
+        free_fnc(entry->entry);
+        mem_free(entry);
+        H->elms[hash_key] = NULL;
         --(H->num_used_slots);
     }
 
-    return_with;
+    return;
+}
+
+PDictEntry *P_dict_get_entry(const PDictionary * const H, const void * const key) {
+    uint32_t hash_key;
+    PDictEntry *entry;
+
+    assert_not_null(H);
+
+    hash_key = H->key_hash_fnc((void *) key) % H->num_slots;
+    entry = H->elms[hash_key];
+
+    /* re-apply the hash function until we find what we're looking for. */
+    while(is_not_null(entry) && H->collision_fnc((void *) key, entry->key)) {
+        hash_key = (hash_key+1) % H->num_slots;
+        entry = H->elms[hash_key];
+    }
+
+    return entry;
 }
 
 /**
  * Get a record from a hash table.
  */
-void *dict_get(const PDictionary * const H, const void * const key) { $H
-    assert_not_null(H);
-
-
-    uint32_t hash_key = H->key_hash_fnc((void *) key) % H->num_slots;
-    PDictEntry *X = H->elms[hash_key];
-
-    /* re-apply the hash function until we find what we're looking for. */
-    while(is_not_null(X) && H->collision_fnc((void *) key, X->key)) {
-        hash_key = (hash_key+1) % H->num_slots;
-        X = H->elms[hash_key];
-    }
-
-    return_with (is_null(X) ? NULL : X->entry);
+void *dict_get(const PDictionary * const H, const void * const key) {
+    PDictEntry *entry = P_dict_get_entry(H, key);
+    return (is_null(entry) ? NULL : entry->entry);
 }
 
 /**
  * Check if a record exists in a hash table.
  */
-inline char dict_is_set(const PDictionary * const H, const void * const key) {
-    return is_not_null(dict_get(H, key));
+char dict_is_set(const PDictionary * const H, const void * const key) {
+    return is_not_null(P_dict_get_entry(H, key));
 }
 
 /**
  * Turn a pointer into an array of char and then hash it.
  */
-uint32_t dict_hash_pointer(void *pointer ) { $H
+uint32_t dict_hash_pointer(void *pointer ) {
     pointer_to_char_t switcher;
     switcher.ptr = pointer;
-    return_with murmur_hash(switcher.chars, 4, 73);
+    return murmur_hash(switcher.chars, 4, 73);
 }

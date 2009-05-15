@@ -9,7 +9,7 @@
 #include <adt-tree.h>
 
 #define FREE_GENERATOR_FUNC(N, T, F) \
-    static void N(void *g ) { $H\
+    static void N(void *g ) {\
         PTreeGenerator *G = NULL; \
         T *A = NULL; \
         assert_not_null(g); \
@@ -20,7 +20,7 @@
         mem_free(g); \
         G = NULL; \
         g = NULL; \
-        return_with; \
+        return; \
     }
 
 /**
@@ -28,10 +28,10 @@
  * structure which *must* contain a PTree as its first field, and the degree
  * is the number of branches that this tree should have.
  */
-void *tree_alloc(const size_t struct_size, const unsigned short degree ) { $H
+void *tree_alloc(const size_t struct_size, const unsigned short degree ) {
     void *tree = NULL;
     PTree *T = NULL,
-         **B = NULL;
+          **B = NULL;
 
     assert(sizeof(PTree) <= struct_size);
 
@@ -56,27 +56,27 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree ) { $H
     T->_parent_branch = 0;
     T->_parent = NULL;
 
-    return_with tree;
+    return tree;
 }
 
 /**
  * Figure out a valid memory freeing callback for freeing things.
  */
-static PDelegate T_valid_free_callback(void * ft, PDelegate disallowed, PDelegate allowed ) { $H
+static PDelegate T_valid_free_callback(PDelegate ft, PDelegate disallowed, PDelegate allowed ) {
     PDelegate free_tree = NULL;
 
     /* make sure we don't over free */
     assert_not_null(ft);
 
-    if((void *)disallowed == ft) {
+    if(disallowed == ft) {
         free_tree = allowed;
     }
 
     if(is_null(free_tree)) {
-        free_tree = (PDelegate) ft;
+        free_tree = ft;
     }
 
-    return_with free_tree;
+    return free_tree;
 }
 
 /**
@@ -87,11 +87,12 @@ static PDelegate T_valid_free_callback(void * ft, PDelegate disallowed, PDelegat
  *     which are not part of the PTree structure. The PTree structure should be
  *     seen as a black box and not touched.
  */
-void tree_free(void *T, PDelegate free_tree_fnc) { $H
-    assert_not_null(T);
-
+void tree_free(void *T, PDelegate free_tree_fnc) {
     PTree *node = (PTree *) T;
+    PTreeGenerator *G = NULL;
     void *elm = NULL;
+
+    assert_not_null(T);
 
     /* get a valid memory free callback for this context */
     free_tree_fnc = T_valid_free_callback(
@@ -103,7 +104,7 @@ void tree_free(void *T, PDelegate free_tree_fnc) { $H
     /* traverse the tree in post order and free the tree nodes from the
      * bottom up. */
     if(0 < node->_fill) {
-        PTreeGenerator *G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
+        G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
 
         while(generator_next(G)) {
             elm = generator_current(G );
@@ -130,55 +131,62 @@ void tree_free(void *T, PDelegate free_tree_fnc) { $H
 
     T = NULL;
 
-    return_with;
+    return;
 }
 
 /**
  * A tree free with no callback.
  */
-void delegate_tree_free(void *T ) { $H
+void delegate_tree_free(void *T ) {
     tree_free(T, &delegate_do_nothing );
-    return_with;
+    return;
 }
 
 /**
  * Return the number of branches allocated for this tree.
  */
-size_t tree_degree(void *t ) { $H
+size_t tree_degree(void *t ) {
     assert_not_null(t);
-    return_with ((PTree *) t)->_degree;
+    return ((PTree *) t)->_degree;
 }
 
 /**
  * Return the number of allocated branches that have been filled.
  */
-size_t tree_fill(void *t ) { $H
+size_t tree_fill(void *t ) {
     assert_not_null(t);
-    return_with ((PTree *) t)->_fill;
+    return ((PTree *) t)->_fill;
+}
+
+/**
+ * Return a tree's parent.
+ */
+void *tree_parent(void *t) {
+    assert_not_null(t);
+    return (((PTree *) t)->_parent);
 }
 
 /**
  * Trim off all of the branches, and push each of them into the garbage stack.
  */
-void tree_trim(void *tree, PStack *garbage_stack ) { $H
-	assert_not_null(tree);
-	assert_not_null(garbage_stack);
-
-    PTree *T = (PTree *) tree,
+void tree_trim(void *tree, PStack *garbage_stack) {
+	PTree *T = (PTree *) tree,
           *branch = NULL;
-
     unsigned short i;
+
+    assert_not_null(tree);
+    assert_not_null(garbage_stack);
 
     /* none of the branches have been filled, or no branches were allocated,
      * so we have nothing to do.. yay! */
     if(T->_fill == 0 || is_null(T->_branches)) {
-        return_with;
+        return;
     }
 
     /* sub-trees are there, collect them into our garbage collection. */
     for(i = 0; i < T->_fill; ++i) {
         branch = (PTree *) (T->_branches[i]);
-        stack_push(garbage_stack, branch );
+        stack_push(garbage_stack, branch);
 
         /* update the branches parent information */
         branch->_parent_branch = 0;
@@ -189,23 +197,22 @@ void tree_trim(void *tree, PStack *garbage_stack ) { $H
     /* update the tree accordingly */
     T->_fill = 0;
 
-    return_with;
+    return;
 }
 
 /**
  * Trim off all of the branches of a tree and free all of the branch trees.
  */
-void tree_trim_free(void *tree, PDelegate free_tree_fnc) { $H
-
-    assert_not_null(tree);
-    assert_not_null(free_tree_fnc);
-
+void tree_trim_free(void *tree, PDelegate free_tree_fnc) {
     PTreeGenerator *G = NULL;
     PTree *T = (PTree *) tree,
           *node = NULL;
 
     unsigned short i;
     void *elm = NULL;
+
+    assert_not_null(tree);
+    assert_not_null(free_tree_fnc);
 
     free_tree_fnc = T_valid_free_callback(
         free_tree_fnc,
@@ -216,7 +223,7 @@ void tree_trim_free(void *tree, PDelegate free_tree_fnc) { $H
     /* none of the branches have been filled, or no branches were allocated,
      * so we have nothing to do.. yay! */
     if(T->_fill == 0 || is_null(T->_branches)) {
-        return_with;
+        return;
     }
 
     for(i = 0; i < T->_fill; ++i) {
@@ -242,28 +249,31 @@ void tree_trim_free(void *tree, PDelegate free_tree_fnc) { $H
         }
     }
 
-    generator_free(G);
+    if(is_not_null(G)) {
+        generator_free(G);
+    }
 
-    return_with;
+    return;
 }
 
 /**
  * Set a tree C as one of the branches of T. Return 1 if successful, 0 on failure.
  */
-char tree_add_branch(void *tree, void *branch ) { $H
-	assert_not_null(tree);
-	assert_not_null(branch);
-
+char tree_add_branch(void *tree, void *branch ) {
     PTree *parent = (PTree *) tree,
           *child = (PTree *) branch;
 
+    assert_not_null(tree);
+    assert_not_null(branch);
     assert(parent->_fill < parent->_degree);
+
     parent->_branches[parent->_fill] = child;
     child->_parent = parent;
+    child->_parent_branch = parent->_fill;
 
     ++(parent->_fill);
 
-    return_with 1;
+    return 1;
 }
 
 FREE_GENERATOR_FUNC(T_generator_free_s, PStack, stack_free)
@@ -272,7 +282,7 @@ FREE_GENERATOR_FUNC(T_generator_free_q, PQueue, queue_free)
 /**
  * Generate the next tree element in a depth-first traversal of the tree.
  */
-static void *T_generator_next_df(void *g ) { $H
+static void *T_generator_next_df(void *g ) {
     PStack *S = NULL;
     PTree *curr = NULL;
     void *ret = NULL;
@@ -298,15 +308,15 @@ static void *T_generator_next_df(void *g ) { $H
             stack_push(S, curr->_branches[--i] );
         }
 
-        return_with ret;
+        return ret;
     }
-    return_with NULL;
+    return NULL;
 }
 
 /**
  * Generate the next tree element in a breadth-first traversal of the tree.
  */
-static void *T_generator_next_bf(void *g ) { $H
+static void *T_generator_next_bf(void *g ) {
     PQueue *Q = NULL;
     PTree *curr = NULL;
     void *ret = NULL;
@@ -331,15 +341,15 @@ static void *T_generator_next_bf(void *g ) { $H
             queue_push(Q, curr->_branches[i] );
         }
 
-        return_with ret;
+        return ret;
     }
-    return_with NULL;
+    return NULL;
 }
 
 /**
  * Generate the nodes of a post-order traversal of a tree one at a time.
  */
-static void *T_generator_next_po(void *g ) { $H
+static void *T_generator_next_po(void *g ) {
     PStack *S = NULL;
     PTree *curr = NULL,
           *top = NULL;
@@ -353,7 +363,7 @@ static void *T_generator_next_po(void *g ) { $H
     S = (PStack *) G->_adt;
 
     if(stack_is_empty(S)) {
-        return_with NULL;
+        return NULL;
     }
 
     while(!stack_is_empty(S)) {
@@ -406,20 +416,21 @@ static void *T_generator_next_po(void *g ) { $H
         }
     }
 
-    return_with ret;
+    return ret;
 }
 
 /**
  * Allocate a tree generator on the heap and initialize that generator.
  */
 PTreeGenerator *tree_generator_alloc(void *tree,
-                                     const PTreeTraversal traverse_type) { $H
-	assert_not_null(tree);
+                                     const PTreeTraversal traverse_type) {
+    PTree *T;
+    PTreeGenerator *G;
 
-    /* allocate the generator */
-    PTree *T = (PTree *) tree;
-    PTreeGenerator *G = generator_alloc(sizeof(PTreeGenerator));
+    assert_not_null(tree);
 
+    T = (PTree *) tree;
+    G = generator_alloc(sizeof(PTreeGenerator));
     G->_adt = NULL;
 
     /* initialize the various types of generators */
@@ -460,13 +471,13 @@ PTreeGenerator *tree_generator_alloc(void *tree,
             break;
     }
 
-    return_with G;
+    return G;
 }
 
 /**
  * Reuse a tree generator on a new data structure.
  */
-void tree_generator_reuse(PTreeGenerator *G, void *tree) { $H
+void tree_generator_reuse(PTreeGenerator *G, void *tree) {
     assert_not_null(G);
     assert_not_null(tree);
 

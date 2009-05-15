@@ -10,6 +10,8 @@
 #define PPARSER_H_
 
 #include <stdarg.h>
+
+#include "std-include.h"
 #include "adt-tree.h"
 #include "adt-list.h"
 #include "adt-dict.h"
