@@ -11,7 +11,7 @@
 /**
  * Allocate a new queue on the heap.
  */
-void *queue_alloc(const size_t struct_size ) { $H
+void *queue_alloc(const size_t struct_size ) {
     void *queue = NULL;
     PQueue *Q = NULL;
 
@@ -27,21 +27,21 @@ void *queue_alloc(const size_t struct_size ) { $H
     Q->_tail = NULL;
     Q->_unused = NULL;
 
-    return_with queue;
+    return queue;
 }
 
 /**
  * Empty a queue of its elements.
  */
-void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) { $H
-    PGenericList *L,
-                *next;
+void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) {
+    PGenericList *L = NULL,
+                 *next = NULL;
 
 	assert_not_null(Q);
 	assert_not_null(free_elm_fnc);
 
 	if(is_null(Q->_head)) {
-		return_with;
+		return;
 	}
 
     L = Q->_head;
@@ -59,13 +59,13 @@ void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) { $H
     Q->_head = NULL;
     Q->_tail = NULL;
 
-    return_with;
+    return;
 }
 
 /**
  * Free an allocated queue.
  */
-void queue_free(PQueue *Q, PDelegate free_elm ) { $H
+void queue_free(PQueue *Q, PDelegate free_elm ) {
 	assert_not_null(Q);
 	assert_not_null(free_elm);
 
@@ -77,24 +77,24 @@ void queue_free(PQueue *Q, PDelegate free_elm ) { $H
 
     Q = NULL;
 
-    return_with;
+    return;
 }
 
 /**
  * Check if the queue is empty.
  */
-char queue_is_empty(const PQueue * const Q ) { $H
+char queue_is_empty(const PQueue * const Q ) {
 	assert_not_null(Q);
-    return_with is_null(Q->_head);
+    return is_null(Q->_head);
 }
 
 /**
  * Push an element onto the queue.
  */
-void queue_push(PQueue * const Q, void * E ) { $H
-    assert_not_null(Q);
-
+void queue_push(PQueue * const Q, void * E ) {
     PGenericList *L = NULL;
+
+    assert_not_null(Q);
 
     /* allocate a slot if needed */
     if(is_null(Q->_unused)) {
@@ -119,13 +119,13 @@ void queue_push(PQueue * const Q, void * E ) { $H
     Q->_tail = L;
     gen_list_set_elm(L, E );
 
-    return_with;
+    return;
 }
 
 /**
  * Dequeue an element from the queue.
  */
-void *queue_pop(PQueue * const Q ) { $H
+void *queue_pop(PQueue * const Q) {
     void *E = NULL;
     PGenericList *L = NULL;
 
@@ -150,5 +150,5 @@ void *queue_pop(PQueue * const Q ) { $H
     list_set_next(L, Q->_unused );
     Q->_unused = L;
 
-    return_with E;
+    return E;
 }

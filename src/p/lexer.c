@@ -12,7 +12,7 @@
  * Allocate a new token.
  */
 PToken *token_alloc(PLexeme lexeme, PString *val, uint32_t line, uint32_t col) {
-    $H
+   
 
     PToken *tok = mem_alloc(sizeof(PToken *));
     if(is_null(tok)) {
@@ -24,10 +24,10 @@ PToken *token_alloc(PLexeme lexeme, PString *val, uint32_t line, uint32_t col) {
     tok->line = line;
     tok->column = col;
 
-    return_with tok;
+    return tok;
 }
 
-static void *L_generator_next(void *g) { $H
+static void *L_generator_next(void *g) {
     static PToken *tokens[11];
     static int init = 0,
                pos = -1;
@@ -49,20 +49,20 @@ static void *L_generator_next(void *g) { $H
     }
 
     if((++pos) < 11) {
-        return_with tokens[pos];
+        return tokens[pos];
     }
 
-    return_with NULL;
+    return NULL;
 }
 
 static void L_generator_free(void *gen) {
 
 }
 
-PTokenGenerator *token_generator_alloc(void) { $H
+PTokenGenerator *token_generator_alloc(void) {
     PTokenGenerator *G = generator_alloc(sizeof(PTokenGenerator));
 
     generator_init(G, &L_generator_next, &L_generator_free);
 
-    return_with G;
+    return G;
 }

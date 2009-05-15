@@ -11,7 +11,7 @@
 /**
  * Allocate a new generator on the heap.
  */
-void *generator_alloc(const size_t size ) { $H
+void *generator_alloc(const size_t size ) {
     void *G = NULL;
     PGenerator *g = NULL;
 
@@ -28,51 +28,52 @@ void *generator_alloc(const size_t size ) { $H
     g->_gen = NULL;
     g->_curr = NULL;
 
-    return_with G;
+    return G;
 }
 
 /**
  * Free the memory allocated by the generator.
  */
-void generator_free(void *Cg ) { $H
+void generator_free(void *Cg ) {
 	assert_not_null(Cg);
 
     ((PGenerator *) Cg)->_free(Cg);
-    return_with;
+    return;
 }
 
 /**
  * Initialize the generator.
  */
-void generator_init(void *gen, PFunction gen_next, PDelegate gen_free_fnc ) { $H
-	assert_not_null(gen);
-    PGenerator *G;
+void generator_init(void *gen, PFunction gen_next, PDelegate gen_free_fnc ) {
+    PGenerator *G = NULL;
+
+    assert_not_null(gen);
 
     G = (PGenerator *) gen;
     G->_gen = gen_next;
     G->_free = gen_free_fnc;
 
-    return_with;
+    return;
 }
 
 /**
  * Advance to the next node in the generator.
  */
-char generator_next(void *Cg ) { $H
-	assert_not_null(Cg);
-
+char generator_next(void *Cg ) {
     PGenerator *G = NULL;
+
+    assert_not_null(Cg);
 
     G = (PGenerator *) Cg;
     G->_curr = G->_gen(Cg );
 
-    return_with (NULL != G->_curr);
+    return (NULL != G->_curr);
 }
 
 /**
  * Get the current node in the generator.
  */
-void *generator_current(void *Cg ) { $H
+void *generator_current(void *Cg ) {
 	assert_not_null(Cg);
-    return_with ((PGenerator *) Cg)->_curr;
+    return ((PGenerator *) Cg)->_curr;
 }

@@ -51,6 +51,7 @@ void tree_trim(void *, PStack * );
 char tree_add_branch(void *, void * );
 size_t tree_degree(void * );
 size_t tree_fill(void * );
+void *tree_parent(void *);
 
 /* tree generator */
 PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversal );

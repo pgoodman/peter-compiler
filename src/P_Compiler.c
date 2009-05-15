@@ -15,27 +15,27 @@
 unsigned int __st_depth = 0;
 #endif
 
-PParseTree *Additive(PParseTree *x) { $H
+PParseTree *Additive(PParseTree *x) {
     printf("In additive.\n");
-    return_with NULL;
+    return NULL;
 }
 
-PParseTree *Multitive(PParseTree *x) { $H
+PParseTree *Multitive(PParseTree *x) {
     printf("In multitive.\n");
-    return_with NULL;
+    return NULL;
 }
 
-PParseTree *Primary(PParseTree *x) { $H
+PParseTree *Primary(PParseTree *x) {
     printf("In primary.\n");
-    return_with NULL;
+    return NULL;
 }
 
-PParseTree *Decimal(PParseTree *x) { $H
+PParseTree *Decimal(PParseTree *x) {
     printf("In decimal.\n");
-    return_with NULL;
+    return NULL;
 }
 
-int main() { $MH
+int main() {
 
     /*
      * Additive  <-- Multitive '+' Additive
@@ -87,7 +87,7 @@ int main() { $MH
 
     T = parser_parse_tokens(P, G);
 
-    printf("bottom-up traversal of the parse tree:\n");
+    printf("traversal of the parse tree:\n");
     PTreeGenerator *gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
     PParseTree *curr;
     PParserFunc f;

@@ -11,27 +11,27 @@
 /**
  * Allocate the slots used by a vector.
  */
-static void **V_alloc_slots(uint32_t num_slots) { $H
+static void **V_alloc_slots(uint32_t num_slots) {
     void **slots = mem_calloc(num_slots, sizeof(void *));
 
     if(is_null(slots)) {
         mem_error("Unable to allocate vector slots.");
     }
-    return_with slots;
+    return slots;
 }
 
 /**
  * Resize the vector so that it has at least i slots in it.
  */
-static void V_resize(PVector *V, uint32_t i) { $H
-    assert_not_null(V);
-
+static void V_resize(PVector *V, uint32_t i) {
     uint32_t new_size,
              max_size = 0x7FFFFFFF;
 
+    assert_not_null(V);
+
     /* don't perform any resize operation */
     if(i < V->_num_slots) {
-        return_with;
+        return;
     }
 
     /* grow the capacity without allowing integer to overflow */
@@ -49,16 +49,16 @@ static void V_resize(PVector *V, uint32_t i) { $H
     }
 
     V->_num_slots = new_size;
-    return_with;
+    return;
 }
 
 /**
  * Allocate a generic vector on the heap.
  */
-void *gen_vector_alloc(const size_t struct_size, const uint32_t num_slots) { $H
-    void **elms,
-         *vec;
-    PVector *V;
+void *gen_vector_alloc(const size_t struct_size, const uint32_t num_slots) {
+    void **elms = NULL,
+         *vec = NULL;
+    PVector *V = NULL;
 
     assert(sizeof(PVector) <= struct_size);
 
@@ -75,20 +75,20 @@ void *gen_vector_alloc(const size_t struct_size, const uint32_t num_slots) { $H
     V->_num_slots = num_slots;
     V->_num_used_slots = 0;
 
-    return_with vec;
+    return vec;
 }
 
 /**
  * Allocate a vector on the heap.
  */
-PVector *vector_alloc(const uint32_t num_slots) { $H
-    return_with (PVector *) gen_vector_alloc(sizeof(PVector), num_slots);
+PVector *vector_alloc(const uint32_t num_slots) {
+    return (PVector *) gen_vector_alloc(sizeof(PVector), num_slots);
 }
 
 /**
  * Free a vector and all of its elements.
  */
-void vector_free(PVector *V, PDelegate free_elm_fnc) { $H
+void vector_free(PVector *V, PDelegate free_elm_fnc) {
     uint32_t i;
 
     assert_not_null(V);
@@ -106,23 +106,23 @@ void vector_free(PVector *V, PDelegate free_elm_fnc) { $H
     V->_elms = NULL;
     V = NULL;
 
-    return_with;
+    return;
 }
 
 /**
  * Return the size of a vector.
  */
-uint32_t vector_num_slots(PVector *V) { $H
+uint32_t vector_num_slots(PVector *V) {
 	assert_not_null(V);
-    return_with V->_num_slots;
+    return V->_num_slots;
 }
 
 /**
  * Return the number of used slots in a vector.
  */
-uint32_t vector_num_used_slots(PVector *V) { $H
+uint32_t vector_num_used_slots(PVector *V) {
 	assert_not_null(V);
-    return_with V->_num_used_slots;
+    return V->_num_used_slots;
 }
 
 /**
@@ -130,12 +130,11 @@ uint32_t vector_num_used_slots(PVector *V) { $H
  * can also be passed in so that we can choose to free what the slot pointed
  * too if we are overwriting it.
  */
-void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc) { $H
+void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc) {
+    char slot_increment = 1;
 
 	assert_not_null(V);
 	assert_not_null(elm);
-
-    char slot_increment = 1;
 
     /* are we overwriting an already used slot? */
     if(i <= V->_num_slots) {
@@ -154,13 +153,13 @@ void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc) { $H
     V->_elms[i] = elm;
     V->_num_used_slots += slot_increment;
 
-    return_with;
+    return;
 }
 
 /**
  * Unset the value at a position in a vector.
  */
-void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc) { $H
+void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc) {
 	assert_not_null(V);
 	assert(i < V->_num_slots);
 
@@ -169,25 +168,25 @@ void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc) { $H
         free_elm_fnc(V->_elms[i] );
 	}
 
-    return_with;
+    return;
 }
 
 /**
  * Get an element from a slot in the vector.
  */
-void *vector_get(PVector *V, uint32_t i) { $H
+void *vector_get(PVector *V, uint32_t i) {
 	assert_not_null(V);
 	assert(i < V->_num_slots);
 
-    return_with V->_elms[i];
+    return V->_elms[i];
 }
 
 /**
  * Get the next element in a vector.
  */
-static void *V_generator_next(void *g) { $H
+static void *V_generator_next(void *g) {
     PVectorGenerator *G = g;
-    PVector *V;
+    PVector *V = NULL;
     uint32_t i;
 
     assert_not_null(G);
@@ -198,11 +197,11 @@ static void *V_generator_next(void *g) { $H
 	assert_not_null(V);
 
 	/* ignore empty vectors and index-out-of range. we don't assert the range
-	 * check because generator_next() expects this function to return_with null
+	 * check because generator_next() expects this function to return null
 	 * if no next element exist and because we take advantage of the fact that
 	 * out of range doesn't exist to force null. */
     if(V->_num_used_slots == 0 || V->_num_slots < i) {
-        return_with NULL;
+        return NULL;
     }
 
 	/* loop through the vector until we find a non-null pointer. */
@@ -211,32 +210,33 @@ static void *V_generator_next(void *g) { $H
 
     ++(G->pos);
 
-    return_with V->_elms[i];
+    return V->_elms[i];
 }
 
 /**
  * Free a vector generator.
  */
-static void V_generator_free(void *g) { $H
-	assert_not_null(g);
-
+static void V_generator_free(void *g) {
     PVectorGenerator *G = g;
+
+    assert_not_null(G);
+
     G->vec = NULL;
-
     mem_free(G);
-
     G = NULL;
-
-    return_with;
+    return;
 }
 
 /**
  * Allocate a new vector generator on the heap. Note: we are allowed to have
  * a generator over a NULL vector.
  */
-PVectorGenerator *vector_generator_alloc(PVector *V) { $H
+PVectorGenerator *vector_generator_alloc(PVector *V) {
+    PVectorGenerator *G = NULL;
 
-    PVectorGenerator *G = mem_alloc(sizeof(PVectorGenerator));
+    assert_not_null(V);
+
+    G = mem_alloc(sizeof(PVectorGenerator));
     if(is_null(G)) {
         mem_error("Unable to allocate vector generator on the heap.");
     }
@@ -246,5 +246,5 @@ PVectorGenerator *vector_generator_alloc(PVector *V) { $H
 
     generator_init(G, &V_generator_next, &V_generator_free);
 
-    return_with G;
+    return G;
 }

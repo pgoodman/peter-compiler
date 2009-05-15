@@ -125,13 +125,13 @@ typedef struct P_StackFrame {
  * Hash function that converts a thunk to a char array. Thunks are used as the
  * keys into a hash table for cached parse results.
  */
-static uint32_t P_key_hash_thunk_fnc(void *pointer) { $H
+static uint32_t P_key_hash_thunk_fnc(void *pointer) {
     union {
         P_Thunk thunk;
         char thunk_as_chars[P_SIZE_OF_THUNK];
     } switcher;
     switcher.thunk = *((P_Thunk *) pointer);
-    return_with murmur_hash(switcher.thunk_as_chars, P_SIZE_OF_THUNK, 73);
+    return murmur_hash(switcher.thunk_as_chars, P_SIZE_OF_THUNK, 73);
 }
 
 /**
@@ -148,14 +148,14 @@ static char P_hash_thunk_collision_fnc(void *thunk1, void *thunk2) {
  * array to be hashed. Rewrite rules are hashable to allow us to make sure we
  * don't allocate duplicate rewrile rules where only one is really necessary.
  */
-static uint32_t P_hash_rewrite_rule_fnc(void *rewrite_rule) { $H
+static uint32_t P_hash_rewrite_rule_fnc(void *rewrite_rule) {
     union {
         PParserRewriteRule rewrite;
         char rule_as_chars[P_SIZE_OF_REWRITE_RULE];
     } switcher;
 
     switcher.rewrite = *((PParserRewriteRule *) rewrite_rule);
-    return_with murmur_hash(switcher.rule_as_chars, P_SIZE_OF_REWRITE_RULE, 73);
+    return murmur_hash(switcher.rule_as_chars, P_SIZE_OF_REWRITE_RULE, 73);
 }
 
 /**
@@ -172,21 +172,21 @@ static char P_hash_rewrite_collision_fnc(void *rule1, void *rule2) {
  * parser functions lets us index the various productions in our top-down parsing
  * grammar. The parser production is used to index a P_Production.
  */
-static uint32_t P_key_hash_production_fnc(void *production) { $H
+static uint32_t P_key_hash_production_fnc(void *production) {
     union {
         PParserFunc prod;
         char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
     } switcher;
 
-    switcher.prod = production;
-    return_with murmur_hash(switcher.prod_as_chars, P_SIZE_OF_PARSER_FUNC, 73);
+    switcher.prod = (PParserFunc) production;
+    return murmur_hash(switcher.prod_as_chars, P_SIZE_OF_PARSER_FUNC, 73);
 }
 
 /**
  * Check for a hash collision.
  */
-static char P_hash_production_collision_fnc(void *fnc1, void *fnc2) { $H
-    return_with fnc1 != fnc2;
+static char P_hash_production_collision_fnc(void *fnc1, void *fnc2) {
+    return fnc1 != fnc2;
 }
 
 /**
@@ -197,9 +197,8 @@ static char P_hash_production_collision_fnc(void *fnc1, void *fnc2) { $H
  * The only parameter to this function is thee production to start parsing
  * with.
  */
-PParser *parser_alloc(PParserFunc start_production) { $H
+PParser *parser_alloc(PParserFunc start_production) {
     PParser *P = mem_alloc(sizeof(PParser));
-
     if(is_null(P)) {
         mem_error("Unable to allocate a new parser on the heap.");
     }
@@ -239,7 +238,7 @@ PParser *parser_alloc(PParserFunc start_production) { $H
     /* the production to start parsing with. */
     P->start_production = start_production;
 
-    return_with P;
+    return P;
 }
 
 /**
@@ -254,19 +253,18 @@ void parser_add_production(PParser *P,
                            PParserFunc semantic_handler_fnc, /* the production name */
                            short num_seqs, /* number of rewrite sequences */
                            PParserRuleResult arg1, ...) { /* rewrite rules */
+    PParserRuleResult curr_seq;
+    PGenericList *S = NULL,
+                 *curr = NULL,
+                 *tail = NULL;
     va_list seqs;
-
-    $H
     assert_not_null(P);
     assert_not_null(semantic_handler_fnc);
     assert(0 < num_seqs);
     assert(!P->is_closed);
     assert(!dict_is_set(P->productions, semantic_handler_fnc));
 
-    PParserRuleResult curr_seq;
-    PGenericList *S = NULL,
-                 *curr = NULL,
-                 *tail = NULL;
+
 
     P_Production *prod = mem_alloc(sizeof(P_Production));
     if(is_null(prod)) {
@@ -305,7 +303,7 @@ void parser_add_production(PParser *P,
     /* add in this production */
     dict_set(P->productions, semantic_handler_fnc, prod, &delegate_do_nothing);
 
-    return_with;
+    return;
 }
 
 /**
@@ -314,21 +312,18 @@ void parser_add_production(PParser *P,
  * PParserRewriteRule telling the parser to either match a particular token or
  * to recursively call and match a production.
  */
-PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) { $H
-    va_list rules;
-
-    $H;
-    assert(0 < num_rules);
-    assert_not_null(arg1);
-
+PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) {
     PParserRuleResult result;
-    result.num_elms = num_rules;
-
-    PParserRewriteRule *curr_rule;
-
+    PParserRewriteRule *curr_rule = NULL;
     PGenericList *S = NULL,
                  *curr = NULL,
                  *tail = NULL;
+    va_list rules;
+
+    assert(0 < num_rules);
+    assert_not_null(arg1);
+
+    result.num_elms = num_rules;
 
     va_start(rules, arg1);
     for(curr_rule = arg1; \
@@ -351,8 +346,7 @@ PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1
     }
 
     result.rule = S;
-
-    return_with result;
+    return result;
 }
 
 /**
@@ -365,21 +359,21 @@ PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1
 static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
                                                  PLexeme tok,
                                                  PParserFunc func) {
-    $H
+    PParserRewriteRule rewrite_rule;
+    PParserRewriteRule *R = NULL;
+
     assert_not_null(P);
 
     /* make a thunk out of it to search for in the hash table */
-    PParserRewriteRule rewrite_rule;
-
     rewrite_rule.func = func;
     rewrite_rule.lexeme = tok;
 
     if(dict_is_set(P->rules, &rewrite_rule)) {
-        return_with ((PParserRewriteRule *) dict_get(P->rules, &rewrite_rule));
+        return ((PParserRewriteRule *) dict_get(P->rules, &rewrite_rule));
     }
 
-    // nope, need to allocate it :(
-    PParserRewriteRule *R = mem_alloc(sizeof(PParserRewriteRule));
+    /* nope, need to allocate it :( */
+    R = mem_alloc(sizeof(PParserRewriteRule));
     if(is_null(R)) {
         mem_error("Unable to allocate rewrite rule on the heap.");
     }
@@ -389,32 +383,32 @@ static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
 
     dict_set(P->rules, &rewrite_rule, R, &delegate_do_nothing);
 
-    return_with R;
+    return R;
 }
 
 /**
  * Rewrite rule for a single production function
  */
-PParserRewriteRule *parser_rewrite_function(PParser *P, PParserFunc func) { $H
+PParserRewriteRule *parser_rewrite_function(PParser *P, PParserFunc func) {
     assert_not_null(P);
     assert_not_null(func);
-    return_with P_parser_rewrite_rule(P, P_LEXEME_EPSILON, func);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, func);
 }
 
 /**
  * Rewrite rule for a single token
  */
-PParserRewriteRule *parser_rewrite_token(PParser *P, PLexeme tok) { $H
+PParserRewriteRule *parser_rewrite_token(PParser *P, PLexeme tok) {
     assert_not_null(P);
-    return_with P_parser_rewrite_rule(P, tok, NULL);
+    return P_parser_rewrite_rule(P, tok, NULL);
 }
 
 /**
  * Rewrite rule for no token required.
  */
-PParserRewriteRule *parser_rewrite_epsilon(PParser *P) { $H
+PParserRewriteRule *parser_rewrite_epsilon(PParser *P) {
     assert_not_null(P);
-    return_with P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
 }
 
 /**
@@ -423,7 +417,7 @@ PParserRewriteRule *parser_rewrite_epsilon(PParser *P) { $H
 static P_CachedResult *P_alloc_cache(PGenericList *start,
                                      PGenericList *end,
                                      PParserFunc production,
-                                     PParseTree *tree) { $H
+                                     PParseTree *tree) {
 
     P_CachedResult *R = mem_alloc(sizeof(P_CachedResult));
     if(is_null(R)) {
@@ -435,7 +429,7 @@ static P_CachedResult *P_alloc_cache(PGenericList *start,
     R->production = production;
     R->tree = tree;
 
-    return_with R;
+    return R;
 }
 
 /**
@@ -444,8 +438,8 @@ static P_CachedResult *P_alloc_cache(PGenericList *start,
  */
 static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
                                          P_Production *prod,
-                                         PGenericList *backtrack_point) { $H
-    P_StackFrame *frame;
+                                         PGenericList *backtrack_point) {
+    P_StackFrame *frame = NULL;
 
     if(is_null(*unused)) {
         frame = mem_alloc(sizeof(P_StackFrame));
@@ -469,26 +463,28 @@ static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
         sizeof(PProductionTree),
         (unsigned short) prod->max_rule_elms
     );
+
+    frame->parse_tree->type = P_PARSE_TREE_PRODUCTION;
     ((PProductionTree *) (frame->parse_tree))->rule = 1;
     ((PProductionTree *) (frame->parse_tree))->production = prod->production;
 
-    return_with frame;
+    return frame;
 }
 
 /**
  * Push a stack frame onto the frame stack.
  */
-static void P_frame_stack_push(P_StackFrame **stack, P_StackFrame *frame) { $H
+static void P_frame_stack_push(P_StackFrame **stack, P_StackFrame *frame) {
     frame->caller = (*stack);
     (*stack) = frame;
-    return_with;
+    return;
 }
 
 /**
  * Pop a stack frame off of the frame stack and put it into the unused stack
  * where it will still be accessible.
  */
-static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) { $H
+static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) {
     P_StackFrame *frame = (*stack);
 
     (*stack) = frame->caller;
@@ -503,26 +499,26 @@ static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) { $H
     frame->parse_tree = NULL;
     frame->production = NULL;
 
-    return_with;
+    return;
 }
 
 /**
  * Return a linked list of all tokens in the current file being parsed.
  */
-static P_TokenList P_get_all_tokens(PTokenGenerator *G) { $H
-    assert_not_null(G);
+static P_TokenList P_get_all_tokens(PTokenGenerator *G) {
 
+    P_TokenList list;
     PGenericList *prev = NULL,
                  *curr = NULL;
 
-    P_TokenList list;
+    assert_not_null(G);
 
     list.list = NULL;
     list.num_tokens = 0;
 
     /* build up a list of all of the tokens. */
     if(!generator_next(G)) {
-        return_with list;
+        return list;
     }
 
     /* generate the first token */
@@ -539,13 +535,14 @@ static P_TokenList P_get_all_tokens(PTokenGenerator *G) { $H
         list_set_next(prev, curr);
         prev = curr;
     }
-    return_with list;
+
+    return list;
 }
 
 /**
  * Allocate a new thunk on the heap.
  */
-static P_Thunk *P_alloc_thunk(PParserFunc func, PGenericList *list) { $H
+static P_Thunk *P_alloc_thunk(PParserFunc func, PGenericList *list) {
     P_Thunk *thunk = mem_alloc(sizeof(P_Thunk));
 
     if(is_null(thunk)) {
@@ -555,7 +552,7 @@ static P_Thunk *P_alloc_thunk(PParserFunc func, PGenericList *list) { $H
     thunk->list = list;
     thunk->production = func;
 
-    return_with thunk;
+    return thunk;
 }
 
 /**
@@ -582,18 +579,10 @@ static P_Thunk *P_alloc_thunk(PParserFunc func, PGenericList *list) { $H
  * succeeds then we cache its parse treee, where in the token list it started
  * and ended, and the production function itself.
  */
-PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
-
-    assert_not_null(P);
-    assert_not_null(G);
-    assert(dict_is_set(P->productions, P->start_production));
-
-    /* close the parser to updates on its grammar. */
-    P->is_closed = 1;
-
+PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     PToken *curr_token = NULL;
     P_Production *curr_production = NULL;
-    P_TokenList token_result = P_get_all_tokens(G);
+    P_TokenList token_result;
     PParseTree *parse_tree = NULL;
     PParserRewriteRule *curr_rule;
     P_StackFrame *frame = NULL,
@@ -602,13 +591,21 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
     PTerminalTree *terminal_tree = NULL;
     P_CachedResult *cached_result = NULL;
     P_Thunk thunk;
-
     int num_comparisons = 0;
+
+    assert_not_null(P);
+    assert_not_null(G);
+    assert(dict_is_set(P->productions, P->start_production));
+
+    token_result = P_get_all_tokens(G);
+
+    /* close the parser to updates on its grammar. */
+    P->is_closed = 1;
 
     /* no tokens were lexed,
      * TODO: do something slightly more useful. */
     if(0 == token_result.num_tokens) {
-        return_with parse_tree;
+        return parse_tree;
     }
 
     curr = token_result.list;
@@ -632,12 +629,11 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
         P_frame_stack_alloc(&unused, curr_production, curr)
     );
 
-    while(is_not_null(frame) && is_not_null(curr)) {
+    parse_tree = frame->parse_tree;
 
-        parse_tree = frame->parse_tree;
+    while(is_not_null(frame)) {
 
         /* get the rewrite rule and the current token we are looking at. */
-        curr_token = gen_list_get_elm(curr);
         curr_production = frame->production;
 
         /* an error occurred in the current frame. we need to pop it off, dump
@@ -728,7 +724,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
             /* we can't prove that this is a successful parse of all of the
              * tokens and so we assume that there exists more to parse. save
              * the result of the application of this production to the cache
-             * and yeild control to the parent frame.
+             * and yield control to the parent frame.
              */
             } else {
 
@@ -763,7 +759,10 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
                     frame->curr_rule_list
                 );
             }
-        } else {
+
+        } else if(is_not_null(curr)) {
+
+            curr_token = gen_list_get_elm(curr);
             curr_rule = gen_list_get_elm(frame->curr_rule_list);
 
             /* the next non/terminal in the current rule list is a non-terminal,
@@ -833,6 +832,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
              */
             } else if(P_LEXEME_EPSILON != curr_rule->lexeme) {
 
+                ++num_comparisons;
+
                 /* we have matched a token, advance to the next token in the
                  * list and the next rewrite rule in the current rule list.
                  * also, store the matched token into the frame's partial parse
@@ -850,6 +851,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
                     /* store the match as a parse tree */
                     terminal_tree = tree_alloc(sizeof(PTerminalTree), 0);
                     terminal_tree->token = curr_token;
+                    ((PParseTree *) terminal_tree)->type = P_PARSE_TREE_TERMINAL;
                     tree_add_branch(frame->parse_tree, terminal_tree);
 
                 /* the tokens do not match, backtrack. */
@@ -869,9 +871,18 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) { $H
                     frame->curr_rule_list
                 );
             }
+
+        /* force an upward cascade of successful operations when none of the
+         * other conditions are met. This ensures that we finish by putting
+         * together the entire parse tree. */
+        } else {
+            frame->curr_rule_list = (PGenericList *) list_get_next(
+                frame->curr_rule_list
+            );
         }
     }
 
+    printf("completed parse with %d token comparisons.\n", num_comparisons);
     return parse_tree;
 }
 

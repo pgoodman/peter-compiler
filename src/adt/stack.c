@@ -11,14 +11,13 @@
 /**
  * Allocate a new generic stack on the heap.
  */
-void *stack_alloc(const size_t struct_size ) { $H
+void *stack_alloc(const size_t struct_size ) {
     PStack *S = NULL;
     void *stack = NULL;
 
     assert(sizeof(PStack) <= struct_size);
 
     stack = mem_alloc(struct_size);
-
     if(is_null(stack)) {
         mem_error("Unable to allocate a new stack on the heap.");
     }
@@ -27,21 +26,21 @@ void *stack_alloc(const size_t struct_size ) { $H
     S->_head = NULL;
     S->_unused = NULL;
 
-    return_with stack;
+    return stack;
 }
 
 /**
  * Empty a stack.
  */
-void stack_empty(PStack *S, PDelegate free_elm_fnc ) { $H
+void stack_empty(PStack *S, PDelegate free_elm_fnc ) {
     PGenericList *L = NULL,
-                *next = NULL;
+                 *next = NULL;
 
 	assert_not_null(S);
 	assert_not_null(free_elm_fnc);
 
 	if(is_null(S->_head)) {
-        return_with;
+        return;
 	}
 
     L = S->_head;
@@ -57,13 +56,13 @@ void stack_empty(PStack *S, PDelegate free_elm_fnc ) { $H
     }
 
     S->_head = NULL;
-    return_with;
+    return;
 }
 
 /**
  * Free a stack.
  */
-void stack_free(PStack *S, PDelegate free_elm_fnc ) { $H
+void stack_free(PStack *S, PDelegate free_elm_fnc ) {
 	assert_not_null(S);
 	assert_not_null(free_elm_fnc);
 
@@ -72,21 +71,21 @@ void stack_free(PStack *S, PDelegate free_elm_fnc ) { $H
     mem_free(S);
 
 	S = NULL;
-    return_with;
+    return;
 }
 
 /**
  * Check if a stack is empty.
  */
-char stack_is_empty(const PStack * const S ) { $H
+char stack_is_empty(const PStack * const S ) {
 	assert_not_null(S);
-    return_with is_null(S->_head);
+    return is_null(S->_head);
 }
 
 /**
  * Push an element onto the stack.
  */
-void stack_push(PStack * const S, void * E ) { $H
+void stack_push(PStack * const S, void * E ) {
     PGenericList *L = NULL;
 
     assert_not_null(S);
@@ -106,13 +105,13 @@ void stack_push(PStack * const S, void * E ) { $H
     S->_head = L;
     gen_list_set_elm(L, E );
 
-    return_with;
+    return;
 }
 
 /**
  * Pop an element off of the stack.
  */
-void *stack_pop(PStack * const S ) { $H
+void *stack_pop(PStack * const S ) {
     void *E = NULL;
     PGenericList *L = NULL;
 
@@ -130,13 +129,13 @@ void *stack_pop(PStack * const S ) { $H
     list_set_next(L, S->_unused );
     S->_unused = L;
 
-    return_with E;
+    return E;
 }
 
 /**
  * Peek at the top element on the stack.
  */
-void *stack_peek(const PStack * const S ) { $H
+void *stack_peek(const PStack * const S ) {
 	assert(!stack_is_empty(S));
-    return_with gen_list_get_elm(S->_head );
+    return gen_list_get_elm(S->_head );
 }
