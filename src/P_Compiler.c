@@ -104,7 +104,7 @@ int main() { $MH
             else
                 printf("Primary %d\n", n);
         } else {
-            printf("%d\n", ((PTerminalTree *) curr)->token->lexeme);
+            printf("%s\n", ((PTerminalTree *) curr)->token->val->str);
         }
     }
     generator_free(gen);

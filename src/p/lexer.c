@@ -35,17 +35,17 @@ static void *L_generator_next(void *g) { $H
     if(0 == init) {
         init = 1;
 
-        tokens[0] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(a", 2), 1, 3);
+        tokens[0] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
         tokens[1] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("1", 1), 1, 4);
         tokens[2] = token_alloc(P_LEXEME_ADD, string_alloc_char("+", 1), 1, 5);
         tokens[3] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("2", 1), 1, 5);
-        tokens[4] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")a", 2), 1, 7);
+        tokens[4] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")", 1), 1, 7);
         tokens[5] = token_alloc(P_LEXEME_MULTIPLY, string_alloc_char("*", 1), 1, 2);
-        tokens[6] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(b", 2), 1, 3);
+        tokens[6] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
         tokens[7] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("3", 1), 1, 4);
         tokens[8] = token_alloc(P_LEXEME_ADD, string_alloc_char("+", 1), 1, 5);
         tokens[9] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("4", 1), 1, 5);
-        tokens[10] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")b", 2), 1, 7);
+        tokens[10] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")", 1), 1, 7);
     }
 
     if((++pos) < 11) {
