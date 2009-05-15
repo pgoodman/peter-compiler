@@ -26,7 +26,7 @@
  */
 typedef struct P_Thunk {
     PParserFunc production;
-    PGenericList *list;
+    PTerminalTree *list;
 } P_Thunk;
 
 /**
@@ -43,8 +43,8 @@ typedef struct P_Thunk {
  * thunk hash table.
  */
 typedef struct P_CachedResult {
-    PGenericList *start,
-                 *end;
+    PTerminalTree *start,
+                  *end;
     PParserFunc production;
     PParseTree *tree;
 } P_CachedResult;
@@ -65,12 +65,16 @@ typedef struct P_Production {
 
 /**
  * Type holding a pointer to the ordered list of *all* tokens from whatever text
- * is currently being parsed, as well as the number of tokens in that list.
+ * is currently being parsed, as well as the number of tokens in that list. Right
+ * off the bat we allocate the leaves of the parse tree and put the tokens in
+ * them so that no tree leaf for a given token is allocated more than once. This
+ * also gives us the benefit of having a well-defined in-order traversal path in
+ * the final parse tree.
  */
-typedef struct P_TokenList {
-    PGenericList *list;
+typedef struct P_TerminalTreeList {
+    PTerminalTree *list;
     uint32_t num_tokens;
-} P_TokenList;
+} P_TerminalTreeList;
 
 /**
  * In a sense this parser is recursive-descent; however, it maintains its own
@@ -114,8 +118,8 @@ typedef struct P_TokenList {
 typedef struct P_StackFrame {
     P_Production *production;
     PGenericList *curr_rule_list,
-                 *alternative_rules,
-                 *backtrack_point;
+                 *alternative_rules;
+    PTerminalTree *backtrack_point;
     char do_backtrack;
     PParseTree *parse_tree;
     struct P_StackFrame *caller;
@@ -172,7 +176,7 @@ static char P_hash_rewrite_collision_fnc(void *rule1, void *rule2) {
  * parser functions lets us index the various productions in our top-down parsing
  * grammar. The parser production is used to index a P_Production.
  */
-static uint32_t P_key_hash_production_fnc(void *production) {
+static uint32_t P_key_hash_production_fnc(PParserFunc production) {
     union {
         PParserFunc prod;
         char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
@@ -185,7 +189,7 @@ static uint32_t P_key_hash_production_fnc(void *production) {
 /**
  * Check for a hash collision.
  */
-static char P_hash_production_collision_fnc(void *fnc1, void *fnc2) {
+static char P_hash_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
     return fnc1 != fnc2;
 }
 
@@ -205,7 +209,7 @@ PParser *parser_alloc(PParserFunc start_production) {
 
     /* hash table mapping production function (PParserFunc) to the information
      * that corresponds with them (P_Production). */
-    P->productions = dict_alloc(
+    P->productions = prod_dict_alloc(
         10,
         &P_key_hash_production_fnc,
         &P_hash_production_collision_fnc
@@ -262,7 +266,7 @@ void parser_add_production(PParser *P,
     assert_not_null(semantic_handler_fnc);
     assert(0 < num_seqs);
     assert(!P->is_closed);
-    assert(!dict_is_set(P->productions, semantic_handler_fnc));
+    assert(!prod_dict_is_set(P->productions, semantic_handler_fnc));
 
 
 
@@ -301,7 +305,12 @@ void parser_add_production(PParser *P,
     prod->alternatives = S;
 
     /* add in this production */
-    dict_set(P->productions, semantic_handler_fnc, prod, &delegate_do_nothing);
+    prod_dict_set(
+        P->productions,
+        semantic_handler_fnc,
+        prod,
+        &delegate_do_nothing
+    );
 
     return;
 }
@@ -414,8 +423,8 @@ PParserRewriteRule *parser_rewrite_epsilon(PParser *P) {
 /**
  * Allocate a new cached result of parsing on the heap.
  */
-static P_CachedResult *P_alloc_cache(PGenericList *start,
-                                     PGenericList *end,
+static P_CachedResult *P_alloc_cache(PTerminalTree *start,
+                                     PTerminalTree *end,
                                      PParserFunc production,
                                      PParseTree *tree) {
 
@@ -438,7 +447,7 @@ static P_CachedResult *P_alloc_cache(PGenericList *start,
  */
 static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
                                          P_Production *prod,
-                                         PGenericList *backtrack_point) {
+                                         PTerminalTree *backtrack_point) {
     P_StackFrame *frame = NULL;
 
     if(is_null(*unused)) {
@@ -503,13 +512,29 @@ static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) {
 }
 
 /**
+ * Allocate a new terminal tree.
+ */
+static PTerminalTree *P_alloc_terminal_tree(PToken *tok) {
+    PTerminalTree *T = mem_alloc(sizeof(PTerminalTree));
+    if(is_null(T)) {
+        mem_error("Unable to allocate parse tree leaf node.");
+    }
+    T->token = tok;
+    T->next = NULL;
+    T->prev = NULL;
+    ((PParseTree *) T)->type = P_PARSE_TREE_TERMINAL;
+
+    return T;
+}
+
+/**
  * Return a linked list of all tokens in the current file being parsed.
  */
-static P_TokenList P_get_all_tokens(PTokenGenerator *G) {
+static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G) {
 
-    P_TokenList list;
-    PGenericList *prev = NULL,
-                 *curr = NULL;
+    P_TerminalTreeList list;
+    PTerminalTree *prev = NULL,
+                  *curr = NULL;
 
     assert_not_null(G);
 
@@ -522,17 +547,16 @@ static P_TokenList P_get_all_tokens(PTokenGenerator *G) {
     }
 
     /* generate the first token */
-    list.list = gen_list_alloc();
-    gen_list_set_elm(list.list, generator_current(G));
+    list.list = P_alloc_terminal_tree(generator_current(G));
     prev = list.list;
     list.num_tokens = 1;
 
     /* generate the rest of the tokens */
     while(generator_next(G)) {
         ++(list.num_tokens);
-        curr = gen_list_alloc();
-        gen_list_set_elm(curr, generator_current(G));
-        list_set_next(prev, curr);
+        curr = P_alloc_terminal_tree(generator_current(G));
+        prev->next = curr;
+        curr->prev = prev;
         prev = curr;
     }
 
@@ -542,7 +566,7 @@ static P_TokenList P_get_all_tokens(PTokenGenerator *G) {
 /**
  * Allocate a new thunk on the heap.
  */
-static P_Thunk *P_alloc_thunk(PParserFunc func, PGenericList *list) {
+static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
     P_Thunk *thunk = mem_alloc(sizeof(P_Thunk));
 
     if(is_null(thunk)) {
@@ -582,20 +606,26 @@ static P_Thunk *P_alloc_thunk(PParserFunc func, PGenericList *list) {
 PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     PToken *curr_token = NULL;
     P_Production *curr_production = NULL;
-    P_TokenList token_result;
+    P_TerminalTreeList token_result;
     PParseTree *parse_tree = NULL;
     PParserRewriteRule *curr_rule;
     P_StackFrame *frame = NULL,
                  *unused = NULL;
-    PGenericList *curr = NULL;
-    PTerminalTree *terminal_tree = NULL;
+    PTerminalTree *curr = NULL;
     P_CachedResult *cached_result = NULL;
     P_Thunk thunk;
-    int num_comparisons = 0;
+
+    /* stats */
+    int num_tok_comparisons = 0,
+        num_func_calls = 0,
+        num_cache_uses = 0,
+        num_backtracks = 0,
+        num_cached_successes = 0,
+        num_cached_failures = 0;
 
     assert_not_null(P);
     assert_not_null(G);
-    assert(dict_is_set(P->productions, P->start_production));
+    assert(prod_dict_is_set(P->productions, P->start_production));
 
     token_result = P_get_all_tokens(G);
 
@@ -623,7 +653,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
      * involves registering the start of the token list as the furthest back
      * we can backtrack.
      */
-    curr_production = dict_get(P->productions, P->start_production);
+    curr_production = prod_dict_get(P->productions, P->start_production);
     P_frame_stack_push(
         &frame,
         P_frame_stack_alloc(&unused, curr_production, curr)
@@ -640,6 +670,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
          * its parse tree, backtrack, and possibly cascade the failure upward.
          */
         if(frame->do_backtrack) {
+
+            ++num_backtracks;
 
             /* trim the (partial) branches off of the tree and put them in our
              * temporary stack. parts of these partial trees might represent
@@ -658,6 +690,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 /* dump the parse tree */
                 tree_free(frame->parse_tree, &delegate_do_nothing);
                 frame->parse_tree = NULL;
+
+                ++num_cached_failures;
 
                 /* cache the failure */
                 dict_set(
@@ -729,6 +763,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
             } else {
 
                 printf("production succeeded.\n");
+                ++num_cached_successes;
 
                 /* cache the successful application of this production. */
                 dict_set(
@@ -762,7 +797,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
         } else if(is_not_null(curr)) {
 
-            curr_token = gen_list_get_elm(curr);
+            curr_token = curr->token;
             curr_rule = gen_list_get_elm(frame->curr_rule_list);
 
             /* the next non/terminal in the current rule list is a non-terminal,
@@ -772,7 +807,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
             if(is_not_null(curr_rule->func)) {
 
                 /* check if we have a cached this result of applying this
-                 * particularproduction to our current position in the token
+                 * particular production to our current position in the token
                  * list. */
                 thunk.production = curr_rule->func;
                 thunk.list = curr;
@@ -780,6 +815,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                 /* we have a cached result. */
                 if(is_not_null(cached_result)) {
+
+                    ++num_cache_uses;
 
                     /* the cached result is a failure. time to backtrack. */
                     if(cached_result == P_PRODUCTION_FAILED) {
@@ -816,10 +853,10 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 } else {
 
                     printf("pushing production onto stack.\n");
-
+                    ++num_func_calls;
                     P_frame_stack_push(&frame, P_frame_stack_alloc(
                         &unused,
-                        dict_get(P->productions, curr_rule->func),
+                        prod_dict_get(P->productions, curr_rule->func),
                         curr
                     ));
                 }
@@ -832,7 +869,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              */
             } else if(P_LEXEME_EPSILON != curr_rule->lexeme) {
 
-                ++num_comparisons;
+                ++num_tok_comparisons;
 
                 /* we have matched a token, advance to the next token in the
                  * list and the next rewrite rule in the current rule list.
@@ -842,17 +879,14 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     printf("matched: %s\n", curr_token->val->str);
 
+                    /* store the match as a parse tree */
+                    tree_add_branch(frame->parse_tree, curr);
+
                     /* advance the token and rewrite rule */
-                    curr = (PGenericList *) list_get_next(curr);
+                    curr = curr->next;
                     frame->curr_rule_list = (PGenericList *) list_get_next(
                         frame->curr_rule_list
                     );
-
-                    /* store the match as a parse tree */
-                    terminal_tree = tree_alloc(sizeof(PTerminalTree), 0);
-                    terminal_tree->token = curr_token;
-                    ((PParseTree *) terminal_tree)->type = P_PARSE_TREE_TERMINAL;
-                    tree_add_branch(frame->parse_tree, terminal_tree);
 
                 /* the tokens do not match, backtrack. */
                 } else {
@@ -882,7 +916,13 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         }
     }
 
-    printf("completed parse with %d token comparisons.\n", num_comparisons);
+    printf(
+        "\ncompleted parse with:\n\t %d token comparisons\n\t %d recursive function "
+        "calls\n\t %d cache_uses.\n\t %d backtracks\n\t %d cached succeses\n\t %d cached "
+        "failures\n\t %d tokens\n\n",
+        num_tok_comparisons, num_func_calls, num_cache_uses, num_backtracks,
+        num_cached_successes, num_cached_failures, token_result.num_tokens
+    );
     return parse_tree;
 }
 

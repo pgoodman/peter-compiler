@@ -18,39 +18,39 @@
 /* hash functions take in an object to hash as well as the
  * current size of the hash table.
  */
-typedef uint32_t (*PHashFunction)(void *);
+typedef uint32_t (*PDictHashFunction)(void *);
 
 /* hash collision checker, compares two keys. */
-typedef char (*PHashCollisionFunction)(void *, void *);
+typedef char (*PDictCollisionFunction)(void *, void *);
 
-/* hash table entry. */
-typedef struct PDictEntry {
+/* hash table entry, this is a private type; however, it needs to be out here */
+typedef struct H_Entry {
     void *entry,
          *key;
-} PDictEntry;
+} H_Entry;
 
 /* Hash table / set implementation. */
 typedef struct PDictionary {
-    PDictEntry ** elms;
+    H_Entry ** elms;
 
     uint32_t num_slots,
              num_used_slots;
 
-    PHashFunction key_hash_fnc;
+    PDictHashFunction key_hash_fnc;
 
-    PHashCollisionFunction collision_fnc;
+    PDictCollisionFunction collision_fnc;
 
     int prime_index;
 } PDictionary;
 
-void *gen_dict_alloc(const size_t, const uint32_t, PHashFunction, PHashCollisionFunction);
-PDictionary *dict_alloc(const uint32_t, PHashFunction, PHashCollisionFunction);
+void *gen_dict_alloc(const size_t, const uint32_t, PDictHashFunction, PDictCollisionFunction);
+PDictionary *dict_alloc(const uint32_t, PDictHashFunction, PDictCollisionFunction);
 void dict_free(PDictionary *, PDelegate );
 char dict_set(PDictionary *, void *, void *, PDelegate );
 void dict_unset(PDictionary *, void *, PDelegate );
 
-void *dict_get(const PDictionary * const H, const void * const key);
-char dict_is_set(const PDictionary * const H, const void * const key);
+void *dict_get(PDictionary *H, void *key);
+char dict_is_set(PDictionary *H, void *key);
 
 uint32_t dict_hash_pointer(void * );
 
