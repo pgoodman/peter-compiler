@@ -26,7 +26,6 @@ PParserRuleResult parser_rule_sequence(short, PParserRewriteRule *, ...);
 PParserRewriteRule *parser_rewrite_function(PParser *, PParserFunc);
 PParserRewriteRule *parser_rewrite_token(PParser *, PLexeme);
 PParserRewriteRule *parser_rewrite_epsilon(PParser *);
-
-PParseTree *parser_parse_tokens(PParser *, PTokenGenerator *);
+void parser_parse_tokens(PParser *, PTokenGenerator *);
 
 #endif /* PPARSER_H_ */

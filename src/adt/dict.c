@@ -9,6 +9,7 @@
 #include <adt-dict.h>
 
 #define P_DICT_LOAD_FACTOR 0.65
+#define P_DICT_EMPTY_SLOT (void *)1
 
 /**
  * Credit for primes table: Aaron Krowne
@@ -228,14 +229,28 @@ char dict_set(PDictionary *H, void *key, void *val,
 /**
  * Delete a record from a hash table.
  */
-void dict_unset(PDictionary *H, void *key, PDelegate free_fnc ) {
+void dict_unset(PDictionary *H, void *key, PDelegate free_fnc) {
     H_EntryInfo info = H_get_entry_info(H, key);
+    uint32_t prev_key;
+
     /* remove it if it is there and decrement the number of slots
      * that we're using. */
     if(is_not_null(info.entry)) {
         free_fnc(info.entry->entry);
         mem_free(info.entry);
         H->elms[info.hash_key] = NULL;
+
+        /* shift the elements that were linearly probed into place. */
+        prev_key = info.hash_key;
+        info.hash_key = (info.hash_key + 1) % H->num_slots;
+        while(is_not_null(H->elms[info.hash_key])) {
+            if(H->collision_fnc(H->elms[info.hash_key]->key, key)) {
+                H->elms[prev_key] = H->elms[info.hash_key];
+                prev_key = info.hash_key;
+                info.hash_key = (info.hash_key + 1) % H->num_slots;
+            }
+        }
+
         --(H->num_used_slots);
     }
     return;
@@ -255,4 +270,23 @@ void *dict_get(PDictionary *H, void *key) {
 char dict_is_set(PDictionary *H, void *key) {
     H_EntryInfo info = H_get_entry_info(H, key);
     return is_not_null(info.entry);
+}
+
+/**
+ * Hash a pointer.
+ */
+uint32_t dict_pointer_hash_fnc(void *pointer) {
+    union {
+        void *ptr;
+        char ptr_as_chars[sizeof(void *) / sizeof(char)];
+    } switcher;
+    switcher.ptr = pointer;
+    return murmur_hash(switcher.ptr_as_chars, (sizeof(void *) / sizeof(char)), 73);
+}
+
+/**
+ * Check if two pointers are the same.
+ */
+char dict_pointer_collision_fnc(void *a, void *b) {
+    return (a == b);
 }

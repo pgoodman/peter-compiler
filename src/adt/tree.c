@@ -62,7 +62,7 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree ) {
 /**
  * Figure out a valid memory freeing callback for freeing things.
  */
-static PDelegate T_valid_free_callback(PDelegate ft, PDelegate disallowed, PDelegate allowed ) {
+static PDelegate T_valid_free_callback(PDelegate ft, PDelegate disallowed, PDelegate allowed) {
     PDelegate free_tree = NULL;
 
     /* make sure we don't over free */
@@ -167,15 +167,34 @@ void *tree_parent(void *t) {
 }
 
 /**
+ * Clear off all of the branches, without doing anyting interesting with them.
+ */
+void tree_clear(void *tree) {
+    PTree *T = (PTree *) tree;
+    int i = 0;
+
+    assert_not_null(tree);
+
+    for(; i < T->_fill; ++i) {
+        T->_branches[i]->_parent = NULL;
+        T->_branches[i]->_parent_branch = 0;
+        T->_branches[i] = NULL;
+    }
+
+    T->_fill = 0;
+    return;
+}
+
+/**
  * Trim off all of the branches, and push each of them into the garbage stack.
  */
-void tree_trim(void *tree, PStack *garbage_stack) {
+void tree_trim(void *tree, PDictionary *garbage_set) {
 	PTree *T = (PTree *) tree,
           *branch = NULL;
     unsigned short i;
 
     assert_not_null(tree);
-    assert_not_null(garbage_stack);
+    assert_not_null(garbage_set);
 
     /* none of the branches have been filled, or no branches were allocated,
      * so we have nothing to do.. yay! */
@@ -186,7 +205,7 @@ void tree_trim(void *tree, PStack *garbage_stack) {
     /* sub-trees are there, collect them into our garbage collection. */
     for(i = 0; i < T->_fill; ++i) {
         branch = (PTree *) (T->_branches[i]);
-        stack_push(garbage_stack, branch);
+        dict_set(garbage_set, branch, branch, &delegate_do_nothing);
 
         /* update the branches parent information */
         branch->_parent_branch = 0;
@@ -404,7 +423,7 @@ static void *T_generator_next_po(void *g ) {
                         stack_push(S, curr->_branches[--i] );
                     }
 
-                    curr = stack_peek(S );
+                    curr = stack_peek(S);
 
                 /* no sub-trees to explore, this is a leaf node */
                 } else {
@@ -484,3 +503,12 @@ void tree_generator_reuse(PTreeGenerator *G, void *tree) {
     G->_reclaim_adt(G->_adt, &delegate_do_nothing);
     G->_adt = tree;
 }
+
+/**
+ * Get a specific branch from the tree.
+ */
+/*void *tree_get_branch(void *T, unsigned short branch) {
+    assert_not_null(T);
+    assert(branch < ((PTree *) T)->_fill);
+    return (((PTree *) T)->_branches[branch]);
+}*/

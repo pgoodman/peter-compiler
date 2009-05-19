@@ -13,6 +13,7 @@
 #include "func-delegate.h"
 #include "func-function.h"
 #include "adt-stack.h"
+#include "adt-dict.h"
 #include "adt-queue.h"
 #include "adt-generator.h"
 
@@ -47,15 +48,19 @@ typedef enum {
 void *tree_alloc(const size_t, const unsigned short );
 void tree_free(void *, PDelegate);
 void delegate_tree_free(void * );
-void tree_trim(void *, PStack * );
+void tree_clear(void *tree);
+void tree_trim(void *, PDictionary *);
 char tree_add_branch(void *, void * );
 size_t tree_degree(void * );
 size_t tree_fill(void * );
 void *tree_parent(void *);
+/*void *tree_get_branch(void *, unsigned short);*/
 
 /* tree generator */
 PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversal );
 PTreeGenerator *tree_generator_init(PTreeGenerator *, void *, const PTreeTraversal );
 void tree_generator_reuse(PTreeGenerator *, void *);
+
+#define tree_get_branch(T,branch) (((PTree *) T)->_branches[branch])
 
 #endif /* TREE_H_ */
