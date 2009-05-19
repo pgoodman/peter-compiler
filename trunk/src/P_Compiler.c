@@ -9,30 +9,54 @@
 #include <std-include.h>
 #include <p-lexer.h>
 #include <p-parser.h>
-
+#include <adt-dict.h>
 
 #if defined(P_DEBUG_PRINT_TRACE) && P_DEBUG_PRINT_TRACE == 1
 unsigned int __st_depth = 0;
 #endif
 
-PParseTree *Additive(PParseTree *x) {
+void Additive(PProductionTree *T, PDictionary *garbage) {
     printf("In additive.\n");
-    return NULL;
+    /*
+    switch(T->rule) {
+    case 1:
+
+    case 2:
+
+    }*/
 }
 
-PParseTree *Multitive(PParseTree *x) {
+void Multitive(PProductionTree *T, PDictionary *garbage) {
     printf("In multitive.\n");
-    return NULL;
+    /*PParseTree *left = NULL,
+                right = NULL;
+    if(T->rule == 1) {
+        left = tree_get_branch(tree_get_branch(T, 0), 0);
+        right = tree_get_branch(tree_get_branch(T, 2), 0);
+
+        dict_unset(garbage, left, &delegate_do_nothing);
+        dict_unset(garbage, right, &delegate_do_nothing);
+
+        dict_clear(T);
+
+        dict_add_branch(left, right);
+    } else {
+        left = tree_get_branch(tree_get_branch(T, 0), 0);
+    }*/
 }
 
-PParseTree *Primary(PParseTree *x) {
+void Primary(PProductionTree *T, PDictionary *garbage) {
     printf("In primary.\n");
-    return NULL;
-}
+    /*
+    PParseTree *inner;
 
-PParseTree *Decimal(PParseTree *x) {
-    printf("In decimal.\n");
-    return NULL;
+    if(T->rule == 1) {
+        inner = tree_get_branch(T, 1);
+        tree_clear(T);
+        tree_add_branch(T, inner);
+
+        dict_unset(garbage, inner, &delegate_do_nothing);
+    }*/
 }
 
 int main() {
@@ -51,6 +75,10 @@ int main() {
     PParser *P = parser_alloc(&Additive);
     PParseTree *T = NULL;
     PTokenGenerator *G = token_generator_alloc();
+
+    PTreeGenerator *gen;
+    PParseTree *curr;
+    PParserFunc f;
 
     parser_add_production(P, &Additive, 2,
         parser_rule_sequence(3,
@@ -85,12 +113,10 @@ int main() {
         )
     );
 
-    T = parser_parse_tokens(P, G);
+    parser_parse_tokens(P, G);
 
-    printf("traversal of the parse tree:\n");
-    PTreeGenerator *gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
-    PParseTree *curr;
-    PParserFunc f;
+    /*printf("traversal of the parse tree:\n");
+    gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
     int n;
     while(generator_next(gen)) {
         curr = generator_current(gen);
@@ -107,7 +133,7 @@ int main() {
             printf("%s\n", ((PTerminalTree *) curr)->token->val->str);
         }
     }
-    generator_free(gen);
+    generator_free(gen);*/
 
     printf("done.\n");
 

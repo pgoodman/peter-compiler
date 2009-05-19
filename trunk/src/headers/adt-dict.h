@@ -52,6 +52,7 @@ void dict_unset(PDictionary *, void *, PDelegate );
 void *dict_get(PDictionary *H, void *key);
 char dict_is_set(PDictionary *H, void *key);
 
-uint32_t dict_hash_pointer(void * );
+uint32_t dict_pointer_hash_fnc(void *pointer);
+char dict_pointer_collision_fnc(void *a, void *b);
 
 #endif /* HASHSET_H_ */

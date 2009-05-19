@@ -25,7 +25,7 @@ typedef struct PParseTree {
 
 typedef struct PProductionTree {
     PParseTree _;
-    struct PParseTree *(*production)(struct PParseTree *);
+    void (*production)(struct PProductionTree *, PDictionary *);
     short rule; /* the rule from the production's definition that was matched */
 } PProductionTree;
 
@@ -40,7 +40,7 @@ typedef struct PTerminalTree {
  * a particular node in a parse tree. These functions are called *after* the
  * entire and correct parse tree is generated.
  */
-typedef PParseTree *(*PParserFunc)(PParseTree *);
+typedef void (*PParserFunc)(PProductionTree *, PDictionary *);
 
 
 /*********************/
@@ -63,9 +63,6 @@ typedef struct ProdDictionary {
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PParser {
-    /*PGenericList *parsing_grammar;*/
-    PDictionary *thunk_table;
-
     char is_closed; /* on for when we no longer allow rules to be added. */
 
     ProdDictionary *productions; /* keep track of all of the productions for the
@@ -74,8 +71,6 @@ typedef struct PParser {
     PDictionary *rules; /* keep track of rules used in productions, this does
                          * not keep track of epsilon rules as that is statically
                          * defined anyway. */
-
-    PStack *temp_parse_trees; /* unused or cached parsed trees. */
 
     PParserFunc start_production; /* production used to start parsing. */
 } PParser;
