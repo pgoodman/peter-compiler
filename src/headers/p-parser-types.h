@@ -89,4 +89,18 @@ typedef struct PParserRuleResult {
     short num_elms;
 } PParserRuleResult;
 
+/**
+ * Type representing a single production and all of its rules 'alternatives'
+ * from a top-down parsing grammar. The list is of rules is explicitly ordered.
+ *
+ * The 'max_rule_elms' is maximum number of non/terminals in all of its rules.
+ * This is used to allocate one and only one parse tree with max_rule_elms
+ * branch pointers.
+ */
+typedef struct P_Production {
+    PGenericList *alternatives;
+    PParserFunc production;
+    short max_rule_elms;
+} P_Production;
+
 #endif /* PPARSERTYPES_H_ */

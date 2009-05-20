@@ -199,29 +199,35 @@ char dict_set(PDictionary *H, void *key, void *val,
     assert_not_null(key);
     assert_not_null(free_on_overwrite_fnc);
 
-    /* we've gone past our load factor, grow the hash table. */
-    if(P_DICT_LOAD_FACTOR < (H->num_used_slots / H->num_slots)) {
-        H_grow(H);
-    }
+
 
     info = H_get_entry_info(H, key);
     entry = info.entry;
     did_overwrite = 0;
 
-    /* overwrite with our object, but only if the keys match! */
+    /* overwrite an existing object */
     if(is_not_null(entry)) {
         free_on_overwrite_fnc(info.entry->entry);
         did_overwrite = 1;
+
+    /* adding a new object */
     } else {
+
+        /* we've gone past our load factor, grow the hash table. */
+        if(P_DICT_LOAD_FACTOR < (H->num_used_slots / H->num_slots)) {
+            H_grow(H);
+        }
+
         entry = mem_alloc(sizeof(H_Entry));
         if(is_null(entry)) {
             mem_error("Unable to allocate dictionary entry on the heap.");
         }
+
+        entry->key = key;
+        H->elms[info.hash_key] = entry;
     }
 
     entry->entry = val;
-    entry->key = key;
-    H->elms[info.hash_key] = entry;
 
     return did_overwrite;
 }

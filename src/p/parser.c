@@ -13,10 +13,10 @@
          + sizeof(PGenericList *) \
         ) / sizeof(char)
 #define P_PRODUCTION_FAILED ((void *) 10)
-#define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
-#define P_SIZE_OF_PARSER_FUNC (sizeof(PParserFunc) / sizeof(char))
+#define P_PRODUCTION_TRY_LR ((void *) 11)
 #define P_SIZE_OF_PARSE_TREE (sizeof(PParseTree *) / sizeof(char))
-#define PARSER_DEBUG(x)
+#define PARSER_DEBUG(x) x
+
 
 /* Type representing the necessary information to uniquely identify the result
  * of a production after being applied to a particular suffix of tokens. In this
@@ -36,33 +36,15 @@ typedef struct P_Thunk {
  * parse, the P_PRODUCTION_FAILED pointer is instead cached to indicate a failed
  * application of a production to some part of the token list.
  *
- * 'next' points to somewhere in the token list for the parser to pick up after
- * accepting the cached parse tree, 'tree', from the application of this production.
- *sss
- * 'start' and 'production' indicate what production was used and to what part
- * of the token list. This information is required in the event of resizing the
- * thunk hash table.
+ * 'end' points to somewhere in the token list for the parser to pick up after
+ * accepting the cached parse tree, 'tree', from the application of this
+ * production.
  */
 typedef struct P_CachedResult {
-    PTerminalTree *start,
-                  *end;
-    PParserFunc production;
+    PTerminalTree *end;
     PParseTree *tree;
+    char is_left_recursive;
 } P_CachedResult;
-
-/**
- * Type representing a single production and all of its rules 'alternatives'
- * from a top-down parsing grammar. The list is of rules is explicitly ordered.
- *
- * The 'max_rule_elms' is maximum number of non/terminals in all of its rules.
- * This is used to allocate one and only one parse tree with max_rule_elms
- * branch pointers.
- */
-typedef struct P_Production {
-    PGenericList *alternatives;
-    PParserFunc production;
-    short max_rule_elms;
-} P_Production;
 
 /**
  * Type holding a pointer to the ordered list of *all* tokens from whatever text
@@ -106,10 +88,11 @@ typedef struct P_TerminalTreeList {
  *       when it attempted to start matching this production. This is the point
  *       where it will return to on failure in order to try matching another
  *       rule.
- *    e) a do_backtrack flag indicating that a non/terminal in curr_rule_list
- *       has failed to match a token and so we must backtrack to the
- *       backtrack_point and try another rule, or upon full failure of the
- *       production, cascade the failure to the calling production.
+ *    e) a do_backtrack flag indicating that a non/terminal in
+ *       curr_rule_list has failed to match a token and so we must
+ *       backtrack to the backtrack_point and try another rule, or upon
+ *       full failure of the production, cascade the failure to the
+ *       calling production.
  *    f) the parse tree as it is being constructed.
  *    g) the calling stack frame. This is used for two reasons, it lets us
  *       manually manage the call stack without the overhead of the generic
@@ -149,288 +132,36 @@ static char P_thunk_collision_fnc(void *thunk1, void *thunk2) {
 }
 
 /**
- * Hash function that converts a rewrite rule (parser-func, lexeme) into a char
- * array to be hashed. Rewrite rules are hashable to allow us to make sure we
- * don't allocate duplicate rewrile rules where only one is really necessary.
- */
-static uint32_t P_hash_rewrite_rule_fnc(void *rewrite_rule) {
-    union {
-        PParserRewriteRule rewrite;
-        char rule_as_chars[P_SIZE_OF_REWRITE_RULE];
-    } switcher;
-
-    switcher.rewrite = *((PParserRewriteRule *) rewrite_rule);
-    return murmur_hash(switcher.rule_as_chars, P_SIZE_OF_REWRITE_RULE, 73);
-}
-
-/**
- * Check for a collision in a rewrite rule hash.
- */
-static char P_hash_rewrite_collision_fnc(void *rule1, void *rule2) {
-    PParserRewriteRule *r1 = rule1,
-                       *r2 = rule2;
-    return ((r1->func != r2->func) || (r1->lexeme != r2->lexeme));
-}
-
-/**
- * Hash function that converts a PParserFunc pointer into a char array. Hashing
- * parser functions lets us index the various productions in our top-down parsing
- * grammar. The parser production is used to index a P_Production.
- */
-static uint32_t P_key_hash_production_fnc(PParserFunc production) {
-    union {
-        PParserFunc prod;
-        char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
-    } switcher;
-
-    switcher.prod = (PParserFunc) production;
-    return murmur_hash(switcher.prod_as_chars, P_SIZE_OF_PARSER_FUNC, 73);
-}
-
-/**
- * Check for a hash collision.
- */
-static char P_hash_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
-    return fnc1 != fnc2;
-}
-
-/**
- * Allocate a new parser on the heap. A parser, in this case, is a container
- * linking to all of top-down-parsing language data structures as well as to
- * helping deal with garbage.
- *
- * The only parameter to this function is thee production to start parsing
- * with.
- */
-PParser *parser_alloc(PParserFunc start_production) {
-    PParser *P = mem_alloc(sizeof(PParser));
-    if(is_null(P)) {
-        mem_error("Unable to allocate a new parser on the heap.");
-    }
-
-    /* hash table mapping production function (PParserFunc) to the information
-     * that corresponds with them (P_Production). */
-    P->productions = prod_dict_alloc(
-        10,
-        &P_key_hash_production_fnc,
-        &P_hash_production_collision_fnc
-    );
-
-    /* hash table mapping parser rewrite rules to themselves. This is used
-     * in order to not repeatedly heap allocate the same rule twice. A rewrite
-     * rule identifies a token to match, a production to call, or nothing
-     * (epsilon rule) that is a blind accept.
-     */
-    P->rules = dict_alloc(
-        15,
-        &P_hash_rewrite_rule_fnc,
-        &P_hash_rewrite_collision_fnc
-    );
-
-    /* signal that this parser is open to have productions and their rules added
-     * to it.
-     */
-    P->is_closed = 0;
-
-    /* the production to start parsing with. */
-    P->start_production = start_production;
-
-    return P;
-}
-
-/**
- * Add a production to the parser's grammar. The production's name is the name
- * (or rather the function pointer) of the parser function that handles semantic
- * actions on the parse tree. This function pointer is used to reference this
- * production in the rules.
- *
- * !!! Rules are *ordered*
- */
-void parser_add_production(PParser *P,
-                           PParserFunc semantic_handler_fnc, /* the production name */
-                           short num_seqs, /* number of rewrite sequences */
-                           PParserRuleResult arg1, ...) { /* rewrite rules */
-    PParserRuleResult curr_seq;
-    P_Production *prod = NULL;
-    PGenericList *S = NULL,
-                 *curr = NULL,
-                 *tail = NULL;
-    va_list seqs;
-    assert_not_null(P);
-    assert_not_null(semantic_handler_fnc);
-    assert(0 < num_seqs);
-    assert(!P->is_closed);
-    assert(!prod_dict_is_set(P->productions, semantic_handler_fnc));
-
-    prod = mem_alloc(sizeof(P_Production));
-    if(is_null(prod)) {
-        mem_error("Unable to allocate new production on the heap.");
-    }
-
-    prod->production = semantic_handler_fnc;
-    prod->max_rule_elms = 0;
-
-    va_start(seqs, arg1);
-    for(curr_seq = arg1; \
-        num_seqs > 0; \
-        --num_seqs, curr_seq = va_arg(seqs, PParserRuleResult)) {
-
-        if(prod->max_rule_elms < curr_seq.num_elms) {
-            prod->max_rule_elms = curr_seq.num_elms;
-        }
-
-        curr = gen_list_alloc();
-        gen_list_set_elm(curr, curr_seq.rule);
-
-        /* add this into the sequence */
-        if(is_not_null(tail)) {
-            list_set_next(tail, curr);
-
-        /* no tail ==> need to set the head of the list. */
-        } else {
-            S = curr;
-        }
-
-        tail = curr;
-    }
-
-    prod->alternatives = S;
-
-    /* add in this production */
-    prod_dict_set(
-        P->productions,
-        semantic_handler_fnc,
-        prod,
-        &delegate_do_nothing
-    );
-
-    return;
-}
-
-/**
- * Create one of the rule sequences needed for a production. Each production
- * must have one or more rule sequence, where each rule sequence is a list of
- * PParserRewriteRule telling the parser to either match a particular token or
- * to recursively call and match a production.
- */
-PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) {
-    PParserRuleResult result;
-    PParserRewriteRule *curr_rule = NULL;
-    PGenericList *S = NULL,
-                 *curr = NULL,
-                 *tail = NULL;
-    va_list rules;
-
-    assert(0 < num_rules);
-    assert_not_null(arg1);
-
-    result.num_elms = num_rules;
-
-    va_start(rules, arg1);
-    for(curr_rule = arg1; \
-        num_rules > 0; \
-        --num_rules, curr_rule = va_arg(rules, PParserRewriteRule *)) {
-
-        curr = gen_list_alloc();
-        gen_list_set_elm(curr, curr_rule);
-
-        /* add this into the sequence */
-        if(is_not_null(tail)) {
-            list_set_next(tail, curr);
-
-        /* no tail ==> need to set the head of the list. */
-        } else {
-            S = curr;
-        }
-
-        tail = curr;
-    }
-
-    result.rule = S;
-    return result;
-}
-
-/**
- * A generic parser rewrite rule. This encompasses all three types of things that
- * we want to match:
- *   1) production (function) rules
- *   2) token rules
- *   3) epsilon rules.
- */
-static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
-                                                 PLexeme tok,
-                                                 PParserFunc func) {
-    PParserRewriteRule rewrite_rule;
-    PParserRewriteRule *R = NULL;
-
-    assert_not_null(P);
-
-    /* make a thunk out of it to search for in the hash table */
-    rewrite_rule.func = func;
-    rewrite_rule.lexeme = tok;
-
-    if(dict_is_set(P->rules, &rewrite_rule)) {
-        return ((PParserRewriteRule *) dict_get(P->rules, &rewrite_rule));
-    }
-
-    /* nope, need to allocate it :( */
-    R = mem_alloc(sizeof(PParserRewriteRule));
-    if(is_null(R)) {
-        mem_error("Unable to allocate rewrite rule on the heap.");
-    }
-
-    R->func = func;
-    R->lexeme = tok;
-
-    dict_set(P->rules, &rewrite_rule, R, &delegate_do_nothing);
-
-    return R;
-}
-
-/**
- * Rewrite rule for a single production function
- */
-PParserRewriteRule *parser_rewrite_function(PParser *P, PParserFunc func) {
-    assert_not_null(P);
-    assert_not_null(func);
-    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, func);
-}
-
-/**
- * Rewrite rule for a single token
- */
-PParserRewriteRule *parser_rewrite_token(PParser *P, PLexeme tok) {
-    assert_not_null(P);
-    return P_parser_rewrite_rule(P, tok, NULL);
-}
-
-/**
- * Rewrite rule for no token required.
- */
-PParserRewriteRule *parser_rewrite_epsilon(PParser *P) {
-    assert_not_null(P);
-    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
-}
-
-/**
  * Allocate a new cached result of parsing on the heap.
  */
-static P_CachedResult *P_alloc_cache(PTerminalTree *start,
-                                     PTerminalTree *end,
-                                     PParserFunc production,
-                                     PParseTree *tree) {
+static P_CachedResult *P_alloc_cache(PTerminalTree *end, PParseTree *tree) {
 
     P_CachedResult *R = mem_alloc(sizeof(P_CachedResult));
     if(is_null(R)) {
         mem_error("Unable to cache the result of a production on the heap.");
     }
 
-    R->start = start;
     R->end = end;
-    R->production = production;
     R->tree = tree;
+    R->is_left_recursive = 0;
 
     return R;
+}
+
+/**
+ * Allocate a new thunk on the heap.
+ */
+static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
+    P_Thunk *thunk = mem_alloc(sizeof(P_Thunk));
+
+    if(is_null(thunk)) {
+        mem_error("Unable to heap allocate a thunk.");
+    }
+
+    thunk->list = list;
+    thunk->production = func;
+
+    return thunk;
 }
 
 /**
@@ -443,6 +174,7 @@ static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
                                          PDictionary *all_trees,
                                          char record_tree) {
     P_StackFrame *frame = NULL;
+    P_Thunk thunk;
 
     if(is_null(*unused)) {
         frame = mem_alloc(sizeof(P_StackFrame));
@@ -479,6 +211,10 @@ static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
             frame->parse_tree, &delegate_do_nothing
         );
     }
+
+    /* record the cache entry for this frame */
+    thunk.list = backtrack_point;
+    thunk.production = prod->production;
 
     return frame;
 }
@@ -575,22 +311,6 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
     }
 
     return list;
-}
-
-/**
- * Allocate a new thunk on the heap.
- */
-static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
-    P_Thunk *thunk = mem_alloc(sizeof(P_Thunk));
-
-    if(is_null(thunk)) {
-        mem_error("Unable to heap allocate a thunk.");
-    }
-
-    thunk->list = list;
-    thunk->production = func;
-
-    return thunk;
 }
 
 /**
@@ -834,9 +554,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                         frame->backtrack_point
                     ),
                     P_alloc_cache(
-                        frame->backtrack_point,
                         curr,
-                        curr_production->production,
                         frame->parse_tree
                     ),
                     &delegate_do_nothing
@@ -1041,4 +759,3 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
     return;
 }
-

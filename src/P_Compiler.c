@@ -8,12 +8,8 @@
 
 #include <std-include.h>
 #include <p-lexer.h>
-#include <p-parser.h>
+#include <p-adt.h>
 #include <adt-dict.h>
-
-#if defined(P_DEBUG_PRINT_TRACE) && P_DEBUG_PRINT_TRACE == 1
-unsigned int __st_depth = 0;
-#endif
 
 void Additive(PProductionTree *T, PDictionary *garbage) {
     printf("In additive.\n");
