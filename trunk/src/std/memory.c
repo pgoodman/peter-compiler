@@ -8,7 +8,7 @@
 
 #include <std-memory.h>
 
-
+#if defined(P_DEBUG) && P_DEBUG == 1
 #if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
 
 #include <adt-dict.h>
@@ -61,6 +61,6 @@ void _D1_mem_free(void *x ) {
     free(x);
     return;
 }
-
+#endif
 #endif
 

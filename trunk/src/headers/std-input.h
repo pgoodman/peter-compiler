@@ -10,15 +10,19 @@
 #define HEADEER_H_
 
 #include "std-include.h"
+#include "std-string.h"
 
 /**
  * Wrapper around a C file handle.
  */
-typedef struct PFile {
-    FILE _;
-} PFile;
+typedef struct PFileInputStream {
+    FILE *ptr;
+    char buff[4096];
+} PFileInputStream;
 
-PFile *file_alloc(const char * const, const char * const );
-void file_free(PFile * );
+PFileInputStream *file_read(const PString * const);
+PFileInputStream *file_read_char(const char * const);
+void file_free(PFileInputStream * );
+unsigned char file_get_char(PFileInputStream *);
 
 #endif /* HEADEER_H_ */

@@ -80,7 +80,7 @@ typedef struct PParser {
  */
 typedef struct PParserRewriteRule {
     PParserFunc func;
-    PLexeme lexeme;
+    char lexeme;
 } PParserRewriteRule;
 
 /* the result of creating a parser rewrite rule. */

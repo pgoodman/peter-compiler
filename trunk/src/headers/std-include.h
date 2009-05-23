@@ -16,10 +16,6 @@
 #define is_null(x) (NULL == (x))
 #define is_not_null(x) (NULL != (x))
 
-#if defined(P_DEBUG_PRINT_TRACE) && P_DEBUG_PRINT_TRACE == 1
-extern unsigned int __st_depth;
-#endif
-
 #include <stdlib.h>
 #include <stdio.h>
 #include "vendor-pstdint.h"

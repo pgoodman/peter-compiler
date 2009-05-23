@@ -11,38 +11,40 @@
 /**
  * Allocate space a new string on the heap.
  */
-static PString *string_alloc(uint32_t len ) {
-    assert(len > 0);
+static PString *string_alloc(uint32_t len) {
+    PString *S;
 
-    PString *S = mem_alloc(sizeof(PString)+(sizeof(PChar) * len));
+    S= mem_alloc(sizeof(PString)+(sizeof(PChar) * (len+1)));
     if(NULL == S) {
         mem_error("Unable to allocate string on heap.");
     }
 
     S->len = len;
-    S->ref_count = 1;
     S->str = (PChar *) (((char *) S) + (sizeof(PString) / sizeof(char)));
+
+    S->str[len] = '\0';
 
     return S;
 }
 
 static PChar S_char_to_pchar(char c ) {
-    return (PChar) c;
+    return ((PChar) c);
 }
 
 /**
  * Allocate a new string on the heap by using a stack-allocated array of char.
  */
-PString *string_alloc_char(const char * const str, const uint32_t len ) {
+PString *string_alloc_char(const char *str, const uint32_t len ) {
     PString *S;
+    uint32_t i;
 
-    S = string_alloc(len );
-    int i;
+    S = string_alloc(len);
 
     /* copy the old characters, including null character, into the
      * heap-allocated chars */
-    for(i = 0; i < len+1; ++i)
-        S->str[i] = S_char_to_pchar(str[i] );
+    for(i = 0; i < len+1; ++i) {
+        S->str[i] = S_char_to_pchar(str[i]);
+    }
 
     return S;
 }
@@ -61,10 +63,10 @@ uint32_t string_length(const PString * const S ) {
  * character.
  */
 void string_convert_to_ascii(const PString * const S, char *ascii_version ) {
+    uint32_t i;
+
     assert_not_null(S);
     assert_not_null(ascii_version);
-
-    uint32_t i;
 
     for(i = 0; i < S->len; ++i)
         ascii_version[i] = S->str[i];
@@ -74,25 +76,11 @@ void string_convert_to_ascii(const PString * const S, char *ascii_version ) {
 }
 
 /**
- * Increase the refcount on a string. TODO: overflow check?
- */
-void string_use(PString *S ) {
-    assert_not_null(S);
-    ++(S->ref_count);
-    return;
-}
-
-/**
  * Either free a string or decrease its reference counter.
  */
 void string_free(PString *S ) {
     assert_not_null(S);
-
-    if(S->ref_count <= 1) {
-        mem_free(S);
-    } else {
-        --(S->ref_count);
-    }
+    mem_free(S);
     return;
 }
 
@@ -106,12 +94,13 @@ void delegate_string_free(void *str ) {
  * Check if two strings contain the same characters.
  */
 char string_equal(const PString * const A, const PString * const B ) {
+    char eql = 0;
+    uint32_t i,
+             len;
     assert_not_null(A);
     assert_not_null(B);
 
-    char eql = 0;
-    int i,
-        len = A->len;
+    len = A->len;
 
     if(len == B->len) {
 

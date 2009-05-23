@@ -11,6 +11,6 @@
 
 #include "vendor-pstdint.h"
 
-uint32_t murmur_hash ( const char *, int32_t, uint32_t);
+uint32_t murmur_hash (char *, int32_t, uint32_t);
 
 #endif /* MURMURHASH_H_ */

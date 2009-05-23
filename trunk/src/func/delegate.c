@@ -11,6 +11,6 @@
 /**
  * An empty delegate on one variable.
  */
-void delegate_do_nothing(void * const E ) {
-    return;
+void delegate_do_nothing(void *E) {
+
 }

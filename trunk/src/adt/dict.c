@@ -7,6 +7,7 @@
  */
 
 #include <adt-dict.h>
+#include <stdio.h>
 
 #define P_DICT_LOAD_FACTOR 0.65
 #define P_DICT_EMPTY_SLOT (void *)1
@@ -33,19 +34,25 @@ typedef struct H_EntryInfo {
     uint32_t hash_key;
 } H_EntryInfo;
 
+typedef void * H_key_type;
+typedef void * H_val_type;
+typedef PDictHashFunction H_hash_fnc_type;
+typedef PDictCollisionFunction H_collision_fnc_type;
+typedef PDictionary H_type;
+
 /**
  * Locate an entry and its associated key into the hash table in a dictionary.
  */
-static H_EntryInfo H_get_entry_info(PDictionary *H, void *key) {
+static H_EntryInfo H_get_entry_info(H_type *H, H_key_type key) {
     H_EntryInfo info;
 
     assert_not_null(H);
 
-    info.hash_key = H->key_hash_fnc((void *) key) % H->num_slots;
+    info.hash_key = H->key_hash_fnc(key) % H->num_slots;
     info.entry = H->elms[info.hash_key];
 
     /* re-apply the hash function until we find what we're looking for. */
-    while(is_not_null(info.entry) && H->collision_fnc((void *) key, info.entry->key)) {
+    while(is_not_null(info.entry) && H->collision_fnc(key, (info.entry)->key)) {
         info.hash_key = (info.hash_key+1) % H->num_slots;
         info.entry = H->elms[info.hash_key];
     }
@@ -67,7 +74,7 @@ static H_Entry **H_alloc_slots(uint32_t num_slots ) {
 /**
  * Double the size of the hash table and re-hash all the values.
  */
-static void H_grow(PDictionary *H ) {
+static void H_grow(H_type *H ) {
     H_Entry **old_elms = NULL;
     H_EntryInfo info;
     uint32_t old_size,
@@ -87,8 +94,10 @@ static void H_grow(PDictionary *H ) {
 
     /* re-hash the old objects into the new table */
     for(j = 0; j < old_size; ++j) {
-        info = H_get_entry_info(H, old_elms[j]->key);
-        H->elms[info.hash_key] = old_elms[j];
+        if(is_not_null(old_elms[j])) {
+            info = H_get_entry_info(H, old_elms[j]->key);
+            H->elms[info.hash_key] = old_elms[j];
+        }
     }
 
     /* free the old memory and update our hash table */
@@ -102,14 +111,14 @@ static void H_grow(PDictionary *H ) {
  */
 void *gen_dict_alloc(const size_t dict_struct_size,
                      uint32_t num_slots,
-                     PDictHashFunction key_hash_fnc,
-                     PDictCollisionFunction val_collision_fnc) {
-    PDictionary *H;
+                     H_hash_fnc_type key_hash_fnc,
+                     H_collision_fnc_type val_collision_fnc) {
+    H_type *H;
     H_Entry **elms;
     int i;
     void *table;
 
-    assert(sizeof(PDictionary) <= dict_struct_size);
+    assert(sizeof(H_type) <= dict_struct_size);
     assert_not_null(key_hash_fnc);
     assert_not_null(val_collision_fnc);
 
@@ -133,7 +142,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
     elms = H_alloc_slots(num_slots);
 
     /* initialize the vector */
-    H = (PDictionary *) table;
+    H = (H_type *) table;
     H->elms = elms;
     H->num_slots = num_slots;
     H->num_used_slots = 0;
@@ -147,11 +156,12 @@ void *gen_dict_alloc(const size_t dict_struct_size,
 /**
  * Allocate a hash table on the heap.
  */
-PDictionary *dict_alloc(const uint32_t num_slots,
-                        PDictHashFunction key_hash_fnc,
-                        PDictCollisionFunction collision_fnc) {
-    return (PDictionary *) gen_dict_alloc(
-        sizeof(PDictionary),
+H_type *dict_alloc(const uint32_t num_slots,
+                        H_hash_fnc_type key_hash_fnc,
+                        H_collision_fnc_type collision_fnc) {
+
+    return (H_type *) gen_dict_alloc(
+        sizeof(H_type),
         num_slots,
         key_hash_fnc,
         collision_fnc
@@ -161,7 +171,7 @@ PDictionary *dict_alloc(const uint32_t num_slots,
 /**
  * Free a hash table.
  */
-void dict_free(PDictionary *H, PDelegate free_elm_fnc ) {
+void dict_free(H_type *H, PDelegate free_elm_fnc ) {
     uint32_t i;
 
     assert_not_null(H);
@@ -188,7 +198,7 @@ void dict_free(PDictionary *H, PDelegate free_elm_fnc ) {
  * Set a record into a hash table. This will return 1 if a previous element
  * existed, 0 if it did not. In any case, the value will be set.
  */
-char dict_set(PDictionary *H, void *key, void *val,
+char dict_set(H_type *H, H_key_type key, H_val_type val,
               PDelegate free_on_overwrite_fnc) {
 
     char did_overwrite;
@@ -199,14 +209,13 @@ char dict_set(PDictionary *H, void *key, void *val,
     assert_not_null(key);
     assert_not_null(free_on_overwrite_fnc);
 
-
-
     info = H_get_entry_info(H, key);
     entry = info.entry;
     did_overwrite = 0;
 
     /* overwrite an existing object */
     if(is_not_null(entry)) {
+
         free_on_overwrite_fnc(info.entry->entry);
         did_overwrite = 1;
 
@@ -214,7 +223,7 @@ char dict_set(PDictionary *H, void *key, void *val,
     } else {
 
         /* we've gone past our load factor, grow the hash table. */
-        if(P_DICT_LOAD_FACTOR < (H->num_used_slots / H->num_slots)) {
+        if(P_DICT_LOAD_FACTOR <= ((float)H->num_used_slots / (float)H->num_slots)) {
             H_grow(H);
         }
 
@@ -225,6 +234,9 @@ char dict_set(PDictionary *H, void *key, void *val,
 
         entry->key = key;
         H->elms[info.hash_key] = entry;
+        ++(H->num_used_slots);
+
+
     }
 
     entry->entry = val;
@@ -235,13 +247,19 @@ char dict_set(PDictionary *H, void *key, void *val,
 /**
  * Delete a record from a hash table.
  */
-void dict_unset(PDictionary *H, void *key, PDelegate free_fnc) {
-    H_EntryInfo info = H_get_entry_info(H, key);
+void dict_unset(H_type *H, H_key_type key, PDelegate free_fnc) {
     uint32_t prev_key;
+    H_EntryInfo info;
+
+    assert_not_null(H);
+    assert_not_null(free_fnc);
+
+    info = H_get_entry_info(H, key);
 
     /* remove it if it is there and decrement the number of slots
      * that we're using. */
     if(is_not_null(info.entry)) {
+
         free_fnc(info.entry->entry);
         mem_free(info.entry);
         H->elms[info.hash_key] = NULL;
@@ -265,7 +283,7 @@ void dict_unset(PDictionary *H, void *key, PDelegate free_fnc) {
 /**
  * Get a record from a hash table.
  */
-void *dict_get(PDictionary *H, void *key) {
+H_val_type dict_get(H_type *H, H_key_type key) {
     H_EntryInfo info = H_get_entry_info(H, key);
     return (is_null(info.entry) ? NULL : info.entry->entry);
 }
@@ -273,7 +291,7 @@ void *dict_get(PDictionary *H, void *key) {
 /**
  * Check if a record exists in a hash table.
  */
-char dict_is_set(PDictionary *H, void *key) {
+char dict_is_set(H_type *H, H_key_type key) {
     H_EntryInfo info = H_get_entry_info(H, key);
     return is_not_null(info.entry);
 }

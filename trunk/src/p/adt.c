@@ -1,0 +1,276 @@
+/*
+ * adt.c
+ *
+ *  Created on: May 19, 2009
+ *      Author: petergoodman
+ *     Version: $Id$
+ */
+
+#include <p-adt.h>
+
+#define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
+#define P_SIZE_OF_PARSER_FUNC (sizeof(PParserFunc) / sizeof(char))
+
+/**
+ * Hash function that converts a rewrite rule (parser-func, lexeme) into a char
+ * array to be hashed. Rewrite rules are hashable to allow us to make sure we
+ * don't allocate duplicate rewrile rules where only one is really necessary.
+ */
+static uint32_t P_rewrite_rule_hash_fnc(void *rewrite_rule) {
+    union {
+        PParserRewriteRule rewrite;
+        char rule_as_chars[P_SIZE_OF_REWRITE_RULE];
+    } switcher;
+
+    switcher.rewrite = *((PParserRewriteRule *) rewrite_rule);
+    return murmur_hash(switcher.rule_as_chars, P_SIZE_OF_REWRITE_RULE, 73);
+}
+
+/**
+ * Check for a collision in a rewrite rule hash.
+ */
+static char P_rewrite_rule_collision_fnc(void *rule1, void *rule2) {
+    PParserRewriteRule *r1 = rule1,
+                       *r2 = rule2;
+    return ((r1->func != r2->func) || (r1->lexeme != r2->lexeme));
+}
+
+/**
+ * Hash function that converts a PParserFunc pointer into a char array. Hashing
+ * parser functions lets us index the various productions in our top-down parsing
+ * grammar. The parser production is used to index a P_Production.
+ */
+static uint32_t P_production_hash_fnc(PParserFunc production) {
+    union {
+        PParserFunc prod;
+        char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
+    } switcher;
+
+    switcher.prod = (PParserFunc) production;
+    return murmur_hash(switcher.prod_as_chars, P_SIZE_OF_PARSER_FUNC, 73);
+}
+
+/**
+ * Check for a hash collision.
+ */
+static char P_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
+    return fnc1 != fnc2;
+}
+
+/**
+ * Allocate a new parser on the heap. A parser, in this case, is a container
+ * linking to all of top-down-parsing language data structures as well as to
+ * helping deal with garbage.
+ *
+ * The only parameter to this function is thee production to start parsing
+ * with.
+ */
+PParser *parser_alloc(PParserFunc start_production) {
+    PParser *P = mem_alloc(sizeof(PParser));
+    if(is_null(P)) {
+        mem_error("Unable to allocate a new parser on the heap.");
+    }
+
+    /* hash table mapping production function (PParserFunc) to the information
+     * that corresponds with them (P_Production). */
+    P->productions = prod_dict_alloc(
+        10,
+        &P_production_hash_fnc,
+        &P_production_collision_fnc
+    );
+
+    /* hash table mapping parser rewrite rules to themselves. This is used
+     * in order to not repeatedly heap allocate the same rule twice. A rewrite
+     * rule identifies a token to match, a production to call, or nothing
+     * (epsilon rule) that is a blind accept.
+     */
+    P->rules = dict_alloc(
+        15,
+        &P_rewrite_rule_hash_fnc,
+        &P_rewrite_rule_collision_fnc
+    );
+
+    /* signal that this parser is open to have productions and their rules added
+     * to it.
+     */
+    P->is_closed = 0;
+
+    /* the production to start parsing with. */
+    P->start_production = start_production;
+
+    return P;
+}
+
+/**
+ * Add a production to the parser's grammar. The production's name is the name
+ * (or rather the function pointer) of the parser function that handles semantic
+ * actions on the parse tree. This function pointer is used to reference this
+ * production in the rules.
+ *
+ * !!! Rules are *ordered*
+ */
+void parser_add_production(PParser *P,
+                           PParserFunc semantic_handler_fnc, /* the production name */
+                           short num_seqs, /* number of rewrite sequences */
+                           PParserRuleResult arg1, ...) { /* rewrite rules */
+    PParserRuleResult curr_seq;
+    P_Production *prod = NULL;
+    PGenericList *S = NULL,
+                 *curr = NULL,
+                 *tail = NULL;
+    va_list seqs;
+    assert_not_null(P);
+    assert_not_null(semantic_handler_fnc);
+    assert(0 < num_seqs);
+    assert(!P->is_closed);
+    assert(!prod_dict_is_set(P->productions, semantic_handler_fnc));
+
+    prod = mem_alloc(sizeof(P_Production));
+    if(is_null(prod)) {
+        mem_error("Unable to allocate new production on the heap.");
+    }
+
+    prod->production = semantic_handler_fnc;
+    prod->max_rule_elms = 0;
+
+    va_start(seqs, arg1);
+    for(curr_seq = arg1; \
+        num_seqs > 0; \
+        --num_seqs, curr_seq = va_arg(seqs, PParserRuleResult)) {
+
+        if(prod->max_rule_elms < curr_seq.num_elms) {
+            prod->max_rule_elms = curr_seq.num_elms;
+        }
+
+        curr = gen_list_alloc();
+        gen_list_set_elm(curr, curr_seq.rule);
+
+        /* add this into the sequence */
+        if(is_not_null(tail)) {
+            list_set_next(tail, curr);
+
+        /* no tail ==> need to set the head of the list. */
+        } else {
+            S = curr;
+        }
+
+        tail = curr;
+    }
+
+    prod->alternatives = S;
+
+    /* add in this production */
+    prod_dict_set(
+        P->productions,
+        semantic_handler_fnc,
+        prod,
+        &delegate_do_nothing
+    );
+
+    return;
+}
+
+/**
+ * Create one of the rule sequences needed for a production. Each production
+ * must have one or more rule sequence, where each rule sequence is a list of
+ * PParserRewriteRule telling the parser to either match a particular token or
+ * to recursively call and match a production.
+ */
+PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) {
+    PParserRuleResult result;
+    PParserRewriteRule *curr_rule = NULL;
+    PGenericList *S = NULL,
+                 *curr = NULL,
+                 *tail = NULL;
+    va_list rules;
+
+    assert(0 < num_rules);
+    assert_not_null(arg1);
+
+    result.num_elms = num_rules;
+
+    va_start(rules, arg1);
+    for(curr_rule = arg1; \
+        num_rules > 0; \
+        --num_rules, curr_rule = va_arg(rules, PParserRewriteRule *)) {
+
+        curr = gen_list_alloc();
+        gen_list_set_elm(curr, curr_rule);
+
+        /* add this into the sequence */
+        if(is_not_null(tail)) {
+            list_set_next(tail, curr);
+
+        /* no tail ==> need to set the head of the list. */
+        } else {
+            S = curr;
+        }
+
+        tail = curr;
+    }
+
+    result.rule = S;
+    return result;
+}
+
+/**
+ * A generic parser rewrite rule. This encompasses all three types of things that
+ * we want to match:
+ *   1) production (function) rules
+ *   2) token rules
+ *   3) epsilon rules.
+ */
+static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
+                                                 char tok,
+                                                 PParserFunc func) {
+    PParserRewriteRule rewrite_rule;
+    PParserRewriteRule *R = NULL;
+
+    assert_not_null(P);
+
+    /* make a thunk out of it to search for in the hash table */
+    rewrite_rule.func = func;
+    rewrite_rule.lexeme = tok;
+
+    if(dict_is_set(P->rules, &rewrite_rule)) {
+        return ((PParserRewriteRule *) dict_get(P->rules, &rewrite_rule));
+    }
+
+    /* nope, need to allocate it :( */
+    R = mem_alloc(sizeof(PParserRewriteRule));
+    if(is_null(R)) {
+        mem_error("Unable to allocate rewrite rule on the heap.");
+    }
+
+    R->func = func;
+    R->lexeme = tok;
+
+    dict_set(P->rules, &rewrite_rule, R, &delegate_do_nothing);
+
+    return R;
+}
+
+/**
+ * Rewrite rule for a single production function
+ */
+PParserRewriteRule *parser_rewrite_function(PParser *P, PParserFunc func) {
+    assert_not_null(P);
+    assert_not_null(func);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, func);
+}
+
+/**
+ * Rewrite rule for a single token
+ */
+PParserRewriteRule *parser_rewrite_token(PParser *P, char tok) {
+    assert_not_null(P);
+    return P_parser_rewrite_rule(P, tok, NULL);
+}
+
+/**
+ * Rewrite rule for no token required.
+ */
+PParserRewriteRule *parser_rewrite_epsilon(PParser *P) {
+    assert_not_null(P);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
+}

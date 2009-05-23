@@ -17,16 +17,15 @@ typedef char PChar;
 
 typedef struct PString {
     uint32_t len;
-    unsigned char ref_count;
     PChar *str;
 } PString;
 
 PString *string_alloc_char(const char * const str, const uint32_t len );
-void string_use(PString * );
 void string_free(PString * );
 char string_equal(const PString * const, const PString * const );
 uint32_t string_length(const PString * const );
 void string_convert_to_ascii(const PString * const, char * );
+void delegate_string_free(void *);
 
 #if 0
 typedef struct PString {
