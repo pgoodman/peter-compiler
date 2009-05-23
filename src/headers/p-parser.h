@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "std-include.h"
+#include "std-input.h"
 #include "adt-list.h"
 #include "adt-dict.h"
 #include "func-delegate.h"

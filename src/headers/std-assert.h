@@ -20,10 +20,10 @@ typedef enum {
 
 #if defined(P_DEBUG) && P_DEBUG == 1
 
-void assert_print_stack_trace(PAssertionType, PStackTrace *, unsigned int, char *);
+void assert_print_stack_trace(PAssertionType, unsigned int, const char *);
 
 #define _assert(e,type) {if(!(e)){\
-    (void)assert_print_stack_trace(type,NULL,__LINE__,__FILE__);}}
+    (void)assert_print_stack_trace(type,__LINE__,__FILE__);}}
 
 #define assert(e) _assert((e),P_ASSERT_NORMAL)
 #define assert_not_null(e) _assert((NULL!=(e)),P_ASSERT_NOT_NULL)
@@ -32,6 +32,7 @@ void assert_print_stack_trace(PAssertionType, PStackTrace *, unsigned int, char 
 #else
 
 #define assert(e)
+#define assert_not_null(e)
 
 #endif /* debug */
 

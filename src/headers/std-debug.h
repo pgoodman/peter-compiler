@@ -20,7 +20,7 @@ typedef struct PStackTrace {
 #if defined(P_DEBUG) && P_DEBUG == 1
 
 #define std_error(e) { \
-    printf(e " in %s on line %d.", __FILE__, (unsigned int)__LINE__); \
+    fprintf(stderr, e " in %s on line %d.\n", __FILE__, (unsigned int)__LINE__); \
     fflush(stdout); \
     exit(1);}
 

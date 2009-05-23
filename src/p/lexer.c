@@ -11,8 +11,7 @@
 /**
  * Allocate a new token.
  */
-PToken *token_alloc(PLexeme lexeme, PString *val, uint32_t line, uint32_t col) {
-
+PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col) {
 
     PToken *tok = mem_alloc(sizeof(PToken *));
     if(is_null(tok)) {
@@ -27,68 +26,43 @@ PToken *token_alloc(PLexeme lexeme, PString *val, uint32_t line, uint32_t col) {
     return tok;
 }
 
-static void *L_generator_next(void *g) {
-    static PToken *tokens[11];
-    static int init = 0,
-               pos = -1;
+/**
+ * Free a token generator.
+ */
+static void L_generator_free(PTokenGenerator *gen) {
+    assert_not_null(gen);
+    assert_not_null(gen->stream);
 
-    if(0 == init) {
-        init = 1;
+    file_free(gen->stream);
+    gen->stream = NULL;
 
-        /*
-        tokens[0] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[1] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[2] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[3] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[4] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[5] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[6] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[7] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[8] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[9] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[10] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        */
-        /*
-        tokens[0] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("2", 1), 1, 4);
-        tokens[1] = token_alloc(P_LEXEME_MULTIPLY, string_alloc_char("*", 1), 1, 2);
-        tokens[2] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);
-        tokens[3] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("3", 1), 1, 4);
-        tokens[4] = token_alloc(P_LEXEME_ADD, string_alloc_char("+", 1), 1, 5);
-        tokens[5] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("4", 1), 1, 5);
-        tokens[6] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")", 1), 1, 7);
-        */
-
-        tokens[0] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 1);
-        tokens[1] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("1", 1), 2, 2);
-        tokens[2] = token_alloc(P_LEXEME_ADD, string_alloc_char("+", 1), 3, 3);
-        tokens[3] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("2", 1), 4, 4);
-        tokens[4] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")", 1), 5, 5);
-        tokens[5] = token_alloc(P_LEXEME_MULTIPLY, string_alloc_char("*", 1), 6, 6);
-        tokens[6] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 7, 7);
-        tokens[7] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("3", 1), 8, 8);
-        tokens[8] = token_alloc(P_LEXEME_ADD, string_alloc_char("+", 1), 9, 9);
-        tokens[9] = token_alloc(P_LEXEME_NUMBER, string_alloc_char("4", 1), 10, 10);
-        /*tokens[9] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 10, 10);*/
-        tokens[10] = token_alloc(P_LEXEME_PAREN_CLOSE, string_alloc_char(")", 1), 11, 11);
-
-        /*tokens[10] = token_alloc(P_LEXEME_PAREN_OPEN, string_alloc_char("(", 1), 1, 3);*/
-    }
-
-    if((++pos) < 11) {
-        return tokens[pos];
-    }
-
-    return NULL;
+    mem_free(gen);
 }
 
-static void L_generator_free(void *gen) {
+/**
+ * Allocate a new token generator. The next function is the function that
+ * actually lexes input. This allows the token generator to be completely
+ * general.
+ */
+PTokenGenerator *token_generator_alloc(PFileInputStream *stream,
+                                       PFunction gen_next_fnc) {
+    PTokenGenerator *G = NULL;
 
-}
+    assert_not_null(stream);
+    assert_not_null(generator_next);
 
-PTokenGenerator *token_generator_alloc(void) {
-    PTokenGenerator *G = generator_alloc(sizeof(PTokenGenerator));
+    G = generator_alloc(sizeof(PTokenGenerator));
 
-    generator_init(G, &L_generator_next, &L_generator_free);
+    generator_init(
+        G,
+        gen_next_fnc,
+        (PDelegate) &L_generator_free
+    );
+
+    G->stream = stream;
+    G->column = 1;
+    G->line = 1;
+    G->start_char = -1;
 
     return G;
 }

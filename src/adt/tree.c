@@ -301,16 +301,14 @@ FREE_GENERATOR_FUNC(T_generator_free_q, PQueue, queue_free)
 /**
  * Generate the next tree element in a depth-first traversal of the tree.
  */
-static void *T_generator_next_df(void *g ) {
+static void *T_generator_next_df(PTreeGenerator *G) {
     PStack *S = NULL;
     PTree *curr = NULL;
     void *ret = NULL;
     unsigned short i;
-    PTreeGenerator *G = NULL;
 
-	assert_not_null(g);
+	assert_not_null(G);
 
-    G = (PTreeGenerator *) g;
     S = (PStack *) G->_adt;
 
     while(!stack_is_empty(S)) {
@@ -335,16 +333,14 @@ static void *T_generator_next_df(void *g ) {
 /**
  * Generate the next tree element in a breadth-first traversal of the tree.
  */
-static void *T_generator_next_bf(void *g ) {
+static void *T_generator_next_bf(PTreeGenerator *G) {
     PQueue *Q = NULL;
     PTree *curr = NULL;
     void *ret = NULL;
     unsigned short i;
-    PTreeGenerator *G = NULL;
 
-	assert_not_null(g);
+	assert_not_null(G);
 
-    G = (PTreeGenerator *) g;
     Q = (PQueue *) G->_adt;
 
     while(!queue_is_empty(Q)) {
@@ -368,17 +364,15 @@ static void *T_generator_next_bf(void *g ) {
 /**
  * Generate the nodes of a post-order traversal of a tree one at a time.
  */
-static void *T_generator_next_po(void *g ) {
+static void *T_generator_next_po(PTreeGenerator *G) {
     PStack *S = NULL;
     PTree *curr = NULL,
           *top = NULL;
     void *ret = NULL;
     unsigned short i;
-    PTreeGenerator *G = NULL;
 
-	assert_not_null(g);
+	assert_not_null(G);
 
-    G = (PTreeGenerator *) g;
     S = (PStack *) G->_adt;
 
     if(stack_is_empty(S)) {
@@ -461,8 +455,8 @@ PTreeGenerator *tree_generator_alloc(void *tree,
             G->_adt = stack_alloc(sizeof(PStack));
             G->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
             generator_init(G, \
-                &T_generator_next_po, \
-                &T_generator_free_s \
+                (PFunction) &T_generator_next_po, \
+                (PDelegate) &T_generator_free_s \
             );
             stack_push(G->_adt, T );
             break;
@@ -472,8 +466,8 @@ PTreeGenerator *tree_generator_alloc(void *tree,
             G->_adt = stack_alloc(sizeof(PStack));
             G->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
             generator_init(G, \
-                &T_generator_next_df, \
-                &T_generator_free_s \
+                (PFunction) &T_generator_next_df, \
+                (PDelegate) &T_generator_free_s \
             );
             stack_push(G->_adt, T );
             break;
@@ -483,8 +477,8 @@ PTreeGenerator *tree_generator_alloc(void *tree,
             G->_adt = queue_alloc(sizeof(PQueue) );
             G->_reclaim_adt = (PTreeGeneratorReclaimFunction) &queue_empty;
             generator_init(G, \
-                &T_generator_next_bf, \
-                &T_generator_free_q \
+                (PFunction) &T_generator_next_bf, \
+                (PDelegate) &T_generator_free_q \
             );
             queue_push(G->_adt, T );
             break;

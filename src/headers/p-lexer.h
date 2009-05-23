@@ -12,32 +12,12 @@
 #include "adt-generator.h"
 #include "adt-dict.h"
 #include "std-string.h"
+#include "std-input.h"
 
-typedef enum {
-    P_LEXEME_EPSILON,
-
-    P_LEXEME_ADD,
-    P_LEXEME_MULTIPLY,
-    P_LEXEME_PAREN_OPEN,
-    P_LEXEME_PAREN_CLOSE,
-    P_LEXEME_NUMBER
-/*
-    P_LEXEME_EMPTY_STRING,
-    P_LEXEME_TERMINAL,
-    P_LEXEME_NON_TERMINAL,
-    P_LEXEME_SEQUENCE_OPEN,
-    P_LEXEME_SEQUENCE_CLOSE,
-    P_LEXEME_ORDERED_CHOICE,
-    P_LEXEME_GREEDY_REPETITION,
-    P_LEXEME_GREEDY_POSITIVE_REPETITION,
-    P_LEXEME_OPTIONAL,
-    P_LEXEME_FOLLOWED_BY,
-    P_NOT_FOLLOWED_BY
-*/
-} PLexeme;
+#define P_LEXEME_EPSILON -1
 
 typedef struct PToken {
-    PLexeme lexeme;
+    char lexeme;
     PString *val;
     uint32_t line,
              column;
@@ -45,8 +25,13 @@ typedef struct PToken {
 
 typedef struct PTokenGenerator {
     PGenerator _;
+    PFileInputStream *stream;
+    uint32_t line,
+             column;
+    char start_char;
 } PTokenGenerator;
 
-PTokenGenerator *token_generator_alloc(void);
+PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col);
+PTokenGenerator *token_generator_alloc(PFileInputStream *, PFunction);
 
 #endif /* PLEXER_H_ */

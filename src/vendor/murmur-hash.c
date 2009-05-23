@@ -15,24 +15,25 @@
  * 2. It will not produce the same results on little-endian and big-endian
  *    machines.
  */
-uint32_t murmur_hash( const char * key, int32_t len, uint32_t seed )
+uint32_t murmur_hash(char * key, int32_t len, uint32_t seed )
 {
     /* 'm' and 'r' are mixing constants generated off line.
      * They're not really 'magic', they just happen to work well. */
 
     const uint32_t m = 0x5bd1e995;
     const int32_t r = 24;
+    uint32_t k;
 
     /* Initialize the hash to a 'random' value */
 
     uint32_t h = seed ^ len;
 
     /* Mix 4 bytes at a time into the hash */
-    const unsigned char * data = (const unsigned char *)key;
+    unsigned char * data = (unsigned char *)key;
 
     while(len >= 4)
     {
-        uint32_t k = *(uint32_t *)data;
+        k = *(uint32_t *)data;
 
         k *= m;
         k ^= k >> r;

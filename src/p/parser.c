@@ -301,6 +301,8 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
     prev = list.list;
     list.num_tokens = 1;
 
+    /*printf("'%s'\n", (list.list)->token->val->str);*/
+
     /* generate the rest of the tokens */
     while(generator_next(G)) {
         ++(list.num_tokens);
@@ -308,7 +310,10 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
         prev->next = curr;
         curr->prev = prev;
         prev = curr;
+
+        /*printf("'%s'\n", curr->token->val->str);*/
     }
+    file_free(G->stream);
 
     return list;
 }
@@ -421,6 +426,8 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
      * we can backtrack.
      */
     curr_production = prod_dict_get(P->productions, P->start_production);
+
+    PARSER_DEBUG(printf("pushing production onto stack.\n");)
     P_frame_stack_push(
         &frame,
         P_frame_stack_alloc(
@@ -433,7 +440,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
     while(is_not_null(frame)) {
 
-        PARSER_DEBUG(if(++j > 150) break;)
+        /*PARSER_DEBUG(if(++j > 400) break;)*/
 
         /* get the rewrite rule and the current token we are looking at. */
         curr_production = frame->production;
@@ -525,13 +532,14 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                  * on stack. this is a parse error, so we will backtrack. */
                 if(is_not_null(curr)) {
 
+                    printf("here %s line %d col %d.\n", curr->token->val->str, curr->token->line, curr->token->column);
                     frame->do_backtrack = 1;
 
                 /* we have parsed all of the tokens. there is no need to do any
                  * work on the stack or the cache. */
                 } else {
                     PARSER_DEBUG(printf("done parsing.\n");)
-                    j++; /* make gcc not optimize out this block. */
+                    j++; /* make GCC not optimize out this block. */
                     break;
                 }
 
@@ -643,6 +651,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     PARSER_DEBUG(printf("pushing production onto stack.\n");)
 
                     ++num_func_calls;
+
                     P_frame_stack_push(&frame, P_frame_stack_alloc(
                         &unused,
                         prod_dict_get(P->productions, curr_rule->func),
@@ -676,7 +685,11 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                  * tree. */
                 if(curr_token->lexeme == curr_rule->lexeme) {
 
-                    PARSER_DEBUG(printf("matched: %s\n", curr_token->val->str);)
+                    PARSER_DEBUG(if(is_not_null(curr_token->val)) {
+                        printf("\t matched: %s\n", curr_token->val->str);
+                    } else {
+                        printf("\t matched\n");
+                    })
 
                     /* store the match as a parse tree */
                     if(record_tree) {
@@ -697,23 +710,40 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                         curr_rule->lexeme, curr_token->lexeme
                     );)
 
+                    j++;
+
                     frame->do_backtrack = 1;
                 }
 
-            /* the next non/termrnal in the current rule list is an empty
+            /* the next non/terminal in the current rule list is an empty
              * terminal, i.e. it is the empty string. we accept it, move to the
              * next rule in the current rule list, but *don't* move to the next
              * token. */
             } else {
+                j++;
                 frame->curr_rule_list = (PGenericList *) list_get_next(
                     frame->curr_rule_list
                 );
             }
 
         /* the parser stack has something on it but we've reached the end of
-         * input, i.e. there is more to match, force a backtrack to try to match
-         * what we need to. */
+         * input, there are two cases to deal with:
+         *   i) we need to match a series of epsilon transitions, which might
+         *      lead to a successful parse.
+         *   ii) we need to backtrack because what we're parsing is either
+         *       missing information or the current derivation is such that
+         *       we expect too much information. */
         } else {
+
+            if(is_not_null(frame->curr_rule_list)) {
+                curr_rule = gen_list_get_elm(frame->curr_rule_list);
+                if(P_LEXEME_EPSILON == curr_rule->lexeme) {
+                    frame->curr_rule_list = (PGenericList *) list_get_next(
+                        frame->curr_rule_list
+                    );
+                    continue;
+                }
+            }
 
             frame->do_backtrack = 1;
         }
@@ -723,7 +753,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
     PARSER_DEBUG(printf(
         "\ncompleted parse with:\n\t %d token comparisons\n\t %d recursive function "
-        "calls\n\t %d cache_uses.\n\t %d backtracks\n\t %d cached succeses\n\t %d cached "
+        "calls\n\t %d cache uses.\n\t %d backtracks\n\t %d cached succeses\n\t %d cached "
         "failures\n\t %d tokens\n\n",
         num_tok_comparisons, num_func_calls, num_cache_uses, num_backtracks,
         num_cached_successes, num_cached_failures, token_result.num_tokens
@@ -742,6 +772,8 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         );
 
     } else {
+
+        printf("Successfully parsed.\n");
 
         /* transform the parse tree into an abstract syntax tree */
         gen = tree_generator_alloc(parse_tree, TREE_TRAVERSE_POSTORDER );

@@ -311,7 +311,7 @@
     typedef unsigned char uint8_t;
 #   define UINT8_C(v) ((uint8_t) v)
 # else
-#   error "Platform not supported"
+#    error "Platform not supported"
 # endif
 #endif
 

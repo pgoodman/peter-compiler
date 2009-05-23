@@ -12,6 +12,11 @@
 #include "std-include.h"
 #include "p-parser-types.h"
 
+void *gen_prod_dict_alloc(const size_t prod_dict_struct_size,
+                     uint32_t num_slots,
+                     ProdDictionaryHashFunction key_hash_fnc,
+                     ProdDictionaryCollisionFunction val_collision_fnc);
+
 ProdDictionary *prod_dict_alloc(uint32_t num_slots,
                      ProdDictionaryHashFunction key_hash_fnc,
                      ProdDictionaryCollisionFunction val_collision_fnc);
