@@ -14,8 +14,6 @@
 #include "std-string.h"
 #include "std-input.h"
 
-#define P_LEXEME_EPSILON -1
-
 typedef struct PToken {
     char lexeme;
     PString *val;
@@ -32,6 +30,6 @@ typedef struct PTokenGenerator {
 } PTokenGenerator;
 
 PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col);
-PTokenGenerator *token_generator_alloc(PFileInputStream *, PFunction);
+PTokenGenerator *token_generator_alloc(const char *, PFunction);
 
 #endif /* PLEXER_H_ */

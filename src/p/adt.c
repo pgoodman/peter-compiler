@@ -11,12 +11,14 @@
 #define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
 #define P_SIZE_OF_PARSER_FUNC (sizeof(PParserFunc) / sizeof(char))
 
+
 /**
  * Hash function that converts a rewrite rule (parser-func, lexeme) into a char
  * array to be hashed. Rewrite rules are hashable to allow us to make sure we
  * don't allocate duplicate rewrile rules where only one is really necessary.
  */
 static uint32_t P_rewrite_rule_hash_fnc(void *rewrite_rule) {
+
     union {
         PParserRewriteRule rewrite;
         char rule_as_chars[P_SIZE_OF_REWRITE_RULE];
@@ -57,6 +59,7 @@ static char P_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
     return fnc1 != fnc2;
 }
 
+
 /**
  * Allocate a new parser on the heap. A parser, in this case, is a container
  * linking to all of top-down-parsing language data structures as well as to
@@ -66,6 +69,7 @@ static char P_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
  * with.
  */
 PParser *parser_alloc(PParserFunc start_production) {
+
     PParser *P = mem_alloc(sizeof(PParser));
     if(is_null(P)) {
         mem_error("Unable to allocate a new parser on the heap.");
@@ -102,6 +106,44 @@ PParser *parser_alloc(PParserFunc start_production) {
 }
 
 /**
+ * Free one of the lists of rewrite rules for a production.
+ */
+static void P_free_alternative_rules(PGenericList *L) {
+    gen_list_free_chain(L, &delegate_do_nothing);
+}
+
+/**
+ * Free a production and all of its alternative rewrite rules.
+ */
+static void P_free_production_val(PParserProduction *P) {
+    assert_not_null(P);
+    gen_list_free_chain(P->alternatives, (PDelegate) &P_free_alternative_rules);
+    mem_free(P);
+}
+
+static void P_free_production_key(PParserFunc F) {
+    /* do nothing */
+}
+
+static void P_free_production_val_ignore(PParserProduction *P) {
+    /* do nothing */
+}
+
+/**
+ * Free the parser adt.
+ */
+void parser_free(PParser *P) {
+    assert_not_null(P);
+    prod_dict_free(
+        P->productions,
+        &P_free_production_val,
+        &P_free_production_key
+    );
+    dict_free(P->rules, &delegate_mem_free, &delegate_do_nothing);
+    mem_free(P);
+}
+
+/**
  * Add a production to the parser's grammar. The production's name is the name
  * (or rather the function pointer) of the parser function that handles semantic
  * actions on the parse tree. This function pointer is used to reference this
@@ -114,57 +156,47 @@ void parser_add_production(PParser *P,
                            short num_seqs, /* number of rewrite sequences */
                            PParserRuleResult arg1, ...) { /* rewrite rules */
     PParserRuleResult curr_seq;
-    P_Production *prod = NULL;
-    PGenericList *S = NULL,
-                 *curr = NULL,
-                 *tail = NULL;
+    PParserProduction *prod = NULL;
+    PGenericList *curr = NULL;
+
     va_list seqs;
+
     assert_not_null(P);
     assert_not_null(semantic_handler_fnc);
     assert(0 < num_seqs);
     assert(!P->is_closed);
     assert(!prod_dict_is_set(P->productions, semantic_handler_fnc));
 
-    prod = mem_alloc(sizeof(P_Production));
+    prod = mem_alloc(sizeof(PParserProduction));
     if(is_null(prod)) {
         mem_error("Unable to allocate new production on the heap.");
     }
 
     prod->production = semantic_handler_fnc;
     prod->max_rule_elms = 0;
+    prod->alternatives = gen_list_alloc_chain(num_seqs);
 
     va_start(seqs, arg1);
-    for(curr_seq = arg1; \
-        num_seqs > 0; \
-        --num_seqs, curr_seq = va_arg(seqs, PParserRuleResult)) {
+
+    curr_seq = arg1;
+    curr = prod->alternatives;
+
+    for(; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
 
         if(prod->max_rule_elms < curr_seq.num_elms) {
             prod->max_rule_elms = curr_seq.num_elms;
         }
 
-        curr = gen_list_alloc();
         gen_list_set_elm(curr, curr_seq.rule);
-
-        /* add this into the sequence */
-        if(is_not_null(tail)) {
-            list_set_next(tail, curr);
-
-        /* no tail ==> need to set the head of the list. */
-        } else {
-            S = curr;
-        }
-
-        tail = curr;
+        curr_seq = va_arg(seqs, PParserRuleResult);
     }
-
-    prod->alternatives = S;
 
     /* add in this production */
     prod_dict_set(
         P->productions,
         semantic_handler_fnc,
         prod,
-        &delegate_do_nothing
+        &P_free_production_val_ignore
     );
 
     return;
@@ -179,37 +211,24 @@ void parser_add_production(PParser *P,
 PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) {
     PParserRuleResult result;
     PParserRewriteRule *curr_rule = NULL;
-    PGenericList *S = NULL,
-                 *curr = NULL,
-                 *tail = NULL;
+    PGenericList *curr = NULL;
     va_list rules;
 
     assert(0 < num_rules);
     assert_not_null(arg1);
 
-    result.num_elms = num_rules;
-
     va_start(rules, arg1);
-    for(curr_rule = arg1; \
-        num_rules > 0; \
-        --num_rules, curr_rule = va_arg(rules, PParserRewriteRule *)) {
 
-        curr = gen_list_alloc();
+    result.num_elms = num_rules;
+    result.rule = gen_list_alloc_chain(num_rules);
+    curr_rule = arg1;
+    curr = result.rule;
+
+    for(; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
         gen_list_set_elm(curr, curr_rule);
-
-        /* add this into the sequence */
-        if(is_not_null(tail)) {
-            list_set_next(tail, curr);
-
-        /* no tail ==> need to set the head of the list. */
-        } else {
-            S = curr;
-        }
-
-        tail = curr;
+        curr_rule = va_arg(rules, PParserRewriteRule *);
     }
 
-    result.rule = S;
     return result;
 }
 
@@ -245,7 +264,7 @@ static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
     R->func = func;
     R->lexeme = tok;
 
-    dict_set(P->rules, &rewrite_rule, R, &delegate_do_nothing);
+    dict_set(P->rules, R, R, &delegate_do_nothing);
 
     return R;
 }

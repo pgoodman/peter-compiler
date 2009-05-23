@@ -30,6 +30,8 @@ char list_has_next(void *);
 
 PGenericList *gen_list_alloc(void);
 void gen_list_free(PGenericList *, PDelegate );
+PGenericList *gen_list_alloc_chain(const unsigned int chain_length);
+void gen_list_free_chain(PGenericList *L, PDelegate free_elm_fnc);
 void gen_list_free_elm(PGenericList *, PDelegate );
 void *gen_list_get_elm(PGenericList * );
 void gen_list_set_elm(PGenericList *, void * ) ;

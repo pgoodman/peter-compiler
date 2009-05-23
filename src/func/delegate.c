@@ -14,3 +14,8 @@
 void delegate_do_nothing(void *E) {
 
 }
+
+/* Free a pointer. */
+void delegate_free_pointer(void *pointer) {
+    mem_free(pointer);
+}

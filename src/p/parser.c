@@ -15,7 +15,7 @@
 #define P_PRODUCTION_FAILED ((void *) 10)
 #define P_PRODUCTION_TRY_LR ((void *) 11)
 #define P_SIZE_OF_PARSE_TREE (sizeof(PParseTree *) / sizeof(char))
-#define PARSER_DEBUG(x) x
+#define PARSER_DEBUG(x)
 
 
 /* Type representing the necessary information to uniquely identify the result
@@ -100,9 +100,9 @@ typedef struct P_TerminalTreeList {
  *       future use.
  */
 typedef struct P_StackFrame {
-    P_Production *production;
-    PGenericList *curr_rule_list,
-                 *alternative_rules;
+    PParserProduction *production;
+    PGenericList *curr_rule_list, /* list of rewrite rules */
+                 *alternative_rules; /* list of lists of rewrite rules */
     PTerminalTree *backtrack_point;
     char do_backtrack;
     PParseTree *parse_tree;
@@ -149,6 +149,15 @@ static P_CachedResult *P_alloc_cache(PTerminalTree *end, PParseTree *tree) {
 }
 
 /**
+ * Free a cached result.
+ */
+static void P_free_cached_result(void *result) {
+    if(P_PRODUCTION_FAILED != result) {
+        mem_free(result);
+    }
+}
+
+/**
  * Allocate a new thunk on the heap.
  */
 static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
@@ -169,7 +178,7 @@ static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
  * allocated but now unused one.
  */
 static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
-                                         P_Production *prod,
+                                         PParserProduction *prod,
                                          PTerminalTree *backtrack_point,
                                          PDictionary *all_trees,
                                          char record_tree) {
@@ -301,8 +310,6 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
     prev = list.list;
     list.num_tokens = 1;
 
-    /*printf("'%s'\n", (list.list)->token->val->str);*/
-
     /* generate the rest of the tokens */
     while(generator_next(G)) {
         ++(list.num_tokens);
@@ -310,10 +317,7 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
         prev->next = curr;
         curr->prev = prev;
         prev = curr;
-
-        /*printf("'%s'\n", curr->token->val->str);*/
     }
-    file_free(G->stream);
 
     return list;
 }
@@ -347,9 +351,9 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
  *       ii) allow for left-recursion, as described in the following article:
  *           http://portal.acm.org/citation.cfm?id=1328408.1328424
  */
-void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
+PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     PToken *curr_token = NULL;
-    P_Production *curr_production = NULL;
+    PParserProduction *curr_production = NULL;
     P_TerminalTreeList token_result;
     PParseTree *parse_tree = NULL;
     PParserRewriteRule *curr_rule;
@@ -369,8 +373,11 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         num_cache_uses = 0,
         num_backtracks = 0,
         num_cached_successes = 0,
-        num_cached_failures = 0,
-        j = 0;
+        num_cached_failures = 0;
+
+    /* uint64_t seems to cause strange problems when compiling with GCC. This
+     * might be an issue with vendor-pstdint.h. */
+    unsigned long int j = 0;
 
     /* for parse error info, the farthest point reached in the token stream. */
     struct {
@@ -406,8 +413,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     /* no tokens were lexed,
      * TODO: do something slightly more useful. */
     if(0 == token_result.num_tokens) {
-        /*return parse_tree;*/
-        return;
+        return NULL;
     }
 
     curr = token_result.list;
@@ -428,6 +434,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     curr_production = prod_dict_get(P->productions, P->start_production);
 
     PARSER_DEBUG(printf("pushing production onto stack.\n");)
+
     P_frame_stack_push(
         &frame,
         P_frame_stack_alloc(
@@ -439,8 +446,6 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     parse_tree = frame->parse_tree;
 
     while(is_not_null(frame)) {
-
-        /*PARSER_DEBUG(if(++j > 400) break;)*/
 
         /* get the rewrite rule and the current token we are looking at. */
         curr_production = frame->production;
@@ -525,14 +530,12 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
          */
         } else if(is_null(frame->curr_rule_list)) {
 
-
             if(is_null(frame->caller)) {
 
                 /* there are no tokens to parse but we have a single frame on
                  * on stack. this is a parse error, so we will backtrack. */
                 if(is_not_null(curr)) {
 
-                    printf("here %s line %d col %d.\n", curr->token->val->str, curr->token->line, curr->token->column);
                     frame->do_backtrack = 1;
 
                 /* we have parsed all of the tokens. there is no need to do any
@@ -710,8 +713,6 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                         curr_rule->lexeme, curr_token->lexeme
                     );)
 
-                    j++;
-
                     frame->do_backtrack = 1;
                 }
 
@@ -720,7 +721,7 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * next rule in the current rule list, but *don't* move to the next
              * token. */
             } else {
-                j++;
+
                 frame->curr_rule_list = (PGenericList *) list_get_next(
                     frame->curr_rule_list
                 );
@@ -784,10 +785,19 @@ void parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     (PProductionTree *) parse_tree,
                     all_parse_trees
                 );
+            } else {
+                printf("%s\n", ((PTerminalTree *) parse_tree)->token->val->str);
             }
         }
         generator_free(gen);
     }
 
-    return;
+    /* free some resources that are no longer needed */
+    dict_free(
+        thunk_table,
+        &P_free_cached_result,
+        &delegate_free_pointer
+    );
+
+    return parse_tree;
 }

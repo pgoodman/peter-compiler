@@ -29,14 +29,14 @@ PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col) {
 /**
  * Free a token generator.
  */
-static void L_generator_free(PTokenGenerator *gen) {
-    assert_not_null(gen);
-    assert_not_null(gen->stream);
+static void L_generator_free(PTokenGenerator *G) {
+    assert_not_null(G);
+    assert_not_null(G->stream);
 
-    file_free(gen->stream);
-    gen->stream = NULL;
+    file_free(G->stream);
+    G->stream = NULL;
 
-    mem_free(gen);
+    mem_free(G);
 }
 
 /**
@@ -44,13 +44,15 @@ static void L_generator_free(PTokenGenerator *gen) {
  * actually lexes input. This allows the token generator to be completely
  * general.
  */
-PTokenGenerator *token_generator_alloc(PFileInputStream *stream,
+PTokenGenerator *token_generator_alloc(const char *file_name,
                                        PFunction gen_next_fnc) {
     PTokenGenerator *G = NULL;
+    PFileInputStream *S = NULL;
 
-    assert_not_null(stream);
+    assert_not_null(file_name);
     assert_not_null(generator_next);
 
+    S = file_read_char(file_name);
     G = generator_alloc(sizeof(PTokenGenerator));
 
     generator_init(
@@ -59,7 +61,7 @@ PTokenGenerator *token_generator_alloc(PFileInputStream *stream,
         (PDelegate) &L_generator_free
     );
 
-    G->stream = stream;
+    G->stream = S;
     G->column = 1;
     G->line = 1;
     G->start_char = -1;

@@ -34,12 +34,6 @@ typedef struct H_EntryInfo {
     uint32_t hash_key;
 } H_EntryInfo;
 
-typedef void * H_key_type;
-typedef void * H_val_type;
-typedef PDictHashFunction H_hash_fnc_type;
-typedef PDictCollisionFunction H_collision_fnc_type;
-typedef PDictionary H_type;
-
 /**
  * Locate an entry and its associated key into the hash table in a dictionary.
  */
@@ -157,8 +151,8 @@ void *gen_dict_alloc(const size_t dict_struct_size,
  * Allocate a hash table on the heap.
  */
 H_type *dict_alloc(const uint32_t num_slots,
-                        H_hash_fnc_type key_hash_fnc,
-                        H_collision_fnc_type collision_fnc) {
+                   H_hash_fnc_type key_hash_fnc,
+                   H_collision_fnc_type collision_fnc) {
 
     return (H_type *) gen_dict_alloc(
         sizeof(H_type),
@@ -171,18 +165,22 @@ H_type *dict_alloc(const uint32_t num_slots,
 /**
  * Free a hash table.
  */
-void dict_free(H_type *H, PDelegate free_elm_fnc ) {
+void dict_free(H_type *H,
+               H_free_val_fnc_type free_val_fnc,
+               H_free_key_fnc_type free_key_fnc) {
+
     uint32_t i;
 
     assert_not_null(H);
-    assert_not_null(free_elm_fnc);
+    assert_not_null(free_val_fnc);
+    assert_not_null(free_key_fnc);
 
     /* free the elements stored in the hash table. */
-    if(free_elm_fnc != delegate_do_nothing) {
-        for(i = 0; i < H->num_slots; ++i) {
-            if(is_not_null(H->elms[i])) {
-                free_elm_fnc(H->elms[i] );
-            }
+    for(i = 0; i < H->num_slots; ++i) {
+        if(is_not_null(H->elms[i])) {
+            free_key_fnc(H->elms[i]->key);
+            free_val_fnc(H->elms[i]->entry);
+            mem_free(H->elms[i]);
         }
     }
 
@@ -198,8 +196,10 @@ void dict_free(H_type *H, PDelegate free_elm_fnc ) {
  * Set a record into a hash table. This will return 1 if a previous element
  * existed, 0 if it did not. In any case, the value will be set.
  */
-char dict_set(H_type *H, H_key_type key, H_val_type val,
-              PDelegate free_on_overwrite_fnc) {
+char dict_set(H_type *H,
+              H_key_type key,
+              H_val_type val,
+              H_free_val_fnc_type free_on_overwrite_fnc) {
 
     char did_overwrite;
     H_Entry *entry;
@@ -247,12 +247,17 @@ char dict_set(H_type *H, H_key_type key, H_val_type val,
 /**
  * Delete a record from a hash table.
  */
-void dict_unset(H_type *H, H_key_type key, PDelegate free_fnc) {
+void dict_unset(H_type *H,
+                H_key_type key,
+                H_free_val_fnc_type free_val_fnc,
+                H_free_key_fnc_type free_key_fnc) {
+
     uint32_t prev_key;
     H_EntryInfo info;
 
     assert_not_null(H);
-    assert_not_null(free_fnc);
+    assert_not_null(free_key_fnc);
+    assert_not_null(free_val_fnc);
 
     info = H_get_entry_info(H, key);
 
@@ -260,7 +265,9 @@ void dict_unset(H_type *H, H_key_type key, PDelegate free_fnc) {
      * that we're using. */
     if(is_not_null(info.entry)) {
 
-        free_fnc(info.entry->entry);
+        free_key_fnc(info.entry->key);
+        free_val_fnc(info.entry->entry);
+
         mem_free(info.entry);
         H->elms[info.hash_key] = NULL;
 

@@ -18,9 +18,9 @@
 #include "adt-dict.h"
 #include "func-delegate.h"
 
+#include "p-prod-common.h"
 #include "p-parser-types.h"
-#include "adt-typesafe-prod-dict.h"
 
-void parser_parse_tokens(PParser *, PTokenGenerator *);
+PParseTree *parser_parse_tokens(PParser *, PTokenGenerator *);
 
 #endif /* PPARSER_H_ */

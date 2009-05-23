@@ -10,9 +10,11 @@
 #define PADT_H_
 
 #include "p-parser-types.h"
+#include "p-prod-dict.h"
 #include "p-parser.h"
 
 PParser *parser_alloc(PParserFunc);
+void parser_free(PParser *);
 void parser_add_production(PParser *, PParserFunc, short, PParserRuleResult, ...);
 PParserRuleResult parser_rule_sequence(short, PParserRewriteRule *, ...);
 PParserRewriteRule *parser_rewrite_function(PParser *, PParserFunc);
