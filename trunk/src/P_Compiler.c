@@ -177,11 +177,18 @@ static void Rule(PProductionTree *T, PDictionary *garbage) {
 static void Decoration(PProductionTree *T, PDictionary *garbage) {
 }
 
+#if defined(P_DEBUG) && P_DEBUG == 1
+#if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
+extern unsigned int num_allocated_pointers;
+#endif
+#endif
+
 int main(void) {
 
     PParser *P;
+    PParseTree *T;
     PTokenGenerator *G = token_generator_alloc(
-        file_read_char("src/grammars/parser.g"),
+        "src/grammars/parser.g",
         (PFunction) &lexer_grammar_token_generator
     );
 
@@ -238,27 +245,16 @@ int main(void) {
             parser_rewrite_epsilon(P)));
 
     /* parse the grammar file */
-    parser_parse_tokens(P, G);
+    T = parser_parse_tokens(P, G);
 
-    /*printf("traversal of the parse tree:\n");
-    gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER );
-    int n;
-    while(generator_next(gen)) {
-        curr = generator_current(gen);
-        if(P_PARSE_TREE_PRODUCTION == curr->type) {
-            f = ((PProductionTree *) curr)->production;
-            n = ((PProductionTree *) curr)->rule;
-            if(f == &Additive)
-                printf("Additive %d\n", n);
-            else if(f == &Multitive)
-                printf("Multitive %d\n", n);
-            else
-                printf("Primary %d\n", n);
-        } else {
-            printf("%s\n", ((PTerminalTree *) curr)->token->val->str);
-        }
-    }
-    generator_free(gen);*/
+    generator_free(G);
+    parser_free(P);
+
+#if defined(P_DEBUG) && P_DEBUG == 1
+#if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
+    printf("num unfreed pointers: %d\n", num_allocated_pointers);
+#endif
+#endif
 
     printf("done.\n");
 

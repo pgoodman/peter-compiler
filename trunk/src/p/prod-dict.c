@@ -6,7 +6,7 @@
  *     Version: $Id$
  */
 
-#include <adt-typesafe-prod-dict.h>
+#include <p-prod-dict.h>
 
 #define P_DICT_LOAD_FACTOR 0.65
 #define P_DICT_EMPTY_SLOT (void *)1
@@ -36,7 +36,7 @@ typedef struct PD_EntryInfo {
 /**
  * Locate an entry and its associated key into the hash table in a dictionary.
  */
-static PD_EntryInfo PD_get_entry_info(ProdDictionary *H, PParserFunc key) {
+static PD_EntryInfo PD_get_entry_info(PD_type *H, PD_key_type key) {
     PD_EntryInfo info;
 
     assert_not_null(H);
@@ -45,7 +45,7 @@ static PD_EntryInfo PD_get_entry_info(ProdDictionary *H, PParserFunc key) {
     info.entry = H->elms[info.hash_key];
 
     /* re-apply the hash function until we find what we're looking for. */
-    while(is_not_null(info.entry) && H->collision_fnc(key, info.entry->key)) {
+    while(is_not_null(info.entry) && H->collision_fnc(key, (info.entry)->key)) {
         info.hash_key = (info.hash_key+1) % H->num_slots;
         info.entry = H->elms[info.hash_key];
     }
@@ -67,7 +67,7 @@ static PD_Entry **PD_alloc_slots(uint32_t num_slots ) {
 /**
  * Double the size of the hash table and re-hash all the values.
  */
-static void PD_grow(ProdDictionary *H ) {
+static void PD_grow(PD_type *H ) {
     PD_Entry **old_elms = NULL;
     PD_EntryInfo info;
     uint32_t old_size,
@@ -87,8 +87,10 @@ static void PD_grow(ProdDictionary *H ) {
 
     /* re-hash the old objects into the new table */
     for(j = 0; j < old_size; ++j) {
-        info = PD_get_entry_info(H, old_elms[j]->key);
-        H->elms[info.hash_key] = old_elms[j];
+        if(is_not_null(old_elms[j])) {
+            info = PD_get_entry_info(H, old_elms[j]->key);
+            H->elms[info.hash_key] = old_elms[j];
+        }
     }
 
     /* free the old memory and update our hash table */
@@ -102,14 +104,14 @@ static void PD_grow(ProdDictionary *H ) {
  */
 void *gen_prod_dict_alloc(const size_t prod_dict_struct_size,
                      uint32_t num_slots,
-                     ProdDictionaryHashFunction key_hash_fnc,
-                     ProdDictionaryCollisionFunction val_collision_fnc) {
-    ProdDictionary *H;
+                     PD_hash_fnc_type key_hash_fnc,
+                     PD_collision_fnc_type val_collision_fnc) {
+    PD_type *H;
     PD_Entry **elms;
     int i;
     void *table;
 
-    assert(sizeof(PDictionary) <= prod_dict_struct_size);
+    assert(sizeof(PD_type) <= prod_dict_struct_size);
     assert_not_null(key_hash_fnc);
     assert_not_null(val_collision_fnc);
 
@@ -133,7 +135,7 @@ void *gen_prod_dict_alloc(const size_t prod_dict_struct_size,
     elms = PD_alloc_slots(num_slots);
 
     /* initialize the vector */
-    H = (ProdDictionary *) table;
+    H = (PD_type *) table;
     H->elms = elms;
     H->num_slots = num_slots;
     H->num_used_slots = 0;
@@ -147,11 +149,12 @@ void *gen_prod_dict_alloc(const size_t prod_dict_struct_size,
 /**
  * Allocate a hash table on the heap.
  */
-ProdDictionary *prod_dict_alloc(const uint32_t num_slots,
-                        ProdDictionaryHashFunction key_hash_fnc,
-                        ProdDictionaryCollisionFunction collision_fnc) {
-    return (ProdDictionary *) gen_prod_dict_alloc(
-        sizeof(PDictionary),
+PD_type *prod_dict_alloc(const uint32_t num_slots,
+                   PD_hash_fnc_type key_hash_fnc,
+                   PD_collision_fnc_type collision_fnc) {
+
+    return (PD_type *) gen_prod_dict_alloc(
+        sizeof(PD_type),
         num_slots,
         key_hash_fnc,
         collision_fnc
@@ -161,18 +164,22 @@ ProdDictionary *prod_dict_alloc(const uint32_t num_slots,
 /**
  * Free a hash table.
  */
-void prod_dict_free(ProdDictionary *H, PDelegate free_elm_fnc ) {
+void prod_dict_free(PD_type *H,
+               PD_free_val_fnc_type free_val_fnc,
+               PD_free_key_fnc_type free_key_fnc) {
+
     uint32_t i;
 
     assert_not_null(H);
-    assert_not_null(free_elm_fnc);
+    assert_not_null(free_val_fnc);
+    assert_not_null(free_key_fnc);
 
     /* free the elements stored in the hash table. */
-    if(free_elm_fnc != delegate_do_nothing) {
-        for(i = 0; i < H->num_slots; ++i) {
-            if(is_not_null(H->elms[i])) {
-                free_elm_fnc(H->elms[i] );
-            }
+    for(i = 0; i < H->num_slots; ++i) {
+        if(is_not_null(H->elms[i])) {
+            free_key_fnc(H->elms[i]->key);
+            free_val_fnc(H->elms[i]->entry);
+            mem_free(H->elms[i]);
         }
     }
 
@@ -188,8 +195,10 @@ void prod_dict_free(ProdDictionary *H, PDelegate free_elm_fnc ) {
  * Set a record into a hash table. This will return 1 if a previous element
  * existed, 0 if it did not. In any case, the value will be set.
  */
-char prod_dict_set(ProdDictionary *H, PParserFunc key, void *val,
-              PDelegate free_on_overwrite_fnc) {
+char prod_dict_set(PD_type *H,
+              PD_key_type key,
+              PD_val_type val,
+              PD_free_val_fnc_type free_on_overwrite_fnc) {
 
     char did_overwrite;
     PD_Entry *entry;
@@ -205,6 +214,7 @@ char prod_dict_set(ProdDictionary *H, PParserFunc key, void *val,
 
     /* overwrite an existing object */
     if(is_not_null(entry)) {
+
         free_on_overwrite_fnc(info.entry->entry);
         did_overwrite = 1;
 
@@ -224,6 +234,8 @@ char prod_dict_set(ProdDictionary *H, PParserFunc key, void *val,
         entry->key = key;
         H->elms[info.hash_key] = entry;
         ++(H->num_used_slots);
+
+
     }
 
     entry->entry = val;
@@ -234,14 +246,27 @@ char prod_dict_set(ProdDictionary *H, PParserFunc key, void *val,
 /**
  * Delete a record from a hash table.
  */
-void prod_dict_unset(ProdDictionary *H, PParserFunc key, PDelegate free_fnc) {
-    PD_EntryInfo info = PD_get_entry_info(H, key);
+void prod_dict_unset(PD_type *H,
+                PD_key_type key,
+                PD_free_val_fnc_type free_val_fnc,
+                PD_free_key_fnc_type free_key_fnc) {
+
     uint32_t prev_key;
+    PD_EntryInfo info;
+
+    assert_not_null(H);
+    assert_not_null(free_key_fnc);
+    assert_not_null(free_val_fnc);
+
+    info = PD_get_entry_info(H, key);
 
     /* remove it if it is there and decrement the number of slots
      * that we're using. */
     if(is_not_null(info.entry)) {
-        free_fnc(info.entry->entry);
+
+        free_key_fnc(info.entry->key);
+        free_val_fnc(info.entry->entry);
+
         mem_free(info.entry);
         H->elms[info.hash_key] = NULL;
 
@@ -264,7 +289,7 @@ void prod_dict_unset(ProdDictionary *H, PParserFunc key, PDelegate free_fnc) {
 /**
  * Get a record from a hash table.
  */
-void *prod_dict_get(ProdDictionary *H, PParserFunc key) {
+PD_val_type prod_dict_get(PD_type *H, PD_key_type key) {
     PD_EntryInfo info = PD_get_entry_info(H, key);
     return (is_null(info.entry) ? NULL : info.entry->entry);
 }
@@ -272,7 +297,7 @@ void *prod_dict_get(ProdDictionary *H, PParserFunc key) {
 /**
  * Check if a record exists in a hash table.
  */
-char prod_dict_is_set(ProdDictionary *H, PParserFunc key) {
+char prod_dict_is_set(PD_type *H, PD_key_type key) {
     PD_EntryInfo info = PD_get_entry_info(H, key);
     return is_not_null(info.entry);
 }

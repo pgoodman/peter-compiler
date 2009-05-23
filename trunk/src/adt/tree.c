@@ -97,7 +97,7 @@ void tree_free(void *T, PDelegate free_tree_fnc) {
     /* get a valid memory free callback for this context */
     free_tree_fnc = T_valid_free_callback(
         free_tree_fnc,
-        &D1_mem_free, /* not allowed */
+        &delegate_mem_free, /* not allowed */
         &delegate_do_nothing /* alternative to above */
     );
 
@@ -235,7 +235,7 @@ void tree_trim_free(void *tree, PDelegate free_tree_fnc) {
 
     free_tree_fnc = T_valid_free_callback(
         free_tree_fnc,
-        &D1_mem_free, /* not allowed */
+        &delegate_mem_free, /* not allowed */
         &delegate_do_nothing /* alternative to above */
     );
 

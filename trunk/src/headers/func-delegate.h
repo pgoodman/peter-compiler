@@ -15,5 +15,6 @@ typedef void (*PDelegate)(void * );
 typedef void (*PDelegate2)(void *, void * );
 
 void delegate_do_nothing(void *);
+void delegate_free_pointer(void *pointer);
 
 #endif /* DELEGATE_H_ */

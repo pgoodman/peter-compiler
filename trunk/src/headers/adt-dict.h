@@ -10,48 +10,69 @@
 #define HASHSET_H_
 
 #include "std-include.h"
-#include "adt-list.h"
-#include "adt-vector.h"
-#include "func-delegate.h"
 #include "vendor-murmur-hash.h"
+
+typedef void * H_key_type;
+typedef void * H_val_type;
 
 /* hash functions take in an object to hash as well as the
  * current size of the hash table.
  */
-typedef uint32_t (*PDictHashFunction)(void *);
+typedef uint32_t (*H_hash_fnc_type)(H_key_type);
 
 /* hash collision checker, compares two keys. */
-typedef char (*PDictCollisionFunction)(void *, void *);
+typedef char (*H_collision_fnc_type)(H_key_type, H_key_type);
+
+typedef void (*H_free_val_fnc_type)(H_val_type);
+typedef void (*H_free_key_fnc_type)(H_key_type);
 
 /* hash table entry, this is a private type; however, it needs to be out here */
-typedef struct H_Entry {
-    void *entry,
-         *key;
+typedef struct {
+    H_val_type entry;
+    H_key_type key;
 } H_Entry;
 
 /* Hash table / set implementation. */
-typedef struct PDictionary {
+typedef struct {
     H_Entry ** elms;
-
     uint32_t num_slots,
              num_used_slots;
+    H_hash_fnc_type key_hash_fnc;
+    H_collision_fnc_type collision_fnc;
+    short prime_index;
+} H_type;
 
-    PDictHashFunction key_hash_fnc;
+void *gen_dict_alloc(const size_t dict_struct_size,
+                     uint32_t num_slots,
+                     H_hash_fnc_type key_hash_fnc,
+                     H_collision_fnc_type val_collision_fnc);
 
-    PDictCollisionFunction collision_fnc;
+H_type *dict_alloc(const uint32_t num_slots,
+                   H_hash_fnc_type key_hash_fnc,
+                   H_collision_fnc_type collision_fnc);
 
-    int prime_index;
-} PDictionary;
+void dict_free(H_type *H,
+               H_free_val_fnc_type free_entry_fnc,
+               H_free_key_fnc_type free_key_fnc);
 
-void *gen_dict_alloc(const size_t, const uint32_t, PDictHashFunction, PDictCollisionFunction);
-PDictionary *dict_alloc(const uint32_t, PDictHashFunction, PDictCollisionFunction);
-void dict_free(PDictionary *, PDelegate );
-char dict_set(PDictionary *, void *, void *, PDelegate );
-void dict_unset(PDictionary *, void *, PDelegate );
+char dict_set(H_type *H,
+              H_key_type key,
+              H_val_type val,
+              H_free_val_fnc_type free_on_overwrite_fnc);
 
-void *dict_get(PDictionary *H, void *key);
-char dict_is_set(PDictionary *H, void *key);
+void dict_unset(H_type *H,
+                H_key_type key,
+                H_free_val_fnc_type free_val_fnc,
+                H_free_key_fnc_type free_key_fnc);
 
+H_val_type dict_get(H_type *H, H_key_type key);
+
+char dict_is_set(H_type *H, H_key_type key);
+
+/* this is the type to be used by outside programs */
+typedef H_type PDictionary;
+
+/* generic helper functions for simple key types */
 uint32_t dict_pointer_hash_fnc(void *pointer);
 char dict_pointer_collision_fnc(void *a, void *b);
 

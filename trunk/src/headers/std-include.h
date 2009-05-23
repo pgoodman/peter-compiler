@@ -7,7 +7,7 @@
  */
 
 #define P_DEBUG 1
-#define P_DEBUG_MEM 0
+#define P_DEBUG_MEM 1
 #define P_DEBUG_PRINT_TRACE 0
 
 #ifndef STDHEADER_H_
