@@ -258,6 +258,7 @@ int main(void) {
 
     generator_free(G);
     parser_free(P);
+    parser_free_parse_tree(T);
 
 #if defined(P_DEBUG) && P_DEBUG == 1
 #if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1

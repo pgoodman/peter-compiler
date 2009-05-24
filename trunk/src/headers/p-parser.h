@@ -22,5 +22,6 @@
 #include "p-parser-types.h"
 
 PParseTree *parser_parse_tokens(PParser *, PTokenGenerator *);
+void parser_free_parse_tree(PParseTree *tree);
 
 #endif /* PPARSER_H_ */

@@ -323,9 +323,9 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
 }
 
 /**
- * Free a parse tree.
+ * Free an intermediate parse tree.
  */
-static void P_free_parse_tree(PParseTree *T) {
+static void P_free_intermediate_parse_tree(PParseTree *T) {
     PTerminalTree *term = NULL;
 
     assert_not_null(T);
@@ -351,6 +351,27 @@ static void P_free_parse_tree(PParseTree *T) {
 
     tree_clear(T, 0);
     tree_free(T, &delegate_do_nothing);
+}
+
+/**
+ * Free the tokens from a parse tree node.
+ */
+static void P_free_token_from_tree(PParseTree *tree) {
+    assert_not_null(tree);
+    if(tree->type == P_PARSE_TREE_TERMINAL) {
+        token_free(((PTerminalTree *) tree)->token);
+    }
+}
+
+/**
+ * Free a parse tree, in its entirety.
+ */
+void parser_free_parse_tree(PParseTree *tree) {
+    assert_not_null(tree);
+    tree_free(
+        tree,
+        (PDelegate) &P_free_token_from_tree
+    );
 }
 
 /**
@@ -861,7 +882,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     /* free out all of the parse trees left over in the all parse trees dict. */
     dict_free(
         all_parse_trees,
-        (PDelegate) &P_free_parse_tree,
+        (PDelegate) &P_free_intermediate_parse_tree,
         &delegate_do_nothing
     );
 
