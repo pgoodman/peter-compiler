@@ -124,6 +124,7 @@ void tree_free(void *T, PDelegate free_tree_fnc) {
 
     /* task is simple, just free the tree. */
     } else {
+        node->_branches = NULL;
         mem_free(node->_branches);
         free_tree_fnc(node);
         mem_free(node);
@@ -169,16 +170,20 @@ void *tree_parent(void *t) {
 /**
  * Clear off all of the branches, without doing anyting interesting with them.
  */
-void tree_clear(void *tree) {
+void tree_clear(void *tree, int do_clear) {
     PTree *T = (PTree *) tree;
     int i = 0;
 
     assert_not_null(tree);
 
-    for(; i < T->_fill; ++i) {
-        T->_branches[i]->_parent = NULL;
-        T->_branches[i]->_parent_branch = 0;
-        T->_branches[i] = NULL;
+    if(do_clear) {
+        for(; i < T->_fill; ++i) {
+            if(is_not_null(T->_branches[i])) {
+                T->_branches[i]->_parent = NULL;
+                T->_branches[i]->_parent_branch = 0;
+                T->_branches[i] = NULL;
+            }
+        }
     }
 
     T->_fill = 0;

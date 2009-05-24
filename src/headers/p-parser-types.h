@@ -29,6 +29,11 @@ typedef struct PParser {
      * epsilon rules as that is statically defined anyway. */
     PDictionary *rules;
 
+    /* keep track of the important tokens, i.e. the tokens that should
+     * actually appear in the parse tree. */
+    int *token_is_useful,
+        num_tokens;
+
     /* production used to start parsing. */
     PParserFunc start_production;
 } PParser;
@@ -44,7 +49,7 @@ typedef struct PParserRewriteRule {
 /* the result of creating a parser rewrite rule. */
 typedef struct PParserRuleResult {
     PGenericList *rule;
-    short num_elms;
+    unsigned short num_useful_elms;
 } PParserRuleResult;
 
 #endif /* PPARSERTYPES_H_ */

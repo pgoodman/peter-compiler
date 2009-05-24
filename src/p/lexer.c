@@ -27,6 +27,20 @@ PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col) {
 }
 
 /**
+ * Free a token.
+ */
+void token_free(PToken *tok) {
+    assert_not_null(tok);
+
+    if(is_not_null(tok->val)) {
+        string_free(tok->val);
+        tok->val = NULL;
+    }
+
+    mem_free(tok);
+}
+
+/**
  * Free a token generator.
  */
 static void L_generator_free(PTokenGenerator *G) {

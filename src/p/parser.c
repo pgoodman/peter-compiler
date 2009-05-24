@@ -208,7 +208,7 @@ static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
 
         frame->parse_tree = tree_alloc(
             sizeof(PProductionTree),
-            (unsigned short) prod->max_rule_elms
+            (unsigned short) prod->max_num_useful_rewrite_rules
         );
 
         frame->parse_tree->type = P_PARSE_TREE_PRODUCTION;
@@ -323,6 +323,37 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
 }
 
 /**
+ * Free a parse tree.
+ */
+static void P_free_parse_tree(PParseTree *T) {
+    PTerminalTree *term = NULL;
+
+    assert_not_null(T);
+
+    /* free up the related token */
+    if(T->type == P_PARSE_TREE_TERMINAL) {
+        term = (PTerminalTree *) T;
+
+        /* re-link the token chain */
+        if(is_not_null(term->prev)) {
+            (term->prev)->next = term->next;
+        }
+        if(is_not_null(term->next)) {
+            (term->next)->prev = term->prev;
+        }
+
+        token_free(term->token);
+
+        term->next = NULL;
+        term->prev = NULL;
+        term->token = NULL;
+    }
+
+    tree_clear(T, 0);
+    tree_free(T, &delegate_do_nothing);
+}
+
+/**
  * Parse the tokens from a token generator. This parser operates on a simplified
  * TDPL (Top-Down Parsing Language). It supports *local* backtracking. As such,
  * this parser cannot be used to parse ambiguous because expression rules in
@@ -346,6 +377,13 @@ static P_TerminalTreeList P_get_all_tokens(PTokenGenerator *G, PDictionary *D) {
  * we cache that failure in the thunk table as a special pointer. If a production
  * succeeds then we cache its parse treee, where in the token list it started
  * and ended, and the production function itself.
+ *
+ * This parser produces a reduced concrete syntax tree (parse tree). It is
+ * similar to an abstract syntax tree in that it is much smaller than a typical
+ * parse tree and, for the most part, only contains information that is relevant
+ * to semantic analysis. The reduced parse tree is created from the parse tree
+ * by shaving off unnecessary nodes and by excluding non-useful tokens from the
+ * tree itself.
  *
  * TODO: i) implement useful parse error reporting and recovery
  *       ii) allow for left-recursion, as described in the following article:
@@ -459,7 +497,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
             /* clear off the branches of the parse tree */
             if(record_tree) {
-                tree_clear(frame->parse_tree);
+                tree_clear(frame->parse_tree, 1);
             }
 
             /* there are no rules to backtrack to, we need to cascade the
@@ -557,6 +595,43 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                 ++num_cached_successes;
 
+                /* merge the parse trees */
+                if(record_tree) {
+                    j = tree_fill(frame->parse_tree);
+                    if(j <= 1 &&
+                       frame->parse_tree->type == P_PARSE_TREE_PRODUCTION) {
+
+                        /* this is a production that succeeded on an epsilon
+                         * transition. do not record this production in the
+                         * tree. */
+                        if(j == 0) {
+                            frame->parse_tree = NULL;
+
+                        /* this is a production with only one child filled,
+                         * promote that single child node to the place of this
+                         * production in the tree and ignore that production. */
+                        } else {
+                            parse_tree = (PParseTree *) tree_get_branch(
+                                frame->parse_tree,
+                                0
+                            );
+                            P_free_parse_tree(frame->parse_tree);
+                            tree_add_branch(
+                                frame->caller->parse_tree,
+                                parse_tree
+                            );
+                            frame->parse_tree = parse_tree;
+                        }
+
+                    /* this is a node with > 1 child nodes, we must record it. */
+                    } else {
+                        tree_add_branch(
+                            frame->caller->parse_tree,
+                            frame->parse_tree
+                        );
+                    }
+                }
+
                 /* cache the successful application of this production. */
                 dict_set(
                     thunk_table,
@@ -570,14 +645,6 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     ),
                     &delegate_do_nothing
                 );
-
-                /* merge the parse trees */
-                if(record_tree) {
-                    tree_add_branch(
-                        frame->caller->parse_tree,
-                        frame->parse_tree
-                    );
-                }
 
                 /* pop the frame */
                 P_frame_stack_pop(&unused, &frame);
@@ -695,7 +762,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     })
 
                     /* store the match as a parse tree */
-                    if(record_tree) {
+                    if(record_tree && P->token_is_useful[(int) curr_token->lexeme]) {
                         tree_add_branch(frame->parse_tree, curr);
                     }
 
@@ -776,21 +843,27 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
         printf("Successfully parsed.\n");
 
-        /* transform the parse tree into an abstract syntax tree */
+        /* go over our reduced parse tree and remove any references to trees
+         * listed in our all trees hash table to that we can free all of the
+         * remaining trees in there at once. */
         gen = tree_generator_alloc(parse_tree, TREE_TRAVERSE_POSTORDER );
         while(generator_next(gen)) {
-            parse_tree = generator_current(gen);
-            if(P_PARSE_TREE_PRODUCTION == parse_tree->type) {
-                ((PProductionTree *) parse_tree)->production(
-                    (PProductionTree *) parse_tree,
-                    all_parse_trees
-                );
-            } else {
-                printf("%s\n", ((PTerminalTree *) parse_tree)->token->val->str);
-            }
+            dict_unset(
+                all_parse_trees,
+                generator_current(gen),
+                &delegate_do_nothing,
+                &delegate_do_nothing
+            );
         }
         generator_free(gen);
     }
+
+    /* free out all of the parse trees left over in the all parse trees dict. */
+    dict_free(
+        all_parse_trees,
+        (PDelegate) &P_free_parse_tree,
+        &delegate_do_nothing
+    );
 
     /* free some resources that are no longer needed */
     dict_free(

@@ -13,10 +13,13 @@
 #include "p-prod-dict.h"
 #include "p-parser.h"
 
-PParser *parser_alloc(PParserFunc);
+PParser *parser_alloc(PParserFunc start_production,
+                      size_t num_tokens,
+                      size_t num_useful_tokens,
+                      short useful_tokens[]);
 void parser_free(PParser *);
 void parser_add_production(PParser *, PParserFunc, short, PParserRuleResult, ...);
-PParserRuleResult parser_rule_sequence(short, PParserRewriteRule *, ...);
+PParserRuleResult parser_rule_sequence(PParser *, short, PParserRewriteRule *, ...);
 PParserRewriteRule *parser_rewrite_function(PParser *, PParserFunc);
 PParserRewriteRule *parser_rewrite_token(PParser *, char);
 PParserRewriteRule *parser_rewrite_epsilon(PParser *);
