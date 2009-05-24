@@ -279,6 +279,8 @@ void dict_unset(H_type *H,
                 H->elms[prev_key] = H->elms[info.hash_key];
                 prev_key = info.hash_key;
                 info.hash_key = (info.hash_key + 1) % H->num_slots;
+            } else {
+                break;
             }
         }
 

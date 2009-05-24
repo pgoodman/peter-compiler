@@ -30,6 +30,7 @@ typedef struct PTokenGenerator {
 } PTokenGenerator;
 
 PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col);
+void token_free(PToken *tok);
 PTokenGenerator *token_generator_alloc(const char *, PFunction);
 
 #endif /* PLEXER_H_ */

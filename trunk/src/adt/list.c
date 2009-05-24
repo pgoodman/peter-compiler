@@ -105,6 +105,8 @@ PGenericList *gen_list_alloc_chain(const unsigned int chain_length) {
                  *prev = NULL;
     unsigned int i;
 
+    assert(chain_length >= 1);
+
     L = mem_alloc(sizeof(PGenericList) * chain_length);
     if(is_null(L)) {
         mem_error("Unable to allocate chain of generic lists on the heap.");
@@ -119,6 +121,7 @@ PGenericList *gen_list_alloc_chain(const unsigned int chain_length) {
         ((PList *) prev)->_next = (L+i);
         ((PList *) (L+i))->_next = NULL;
         (L+i)->_elm = NULL;
+        prev = L+i;
     }
 
     return L;

@@ -116,7 +116,6 @@ clear_spaces:
 
             if('>' == C) {
                 lexeme = L_EPSILON;
-                result.str = string_alloc_char("<>", 2);
                 break;
             }
 
@@ -132,11 +131,9 @@ clear_spaces:
             break;
         case ':':
             lexeme = L_COLON;
-            result.str = string_alloc_char(":", 1);
             break;
         case ';':
             lexeme = L_SEMICOLON;
-            result.str = string_alloc_char(";", 1);
             break;
         default:
             if(ident_char(C)) {
@@ -154,9 +151,14 @@ clear_spaces:
 }
 
 static void Grammar(PProductionTree *T, PDictionary *garbage) {
+
 }
 
 static void Productions(PProductionTree *T, PDictionary *garbage) {
+    if(T->rule == 1) {
+    } else {
+
+    }
 }
 
 static void Production(PProductionTree *T, PDictionary *garbage) {
@@ -192,56 +194,63 @@ int main(void) {
         (PFunction) &lexer_grammar_token_generator
     );
 
-    P = parser_alloc(&Grammar);
+    short useful_tokens[] = {
+        L_TERMINAL,
+        L_NON_TERMINAL,
+        L_CODE,
+        L_EPSILON
+    };
+
+    P = parser_alloc(&Grammar, 6, 4, useful_tokens);
 
     parser_add_production(P, &Grammar, 1,
-        parser_rule_sequence(2,
+        parser_rule_sequence(P, 2,
             parser_rewrite_function(P, &Production),
             parser_rewrite_function(P, &Productions)));
 
     parser_add_production(P, &Productions, 2,
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_function(P, &Grammar)),
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
     parser_add_production(P, &Production, 1,
-        parser_rule_sequence(3,
+        parser_rule_sequence(P, 3,
             parser_rewrite_token(P, L_NON_TERMINAL),
             parser_rewrite_function(P, &ProductionRules),
             parser_rewrite_token(P, L_SEMICOLON)));
 
     parser_add_production(P, &ProductionRules, 2,
-        parser_rule_sequence(2,
+        parser_rule_sequence(P, 2,
             parser_rewrite_function(P, &ProductionRule),
             parser_rewrite_function(P, &ProductionRules)),
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
     parser_add_production(P, &ProductionRule, 1,
-        parser_rule_sequence(2,
+        parser_rule_sequence(P, 2,
             parser_rewrite_token(P, L_COLON),
             parser_rewrite_function(P, &Rules)));
 
     parser_add_production(P, &Rules, 2,
-        parser_rule_sequence(2,
+        parser_rule_sequence(P, 2,
             parser_rewrite_function(P, &Rule),
             parser_rewrite_function(P, &Rules)),
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
     parser_add_production(P, &Rule, 3,
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_NON_TERMINAL)),
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_TERMINAL)),
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_EPSILON)));
 
     parser_add_production(P, &Decoration, 2,
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_CODE)),
-        parser_rule_sequence(1,
+        parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
     /* parse the grammar file */

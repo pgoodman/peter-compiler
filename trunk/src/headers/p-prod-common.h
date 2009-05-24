@@ -53,7 +53,7 @@ typedef void (*PParserFunc)(PProductionTree *, PDictionary *);
 typedef struct PParserProduction {
     PGenericList *alternatives;
     PParserFunc production;
-    short max_rule_elms;
+    short max_num_useful_rewrite_rules;
 } PParserProduction;
 
 #endif /* PPRODCOMMON_H_ */

@@ -48,7 +48,7 @@ typedef enum {
 void *tree_alloc(const size_t, const unsigned short );
 void tree_free(void *, PDelegate);
 void delegate_tree_free(void * );
-void tree_clear(void *tree);
+void tree_clear(void *tree, int do_clear);
 void tree_trim(void *, PDictionary *);
 void tree_trim_free(void *tree, PDelegate free_tree_fnc);
 char tree_add_branch(void *, void * );

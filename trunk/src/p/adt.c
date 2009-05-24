@@ -64,13 +64,15 @@ static char P_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
  * Allocate a new parser on the heap. A parser, in this case, is a container
  * linking to all of top-down-parsing language data structures as well as to
  * helping deal with garbage.
- *
- * The only parameter to this function is thee production to start parsing
- * with.
  */
-PParser *parser_alloc(PParserFunc start_production) {
+PParser *parser_alloc(PParserFunc start_production,
+                      size_t num_tokens,
+                      size_t num_useful_tokens,
+                      short useful_tokens[]) {
 
     PParser *P = mem_alloc(sizeof(PParser));
+    size_t i;
+
     if(is_null(P)) {
         mem_error("Unable to allocate a new parser on the heap.");
     }
@@ -93,6 +95,16 @@ PParser *parser_alloc(PParserFunc start_production) {
         &P_rewrite_rule_hash_fnc,
         &P_rewrite_rule_collision_fnc
     );
+
+    /* table for tokens and their usefulness. */
+    P->num_tokens = num_tokens;
+    P->token_is_useful = mem_calloc(num_tokens, sizeof(short));
+    if(is_null(P->token_is_useful)) {
+        mem_error("Unable to allocate token useefulness table on the heap.");
+    }
+    for(i = 0; i < num_useful_tokens; ++i) {
+        P->token_is_useful[useful_tokens[i]] = 1;
+    }
 
     /* signal that this parser is open to have productions and their rules added
      * to it.
@@ -173,7 +185,7 @@ void parser_add_production(PParser *P,
     }
 
     prod->production = semantic_handler_fnc;
-    prod->max_rule_elms = 0;
+    prod->max_num_useful_rewrite_rules = 0;
     prod->alternatives = gen_list_alloc_chain(num_seqs);
 
     va_start(seqs, arg1);
@@ -183,8 +195,8 @@ void parser_add_production(PParser *P,
 
     for(; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
 
-        if(prod->max_rule_elms < curr_seq.num_elms) {
-            prod->max_rule_elms = curr_seq.num_elms;
+        if(prod->max_num_useful_rewrite_rules < curr_seq.num_useful_elms) {
+            prod->max_num_useful_rewrite_rules = curr_seq.num_useful_elms;
         }
 
         gen_list_set_elm(curr, curr_seq.rule);
@@ -208,24 +220,35 @@ void parser_add_production(PParser *P,
  * PParserRewriteRule telling the parser to either match a particular token or
  * to recursively call and match a production.
  */
-PParserRuleResult parser_rule_sequence(short num_rules, PParserRewriteRule *arg1, ...) {
+PParserRuleResult parser_rule_sequence(PParser *P, short num_rules, PParserRewriteRule *arg1, ...) {
     PParserRuleResult result;
     PParserRewriteRule *curr_rule = NULL;
     PGenericList *curr = NULL;
     va_list rules;
 
+    assert_not_null(P);
     assert(0 < num_rules);
     assert_not_null(arg1);
 
     va_start(rules, arg1);
 
-    result.num_elms = num_rules;
+    result.num_useful_elms = num_rules;
     result.rule = gen_list_alloc_chain(num_rules);
     curr_rule = arg1;
     curr = result.rule;
 
     for(; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
         gen_list_set_elm(curr, curr_rule);
+
+        /* this is not a useful rule, make sure that we know not to record
+         * it in any parse trees. */
+        if(is_null(curr_rule->func)
+           && (curr_rule->lexeme == P_LEXEME_EPSILON
+               || !(P->token_is_useful[(int) curr_rule->lexeme]))) {
+
+            --(result.num_useful_elms);
+        }
+
         curr_rule = va_arg(rules, PParserRewriteRule *);
     }
 
