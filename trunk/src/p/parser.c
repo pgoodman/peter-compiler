@@ -356,8 +356,8 @@ static void P_free_parse_tree(PParseTree *T) {
 /**
  * Parse the tokens from a token generator. This parser operates on a simplified
  * TDPL (Top-Down Parsing Language). It supports *local* backtracking. As such,
- * this parser cannot be used to parse ambiguous because expression rules in
- * productions are ordered and once one succeeds for a particular input the
+ * this parser cannot be used to parse ambiguous grammar because expression rules
+ * in productions are ordered and once one succeeds for a particular input the
  * other possibilities will never be attempted for that input.
  *
  * The parser starts by accumulating all of the tokens from the source text
@@ -375,8 +375,7 @@ static void P_free_parse_tree(PParseTree *T) {
  *
  * All results from productions are cached. That is, if a production fails then
  * we cache that failure in the thunk table as a special pointer. If a production
- * succeeds then we cache its parse treee, where in the token list it started
- * and ended, and the production function itself.
+ * succeeds then we cache its parse tree and where in the token list it ended.
  *
  * This parser produces a reduced concrete syntax tree (parse tree). It is
  * similar to an abstract syntax tree in that it is much smaller than a typical
@@ -390,6 +389,7 @@ static void P_free_parse_tree(PParseTree *T) {
  *           http://portal.acm.org/citation.cfm?id=1328408.1328424
  */
 PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
+
     PToken *curr_token = NULL;
     PParserProduction *curr_production = NULL;
     P_TerminalTreeList token_result;
@@ -417,7 +417,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
      * might be an issue with vendor-pstdint.h. */
     unsigned long int j = 0;
 
-    /* for parse error info, the farthest point reached in the token stream. */
+    /* for parse error info, the farthest point reached (fpr) in the token
+     * stream. */
     struct {
         uint32_t line;
         uint32_t column;
@@ -431,10 +432,10 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     fpr.column = 0;
     fpr.line = 0;
 
-    /* set for all trees to go in. while construction the AST from the CST we
+    /* set for all trees to go in. while constructing the rCST from the CST we
      * will be removing some nodes and keeping others. We use this dictionary
      * to first track *all* trees, then we will remove the trees that we are
-     * _keeping_ in the AST from the dictionary so that all the remaining trees
+     * _keeping_ in the rCST from the dictionary so that all the remaining trees
      * in the set can be freed.
      */
     all_parse_trees = dict_alloc(
@@ -615,7 +616,6 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                                 frame->parse_tree,
                                 0
                             );
-                            P_free_parse_tree(frame->parse_tree);
                             tree_add_branch(
                                 frame->caller->parse_tree,
                                 parse_tree
