@@ -47,6 +47,7 @@ void _mem_free(void *x, const unsigned int line, const char *file ) {
     printf("Freeing memory address 0x%X, %d:%s, loose pointers remaining: %d.\n", (int)x, line, file, num_allocated_pointers);
     fflush(stdout);
     */
+
     free(x);
     return;
 }

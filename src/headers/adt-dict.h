@@ -27,19 +27,21 @@ typedef void (*H_free_val_fnc_type)(H_val_type);
 typedef void (*H_free_key_fnc_type)(H_key_type);
 
 /* hash table entry, this is a private type; however, it needs to be out here */
-typedef struct {
+typedef struct H_Entry {
+    struct H_Entry *next;
     H_val_type entry;
     H_key_type key;
 } H_Entry;
 
 /* Hash table / set implementation. */
 typedef struct {
-    H_Entry ** elms;
+    H_Entry **slots;
     uint32_t num_slots,
              num_used_slots;
     H_hash_fnc_type key_hash_fnc;
     H_collision_fnc_type collision_fnc;
-    short prime_index;
+    unsigned char prime_index,
+                  grow_table;
 } H_type;
 
 void *gen_dict_alloc(const size_t dict_struct_size,
@@ -55,7 +57,7 @@ void dict_free(H_type *H,
                H_free_val_fnc_type free_entry_fnc,
                H_free_key_fnc_type free_key_fnc);
 
-char dict_set(H_type *H,
+void dict_set(H_type *H,
               H_key_type key,
               H_val_type val,
               H_free_val_fnc_type free_on_overwrite_fnc);
