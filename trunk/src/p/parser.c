@@ -362,6 +362,10 @@ static void P_free_intermediate_parse_tree(PParseTree *T) {
         tree_clear((PTree *) T, 0);
     }
 
+    if((unsigned int)T == 0x3048b0) {
+        printf("intermediatee. \n");
+    }
+
     tree_free((PTree *) T, &delegate_do_nothing);
 }
 
@@ -371,7 +375,7 @@ static void P_free_intermediate_parse_tree(PParseTree *T) {
 static void P_free_token_from_tree(PParseTree *tree) {
     PTerminalTree *term;
 
-    printf("here.\n");
+
     assert_not_null(tree);
 
     if(tree->type == P_PARSE_TREE_TERMINAL) {
@@ -388,12 +392,10 @@ static void P_free_token_from_tree(PParseTree *tree) {
 void parser_free_parse_tree(PParseTree *tree) {
     assert_not_null(tree);
 
-    printf("freeing tree...\n");
     tree_free(
         (PTree *) tree,
         (PDelegate) &P_free_token_from_tree
     );
-    printf("tree freed.\n\n");
 }
 
 /**
@@ -920,6 +922,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         }
 
         generator_free(gen);
+
         printf("Num nodes in tree: %ld \n", j);
         printf("Num trees in garbage: %d \n", all_parse_trees->num_used_slots);
     }
@@ -941,6 +944,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         &P_free_cached_result,
         &delegate_free_pointer
     );
+
+
 
     printf("returning parse tree...\n");
 

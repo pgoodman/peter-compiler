@@ -21,7 +21,6 @@ static PString *string_alloc(uint32_t len) {
 
     S->len = len;
     S->str = (PChar *) (((char *) S) + (sizeof(PString) / sizeof(char)));
-
     S->str[len] = '\0';
 
     return S;

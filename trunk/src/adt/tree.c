@@ -29,36 +29,28 @@
  * is the number of branches that this tree should have.
  */
 void *tree_alloc(const size_t struct_size, const unsigned short degree) {
-    void *tree = NULL;
-    PTree *T = NULL,
-          **B = NULL;
+    char *data;
+    PTree *T = NULL;
 
     assert(sizeof(PTree) <= struct_size);
 
-    tree = mem_alloc(struct_size);
-
-    if (is_null(tree)) {
+    data = mem_alloc(struct_size + (sizeof(PTree *) * degree));
+    if (is_null(data)) {
         mem_error("Unable to allocate a tree on the heap.");
     }
 
-    T = (PTree *) tree;
-    if (0 < degree) {
-        B = mem_alloc(struct_size * degree);
-        if (is_null(B)) {
-            mem_error("Unable to allocate the branches for a tree on the heap.");
-        }
-    }
-
-    /* initialize the tree fields. */
+    T = (PTree *) data;
+    T->_branches = NULL;
     T->_degree = degree;
     T->_fill = 0;
-    T->_branches = B;
     T->_parent_branch = 0;
     T->_parent = NULL;
 
-    printf("tree %p \n", (void *)T);
+    if (degree > 0) {
+        T->_branches = (PTree **) (data + (struct_size / sizeof(char)));
+    }
 
-    return tree;
+    return T;
 }
 
 /**
@@ -83,6 +75,15 @@ static PDelegate T_valid_free_callback(PDelegate ft,
     return free_tree;
 }
 
+/* Free a single tree node. */
+static void T_free(PTree *tree, PDelegate free_tree_fnc) {
+    tree->_degree = 0;
+    tree->_fill = 0;
+    free_tree_fnc(tree);
+    mem_free(tree);
+    return;
+}
+
 /**
  * Free the pointers of a tree. This takes in a visitor call-back that can
  * perform any manual freeing on the tree.
@@ -92,12 +93,9 @@ static PDelegate T_valid_free_callback(PDelegate ft,
  *     seen as a black box and not touched.
  */
 void tree_free(PTree *T, PDelegate free_tree_fnc) {
-
-    PTree *node = T;
     PTreeGenerator *G = NULL;
-    void *elm = NULL;
 
-    assert_not_null(node);
+    assert_not_null(T);
     assert_not_null(free_tree_fnc);
 
     /* get a valid memory free callback for this context */
@@ -109,35 +107,17 @@ void tree_free(PTree *T, PDelegate free_tree_fnc) {
 
     /* traverse the tree in post order and free the tree nodes from the
      * bottom up. */
-    if (node->_fill > 0) {
+    if (T->_fill > 0) {
         G = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
-
         while (generator_next(G)) {
-            elm = generator_current(G);
-            node = (PTree *) elm;
-
-            if (0 < node->_degree) {
-                mem_free(node->_branches);
-            }
-
-            free_tree_fnc(elm);
-            mem_free(elm);
+            T_free(generator_current(G), free_tree_fnc);
         }
-
-        /* free the generator */
         generator_free(G);
-        G = NULL;
 
-        /* task is simple, just free the tree. */
+    /* task is simple, just free the tree. */
     } else {
-        mem_free(node->_branches);
-        node->_branches = NULL;
-        node->_fill = 0;
-        free_tree_fnc(node);
-        mem_free(node);
+        T_free(T, free_tree_fnc);
     }
-
-    T = NULL;
 
     return;
 }
@@ -183,7 +163,6 @@ void tree_clear(PTree *T, int do_clear) {
     assert_not_null(T);
 
     if (do_clear) {
-
         for (; i < T->_fill; ++i) {
             if (is_not_null(T->_branches[i])) {
                 T->_branches[i]->_parent = NULL;
@@ -227,59 +206,6 @@ void tree_trim(PTree *T, PDictionary *garbage_set) {
 
     /* update the tree accordingly */
     T->_fill = 0;
-
-    return;
-}
-
-/**
- * Trim off all of the branches of a tree and free all of the branch trees.
- */
-void tree_trim_free(PTree *T, PDelegate free_tree_fnc) {
-    PTreeGenerator *G = NULL;
-    PTree *node = NULL;
-
-    unsigned short i;
-    void *elm = NULL;
-
-    assert_not_null(T);
-    assert_not_null(free_tree_fnc);
-
-    free_tree_fnc = T_valid_free_callback(free_tree_fnc, &delegate_mem_free, /* not allowed */
-    &delegate_do_nothing /* alternative to above */
-    );
-
-    /* none of the branches have been filled, or no branches were allocated,
-     * so we have nothing to do.. yay! */
-    if (T->_fill == 0 || is_null(T->_branches)) {
-        return;
-    }
-
-    for (i = 0; i < T->_fill; ++i) {
-
-        /* allocate or reuse the tree generator */
-        if (is_null(G)) {
-            G = tree_generator_alloc(T->_branches[i], TREE_TRAVERSE_POSTORDER);
-        } else {
-            tree_generator_reuse(G, T->_branches[i]);
-        }
-
-        /* free the trees in the branch */
-        while (generator_next(G)) {
-            elm = generator_current(G);
-            node = (PTree *) elm;
-
-            if (0 < node->_degree) {
-                mem_free(node->_branches);
-            }
-
-            free_tree_fnc(elm);
-            mem_free(elm);
-        }
-    }
-
-    if (is_not_null(G)) {
-        generator_free(G);
-    }
 
     return;
 }

@@ -50,7 +50,6 @@ void tree_free(PTree *, PDelegate);
 void delegate_tree_free(PTree * );
 void tree_clear(PTree *tree, int do_clear);
 void tree_trim(PTree *, PDictionary *);
-void tree_trim_free(PTree *tree, PDelegate free_tree_fnc);
 char tree_add_branch(PTree *, PTree * );
 size_t tree_get_num_slots(PTree * );
 size_t tree_get_num_branches(PTree * );
