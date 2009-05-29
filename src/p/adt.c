@@ -164,9 +164,9 @@ void parser_free(PParser *P) {
  * !!! Rules are *ordered*
  */
 void parser_add_production(PParser *P,
-                           PParserFunc semantic_handler_fnc, /* the production name */
-                           short num_seqs, /* number of rewrite sequences */
-                           PParserRuleResult arg1, ...) { /* rewrite rules */
+                           PParserFunc semantic_handler_fnc,
+                           short num_seqs,
+                           PParserRuleResult arg1, ...) {
     PParserRuleResult curr_seq;
     PParserProduction *prod = NULL;
     PGenericList *curr = NULL;
@@ -193,7 +193,7 @@ void parser_add_production(PParser *P,
     curr_seq = arg1;
     curr = prod->alternatives;
 
-    for(; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
+    for(; is_not_null(curr); ) {
 
         if(prod->max_num_useful_rewrite_rules < curr_seq.num_useful_elms) {
             prod->max_num_useful_rewrite_rules = curr_seq.num_useful_elms;
@@ -201,6 +201,8 @@ void parser_add_production(PParser *P,
 
         gen_list_set_elm(curr, curr_seq.rule);
         curr_seq = va_arg(seqs, PParserRuleResult);
+
+        curr = (PGenericList *) list_get_next((PList *) curr);
     }
 
     /* add in this production */
@@ -220,7 +222,9 @@ void parser_add_production(PParser *P,
  * PParserRewriteRule telling the parser to either match a particular token or
  * to recursively call and match a production.
  */
-PParserRuleResult parser_rule_sequence(PParser *P, short num_rules, PParserRewriteRule *arg1, ...) {
+PParserRuleResult parser_rule_sequence(PParser *P,
+                                       short num_rules,
+                                       PParserRewriteRule *arg1, ...) {
     PParserRuleResult result;
     PParserRewriteRule *curr_rule = NULL;
     PGenericList *curr = NULL;
@@ -237,7 +241,7 @@ PParserRuleResult parser_rule_sequence(PParser *P, short num_rules, PParserRewri
     curr_rule = arg1;
     curr = result.rule;
 
-    for(; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
+    for(; is_not_null(curr); ) {
         gen_list_set_elm(curr, curr_rule);
 
         /* this is not a useful rule, make sure that we know not to record
@@ -250,6 +254,7 @@ PParserRuleResult parser_rule_sequence(PParser *P, short num_rules, PParserRewri
         }
 
         curr_rule = va_arg(rules, PParserRewriteRule *);
+        curr = (PGenericList *) list_get_next((PList *) curr);
     }
 
     return result;

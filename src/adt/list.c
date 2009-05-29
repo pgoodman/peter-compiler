@@ -29,7 +29,7 @@ void *list_alloc(const size_t struct_size ) {
 /**
  * Free a list.
  */
-void list_free(void *L, PDelegate free_list_fnc ) {
+void list_free(PList *L, PDelegate free_list_fnc ) {
     PList *next = NULL;
 
 	assert_not_null(free_list_fnc);
@@ -46,26 +46,26 @@ void list_free(void *L, PDelegate free_list_fnc ) {
 /**
  * Set the next element in a linked list.
  */
-void list_set_next(void *L, void *N ) {
+void list_set_next(PList *L, PList *N ) {
     assert_not_null(L);
-    ((PList *) L)->_next = (PList *) N;
+    L->_next = N;
     return;
 }
 
 /**
  * Get the next element of a linked list.
  */
-PList *list_get_next(void *L) {
+PList *list_get_next(PList *L) {
 	assert_not_null(L);
-    return ((PList *) L)->_next;
+    return L->_next;
 }
 
 /**
  * Check if a list has a next element.
  */
-char list_has_next(void *L) {
+char list_has_next(PList *L) {
     assert_not_null(L);
-    return (NULL != ((PList *) L)->_next);
+    return NULL != L->_next;
 }
 
 /**
@@ -88,7 +88,7 @@ void gen_list_free(PGenericList *L, PDelegate free_elm_fnc ) {
 	/* Go through the chain and free the lists and their respective
 	 * elements. */
     for(; is_not_null(L); L = next) {
-        next = (PGenericList *) list_get_next(L);
+        next = (PGenericList *) list_get_next((PList *) L);
         free_elm_fnc(L->_elm);
         L->_elm = NULL;
         mem_free(L);
@@ -132,8 +132,9 @@ PGenericList *gen_list_alloc_chain(const unsigned int chain_length) {
  */
 void gen_list_free_chain(PGenericList *L, PDelegate free_elm_fnc) {
     PGenericList *curr;
-    for(curr = L; is_not_null(curr); curr = (PGenericList *) list_get_next(curr)) {
+    for(curr = L; is_not_null(curr); ) {
         free_elm_fnc(curr->_elm);
+        curr = (PGenericList *) list_get_next((PList *) curr);
     }
     mem_free(L);
 }

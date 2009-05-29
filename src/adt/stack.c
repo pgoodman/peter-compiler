@@ -49,8 +49,8 @@ void stack_empty(PStack *S, PDelegate free_elm_fnc ) {
      * list */
     while(is_not_null(L)) {
         gen_list_free_elm(L, free_elm_fnc );
-        next = (PGenericList *) list_get_next(L);
-        list_set_next(L, S->_unused );
+        next = (PGenericList *) list_get_next((PList *) L);
+        list_set_next((PList *) L, (PList *) S->_unused);
         S->_unused = L;
         L = next;
     }
@@ -97,11 +97,11 @@ void stack_push(PStack * const S, void * E ) {
     /* take the first unused one otherwise */
     } else {
         L = S->_unused;
-        S->_unused = (PGenericList *) list_get_next(L);
+        S->_unused = (PGenericList *) list_get_next((PList *) L);
     }
 
     /* add in the list to the head of the stack */
-    list_set_next(L, S->_head );
+    list_set_next((PList *) L, (PList *) S->_head);
     S->_head = L;
     gen_list_set_elm(L, E );
 
@@ -122,11 +122,11 @@ void *stack_pop(PStack * const S ) {
     E = gen_list_get_elm(L );
 
     /* update the head pointer */
-    S->_head = (PGenericList *) list_get_next(L);
+    S->_head = (PGenericList *) list_get_next((PList *) L);
 
     /* keep the list around for future use */
     gen_list_set_elm(L, NULL );
-    list_set_next(L, S->_unused );
+    list_set_next((PList *) L, (PList *) S->_unused);
     S->_unused = L;
 
     return E;

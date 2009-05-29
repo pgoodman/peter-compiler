@@ -50,8 +50,8 @@ void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) {
      * list */
     while(is_not_null(L)) {
         gen_list_free_elm(L, free_elm_fnc );
-        next = (PGenericList *) list_get_next(L);
-        list_set_next(L, Q->_unused );
+        next = (PGenericList *) list_get_next((PList *) L);
+        list_set_next((PList *) L, (PList *) Q->_unused );
         Q->_unused = L;
         L = next;
     }
@@ -103,12 +103,12 @@ void queue_push(PQueue * const Q, void * E ) {
     /* take the first unused one otherwise */
     } else {
         L = Q->_unused;
-        Q->_unused = (PGenericList *) list_get_next(L);
+        Q->_unused = (PGenericList *) list_get_next((PList *) L);
     }
 
     /* add in the slot to the tail of the queue */
     if(is_not_null(Q->_tail)) {
-        list_set_next(Q->_tail, L );
+        list_set_next((PList *) Q->_tail, (PList *) L);
 
     /* the tail is null <==> the head is null */
     } else {
@@ -142,12 +142,12 @@ void *queue_pop(PQueue * const Q) {
 
     /* update the head pointer */
     } else {
-        Q->_head = (PGenericList *) list_get_next(L);
+        Q->_head = (PGenericList *) list_get_next((PList *) L);
     }
 
     /* keep the list around for future use */
     gen_list_set_elm(L, NULL );
-    list_set_next(L, Q->_unused );
+    list_set_next((PList *) L, (PList *) Q->_unused);
     Q->_unused = L;
 
     return E;

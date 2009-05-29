@@ -22,11 +22,11 @@ typedef struct PGenericList {
 } PGenericList;
 
 void *list_alloc(const size_t );
-void list_free(void *, PDelegate );
+void list_free(PList *, PDelegate );
 
-PList *list_get_next(void * );
-void list_set_next(void *, void * );
-char list_has_next(void *);
+PList *list_get_next(PList * );
+void list_set_next(PList *, PList *);
+char list_has_next(PList *);
 
 PGenericList *gen_list_alloc(void);
 void gen_list_free(PGenericList *, PDelegate );

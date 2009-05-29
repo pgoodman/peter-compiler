@@ -65,7 +65,7 @@ char generator_next(void *Cg ) {
     assert_not_null(Cg);
 
     G = (PGenerator *) Cg;
-    G->_curr = G->_gen(Cg );
+    G->_curr = G->_gen(Cg);
 
     return (NULL != G->_curr);
 }
