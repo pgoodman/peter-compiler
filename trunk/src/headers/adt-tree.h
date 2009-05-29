@@ -46,15 +46,16 @@ typedef enum {
 
 /* tree operations */
 void *tree_alloc(const size_t, const unsigned short );
-void tree_free(void *, PDelegate);
-void delegate_tree_free(void * );
-void tree_clear(void *tree, int do_clear);
-void tree_trim(void *, PDictionary *);
-void tree_trim_free(void *tree, PDelegate free_tree_fnc);
-char tree_add_branch(void *, void * );
-size_t tree_degree(void * );
-size_t tree_fill(void * );
-void *tree_parent(void *);
+void tree_free(PTree *, PDelegate);
+void delegate_tree_free(PTree * );
+void tree_clear(PTree *tree, int do_clear);
+void tree_trim(PTree *, PDictionary *);
+void tree_trim_free(PTree *tree, PDelegate free_tree_fnc);
+char tree_add_branch(PTree *, PTree * );
+size_t tree_get_num_slots(PTree * );
+size_t tree_get_num_branches(PTree * );
+void *tree_parent(PTree *);
+void tree_replace_branch(PTree *old_child, PTree *new_child);
 /*void *tree_get_branch(void *, unsigned short);*/
 
 /* tree generator */

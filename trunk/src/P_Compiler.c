@@ -194,6 +194,8 @@ int main(void) {
         (PFunction) &lexer_grammar_token_generator
     );
 
+    PTreeGenerator *tree_gen;
+
     short useful_tokens[] = {
         L_TERMINAL,
         L_NON_TERMINAL,
@@ -259,6 +261,14 @@ int main(void) {
     generator_free(G);
     parser_free(P);
     parser_free_parse_tree(T);
+
+    /*
+    tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_PREORDER);
+    while(generator_next(tree_gen)) {
+        T = (PParseTree *)generator_current(tree_gen);
+        printf("%p fill %d degree %d \n", (void *)T, (T->_)._fill, (T->_)._degree);
+    }
+    generator_free(tree_gen);*/
 
 #if defined(P_DEBUG) && P_DEBUG == 1
 #if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1

@@ -235,8 +235,6 @@ char dict_set(H_type *H,
         entry->key = key;
         H->elms[info.hash_key] = entry;
         ++(H->num_used_slots);
-
-
     }
 
     entry->entry = val;
@@ -253,7 +251,10 @@ void dict_unset(H_type *H,
                 H_free_key_fnc_type free_key_fnc) {
 
     uint32_t prev_key;
+    unsigned int hashed_key,
+                 temp_hashed_key;
     H_EntryInfo info;
+    unsigned int i;
 
     assert_not_null(H);
     assert_not_null(free_key_fnc);
@@ -271,21 +272,29 @@ void dict_unset(H_type *H,
         mem_free(info.entry);
         H->elms[info.hash_key] = NULL;
 
-        /* shift the elements that were linearly probed into place. */
-        prev_key = info.hash_key;
-        info.hash_key = (info.hash_key + 1) % H->num_slots;
-        while(is_not_null(H->elms[info.hash_key])) {
-            if(H->collision_fnc(H->elms[info.hash_key]->key, key)) {
-                H->elms[prev_key] = H->elms[info.hash_key];
-                prev_key = info.hash_key;
-                info.hash_key = (info.hash_key + 1) % H->num_slots;
-            } else {
-                break;
+        hashed_key = H->key_hash_fnc(key) % H->num_slots;
+
+        /* shift the elements that were linearly probed past the now empty
+         * slot back into place to fill up the slot. */
+        do {
+            prev_key = info.hash_key;
+            info.hash_key = (prev_key + 1) % H->num_slots;
+            info.entry = H->elms[info.hash_key];
+
+            if(is_not_null(info.entry)) {
+                temp_hashed_key = H->key_hash_fnc(info.entry->key) % H->num_slots;
+                if(temp_hashed_key == hashed_key) {
+                    H->elms[prev_key] = info.entry;
+                    H->elms[info.hash_key] = NULL;
+
+                    continue;
+                }
             }
-        }
+        } while(0);
 
         --(H->num_used_slots);
     }
+
     return;
 }
 
@@ -321,5 +330,5 @@ uint32_t dict_pointer_hash_fnc(void *pointer) {
  * Check if two pointers are the same.
  */
 char dict_pointer_collision_fnc(void *a, void *b) {
-    return (a == b);
+    return (a != b);
 }
