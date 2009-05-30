@@ -33,4 +33,6 @@ PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col);
 void token_free(PToken *tok);
 PTokenGenerator *token_generator_alloc(const char *, PFunction);
 
+unsigned long int token_num_allocated_pointers(void);
+
 #endif /* PLEXER_H_ */

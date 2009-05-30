@@ -14,6 +14,7 @@
 #include <p-lexer.h>
 #include <p-adt.h>
 #include <adt-dict.h>
+
 enum {
     L_NON_TERMINAL,
     L_TERMINAL,
@@ -115,6 +116,7 @@ clear_spaces:
             C = file_get_char(G->stream);
 
             if('>' == C) {
+                result.str = string_alloc_char("", 0);
                 lexeme = L_EPSILON;
                 break;
             }
@@ -130,9 +132,11 @@ clear_spaces:
             lexeme = L_TERMINAL;
             break;
         case ':':
+            result.str = string_alloc_char(":", 1);
             lexeme = L_COLON;
             break;
         case ';':
+            result.str = string_alloc_char(";", 1);
             lexeme = L_SEMICOLON;
             break;
         default:
@@ -150,40 +154,17 @@ clear_spaces:
     return token_alloc(lexeme, result.str, G->line, G->column);
 }
 
-static void Grammar(PProductionTree *T, PDictionary *garbage) {
 
-}
-
-static void Productions(PProductionTree *T, PDictionary *garbage) {
-    if(T->rule == 1) {
-    } else {
-
-    }
-}
-
-static void Production(PProductionTree *T, PDictionary *garbage) {
-}
-
-static void ProductionRules(PProductionTree *T, PDictionary *garbage) {
-}
-
-static void ProductionRule(PProductionTree *T, PDictionary *garbage) {
-}
-
-static void Rules(PProductionTree *T, PDictionary *garbage) {
-}
-
-static void Rule(PProductionTree *T, PDictionary *garbage) {
-}
-
-static void Decoration(PProductionTree *T, PDictionary *garbage) {
-}
-
-#if defined(P_DEBUG) && P_DEBUG == 1
-#if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
-extern unsigned int num_allocated_pointers;
-#endif
-#endif
+typedef enum {
+    P_GRAMMAR,
+    P_PRODUCTIONS,
+    P_PRODUCTION,
+    P_PRODUCTION_RULES,
+    P_PRODUCTION_RULE,
+    P_RULES,
+    P_RULE,
+    P_DECORATION
+} PProduction;
 
 int main(void) {
 
@@ -196,52 +177,69 @@ int main(void) {
 
     PTreeGenerator *tree_gen;
 
-    short useful_tokens[] = {
+    char production_names[8][16] = {
+        "Grammar",
+        "Productions",
+        "Production",
+        "ProductionRules",
+        "ProductionRule",
+        "Rules",
+        "Rule",
+        "Decoration"
+    };
+
+    unsigned char useful_tokens[] = {
         L_TERMINAL,
         L_NON_TERMINAL,
         L_CODE,
         L_EPSILON
     };
 
-    P = parser_alloc(&Grammar, 6, 4, useful_tokens);
+    P = parser_alloc(
+        P_GRAMMAR,
+        8, /* number of productions */
+        6, /* number of tokens */
+        4, /* number of useful tokens */
+        useful_tokens /* array of useful tokens */
+    );
 
-    parser_add_production(P, &Grammar, 1,
+    parser_add_production(P, P_GRAMMAR, 1,
         parser_rule_sequence(P, 2,
-            parser_rewrite_function(P, &Production),
-            parser_rewrite_function(P, &Productions)));
+            parser_rewrite_function(P, P_PRODUCTION),
+            parser_rewrite_function(P, P_PRODUCTIONS)));
 
-    parser_add_production(P, &Productions, 2,
+    parser_add_production(P, P_PRODUCTIONS, 2,
         parser_rule_sequence(P, 1,
-            parser_rewrite_function(P, &Grammar)),
+            parser_rewrite_function(P, P_GRAMMAR)),
         parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
-    parser_add_production(P, &Production, 1,
+    parser_add_production(P, P_PRODUCTION, 1,
         parser_rule_sequence(P, 3,
             parser_rewrite_token(P, L_NON_TERMINAL),
-            parser_rewrite_function(P, &ProductionRules),
+            parser_rewrite_function(P, P_PRODUCTION_RULES),
             parser_rewrite_token(P, L_SEMICOLON)));
 
-    parser_add_production(P, &ProductionRules, 2,
+    parser_add_production(P, P_PRODUCTION_RULES, 2,
         parser_rule_sequence(P, 2,
-            parser_rewrite_function(P, &ProductionRule),
-            parser_rewrite_function(P, &ProductionRules)),
+            parser_rewrite_function(P, P_PRODUCTION_RULE),
+            parser_rewrite_function(P, P_PRODUCTION_RULES)),
         parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
-    parser_add_production(P, &ProductionRule, 1,
+    parser_add_production(P, P_PRODUCTION_RULE, 1,
         parser_rule_sequence(P, 2,
             parser_rewrite_token(P, L_COLON),
-            parser_rewrite_function(P, &Rules)));
+            parser_rewrite_function(P, P_RULES)));
 
-    parser_add_production(P, &Rules, 2,
+    parser_add_production(P, P_RULES, 2,
         parser_rule_sequence(P, 2,
-            parser_rewrite_function(P, &Rule),
-            parser_rewrite_function(P, &Rules)),
+            parser_rewrite_function(P, P_RULE),
+            parser_rewrite_function(P, P_RULES)),
         parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
-    parser_add_production(P, &Rule, 3,
+    parser_add_production(P, P_RULE, 3,
         parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_NON_TERMINAL)),
         parser_rule_sequence(P, 1,
@@ -249,7 +247,7 @@ int main(void) {
         parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_EPSILON)));
 
-    parser_add_production(P, &Decoration, 2,
+    parser_add_production(P, P_DECORATION, 2,
         parser_rule_sequence(P, 1,
             parser_rewrite_token(P, L_CODE)),
         parser_rule_sequence(P, 1,
@@ -258,23 +256,45 @@ int main(void) {
     /* parse the grammar file */
     T = parser_parse_tokens(P, G);
 
+    tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
+    while(generator_next(tree_gen)) {
+        T = generator_current(tree_gen);
+
+        if(T->_._parent != NULL) {
+            if(T->type == 1) {
+                printf("\"%p\" -> \"%p\" \n", (void *)T->_._parent, (void *)T);
+                if(((PTerminalTree *)T)->token->val != NULL) {
+                    printf("\"%p\" [label=\"%s\" color=blue] \n", (void *)T, (char *)((PTerminalTree *)T)->token->val->str);
+                }
+            } else {
+                printf("\"%p\" -> \"%p\"\n", (void *)T->_._parent, (void *)T);
+            }
+        }
+
+        if(T->type == 0) {
+            printf("\"%p\" [label=\"%s\"]\n", (void *)T, production_names[((PProductionTree *) T)->production]);
+        }
+    }
+
+    generator_free(tree_gen);
     generator_free(G);
     parser_free(P);
     parser_free_parse_tree(T);
 
-    /*
-    tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_PREORDER);
-    while(generator_next(tree_gen)) {
-        T = (PParseTree *)generator_current(tree_gen);
-        printf("%p fill %d degree %d \n", (void *)T, (T->_)._fill, (T->_)._degree);
-    }
-    generator_free(tree_gen);*/
 
-#if defined(P_DEBUG) && P_DEBUG == 1
-#if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
-    printf("num unfreed pointers: %d\n", num_allocated_pointers);
+
+
+#if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
+    printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
 #endif
-#endif
+
+    printf(
+        "dict: %ld \ntree: %ld\ntokens: %ld \nstrings: %ld \n",
+        dict_num_allocated_pointers(),
+        tree_num_allocated_pointers(),
+        token_num_allocated_pointers(),
+        string_num_allocated_pointers()
+    );
 
     printf("done.\n");
 

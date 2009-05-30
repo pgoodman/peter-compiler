@@ -64,4 +64,7 @@ void tree_generator_reuse(PTreeGenerator *, void *);
 
 #define tree_get_branch(T,branch) (((PTree *) T)->_branches[branch])
 
+
+unsigned long int tree_num_allocated_pointers(void);
+
 #endif /* TREE_H_ */

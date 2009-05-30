@@ -25,8 +25,9 @@ typedef struct PParseTree {
 
 typedef struct PProductionTree {
     PParseTree _;
-    void (*production)(struct PProductionTree *, PDictionary *);
-    short rule; /* the rule from the production's definition that was matched */
+    unsigned char production,
+                  /* the rule from the production's definition that matched */
+                  rule;
 } PProductionTree;
 
 typedef struct PTerminalTree {
@@ -35,12 +36,6 @@ typedef struct PTerminalTree {
     struct PTerminalTree *prev,
                          *next;
 } PTerminalTree;
-
-/* a parser function. a parser function deals with the *semantic* meaning of
- * a particular node in a parse tree. These functions are called *after* the
- * entire and correct parse tree is generated.
- */
-typedef void (*PParserFunc)(PProductionTree *, PDictionary *);
 
 /**
  * Type representing a single production and all of its rules 'alternatives'
@@ -52,7 +47,7 @@ typedef void (*PParserFunc)(PProductionTree *, PDictionary *);
  */
 typedef struct PParserProduction {
     PGenericList *alternatives;
-    PParserFunc production;
+    unsigned char production;
     short max_num_useful_rewrite_rules;
 } PParserProduction;
 

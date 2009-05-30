@@ -15,6 +15,8 @@
  * Deal with debugging heap allocation and freeing.
  */
 
+unsigned long int mem_num_allocated_pointers(void);
+
 #if defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
 
 void *_mem_alloc(size_t, const unsigned int, const char * );

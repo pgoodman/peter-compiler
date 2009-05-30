@@ -78,4 +78,6 @@ typedef H_type PDictionary;
 uint32_t dict_pointer_hash_fnc(void *pointer);
 char dict_pointer_collision_fnc(void *a, void *b);
 
+unsigned long int dict_num_allocated_pointers(void);
+
 #endif /* HASHSET_H_ */

@@ -8,10 +8,8 @@
 
 #include <p-parser.h>
 
-int num_trees = 0;
-
 #define P_SIZE_OF_THUNK (0 \
-         + sizeof(PParserFunc) \
+         + sizeof(unsigned char) \
          + sizeof(PGenericList *) \
         ) / sizeof(char)
 #define P_PRODUCTION_FAILED ((void *) 10)
@@ -28,7 +26,7 @@ int num_trees = 0;
  * cached.
  */
 typedef struct P_Thunk {
-    PParserFunc production;
+    unsigned char production;
     PTerminalTree *list;
 } P_Thunk;
 
@@ -162,7 +160,7 @@ static void P_free_cached_result(void *result) {
 /**
  * Allocate a new thunk on the heap.
  */
-static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
+static P_Thunk *P_alloc_thunk(unsigned char production, PTerminalTree *list) {
     P_Thunk *thunk = mem_alloc(sizeof(P_Thunk));
 
     if(is_null(thunk)) {
@@ -170,7 +168,7 @@ static P_Thunk *P_alloc_thunk(PParserFunc func, PTerminalTree *list) {
     }
 
     thunk->list = list;
-    thunk->production = func;
+    thunk->production = production;
 
     return thunk;
 }
@@ -211,8 +209,6 @@ static P_StackFrame *P_frame_stack_alloc(P_StackFrame **unused,
 
     /* make the parse tree */
     if(record_tree) {
-
-        ++num_trees;
 
         frame->parse_tree = tree_alloc(
             sizeof(PProductionTree),
@@ -279,8 +275,6 @@ static PTerminalTree *P_alloc_terminal_tree(PToken *tok, PDictionary *all_trees)
 
     assert_not_null(tok);
     assert_not_null(all_trees);
-
-    ++num_trees;
 
     T = tree_alloc(sizeof(PTerminalTree), 0);
     T->token = tok;
@@ -362,10 +356,6 @@ static void P_free_intermediate_parse_tree(PParseTree *T) {
         tree_clear((PTree *) T, 0);
     }
 
-    if((unsigned int)T == 0x3048b0) {
-        printf("intermediatee. \n");
-    }
-
     tree_free((PTree *) T, &delegate_do_nothing);
 }
 
@@ -374,7 +364,6 @@ static void P_free_intermediate_parse_tree(PParseTree *T) {
  */
 static void P_free_token_from_tree(PParseTree *tree) {
     PTerminalTree *term;
-
 
     assert_not_null(tree);
 
@@ -391,7 +380,6 @@ static void P_free_token_from_tree(PParseTree *tree) {
  */
 void parser_free_parse_tree(PParseTree *tree) {
     assert_not_null(tree);
-
     tree_free(
         (PTree *) tree,
         (PDelegate) &P_free_token_from_tree
@@ -471,7 +459,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
     assert_not_null(P);
     assert_not_null(G);
-    assert(prod_dict_is_set(P->productions, P->start_production));
+    assert(is_not_null(P->productions[P->start_production]));
 
     /* error reporting info */
     fpr.column = 0;
@@ -515,7 +503,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
      * involves registering the start of the token list as the furthest back
      * we can backtrack.
      */
-    curr_production = prod_dict_get(P->productions, P->start_production);
+    curr_production = P->productions[P->start_production];
 
     PARSER_DEBUG(printf("pushing production onto stack.\n");)
 
@@ -721,12 +709,12 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * i.e. it is a production. we need to push the production onto the
              * stack.
              */
-            if(is_not_null(curr_rule->func)) {
+            if(parser_rule_is_production(curr_rule)) {
 
                 /* check if we have a cached this result of applying this
                  * particular production to our current position in the token
                  * list. */
-                thunk.production = curr_rule->func;
+                thunk.production = curr_rule->production;
                 thunk.list = curr;
                 cached_result = dict_get(thunk_table, &thunk);
 
@@ -779,7 +767,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     P_frame_stack_push(&frame, P_frame_stack_alloc(
                         &unused,
-                        prod_dict_get(P->productions, curr_rule->func),
+                        P->productions[curr_rule->production],
                         curr,
                         all_parse_trees,
                         record_tree
@@ -792,7 +780,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * we need to advance to the next rule and to the next token. if
              * they do not match then we need to signal the frame to backtrack.
              */
-            } else if(P_LEXEME_EPSILON != curr_rule->lexeme) {
+            } else if(parser_rule_is_token(curr_rule)) {
 
                 ++num_tok_comparisons;
 
@@ -818,6 +806,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     /* store the match as a parse tree */
                     if(record_tree && P->token_is_useful[(int) curr_token->lexeme]) {
+                        printf("%s %d \n", curr_token->val->str, (unsigned int)curr_token->lexeme);
                         tree_add_branch(
                             (PTree *) frame->parse_tree,
                             (PTree *) curr
@@ -902,7 +891,6 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
     } else {
 
         printf("Successfully parsed.\n");
-        printf("Num allocated trees: %d \n", num_trees);
         printf("Num trees in garbage: %d \n", all_parse_trees->num_used_slots);
 
         /* go over our reduced parse tree and remove any references to trees
@@ -944,8 +932,6 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         &P_free_cached_result,
         &delegate_free_pointer
     );
-
-
 
     printf("returning parse tree...\n");
 
