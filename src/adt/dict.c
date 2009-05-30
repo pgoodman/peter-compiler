@@ -7,10 +7,8 @@
  */
 
 #include <adt-dict.h>
-#include <stdio.h>
 
 #define P_DICT_LOAD_FACTOR 0.65
-#define P_DICT_EMPTY_SLOT (void *)1
 
 /**
  * Credit for primes table: Aaron Krowne
@@ -28,6 +26,16 @@ static const unsigned int H_primes[] = {
 };
 
 static const int H_num_primes = sizeof(H_primes)/sizeof(H_primes[0]);
+static unsigned long int num_allocations = 0;
+
+#define dict_mem_alloc(x) mem_alloc(x); ++num_allocations
+#define dict_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
+#define dict_mem_free(x) mem_free(x); --num_allocations
+#define dict_mem_error(x) mem_error(x)
+
+unsigned long int dict_num_allocated_pointers(void) {
+    return num_allocations;
+}
 
 /**
  * Locate an entry and its associated key into the hash table in a dictionary.
@@ -67,9 +75,9 @@ static void H_add_entry(H_type *H, H_Entry *E) {
  * Allocate the slots used by a vector.
  */
 static H_Entry **H_alloc_slots(uint32_t num_slots ) {
-    H_Entry **slots = mem_calloc(num_slots, sizeof(H_Entry *));
+    H_Entry **slots = dict_mem_calloc(num_slots, sizeof(H_Entry *));
     if(is_null(slots)) {
-        mem_error("Unable to allocate hash table slots.");
+        dict_mem_error("Unable to allocate hash table slots.");
     }
     return slots;
 }
@@ -104,7 +112,7 @@ static void H_grow(H_type *H ) {
         }
     }
 
-    mem_free(old_elms);
+    dict_mem_free(old_elms);
     return;
 }
 
@@ -125,9 +133,9 @@ void *gen_dict_alloc(const size_t dict_struct_size,
     assert_not_null(key_hash_fnc);
     assert_not_null(val_collision_fnc);
 
-    table = mem_alloc(dict_struct_size);
+    table = dict_mem_alloc(dict_struct_size);
     if(is_null(table)) {
-        mem_error("Unable to allocate vector on the heap.");
+        dict_mem_error("Unable to allocate vector on the heap.");
     }
 
     /* figure out the minimum size we will use from our prime table. */
@@ -198,16 +206,13 @@ void dict_free(H_type *H,
             next = entry->next;
             free_key_fnc(entry->key);
             free_val_fnc(entry->entry);
-            mem_free(entry);
+            dict_mem_free(entry);
             entry = next;
         }
     }
 
-    mem_free(H->slots);
-    mem_free(H);
-
-    H = NULL;
-
+    dict_mem_free(H->slots);
+    dict_mem_free(H);
     return;
 }
 
@@ -215,9 +220,9 @@ void dict_free(H_type *H,
  * Allocate a new dictionary entry.
  */
 static H_Entry *H_alloc_entry(H_key_type key, H_val_type val) {
-    H_Entry *entry = mem_alloc(sizeof(H_Entry));
+    H_Entry *entry = dict_mem_alloc(sizeof(H_Entry));
     if(is_null(entry)) {
-        mem_error("Unable to allocate dictionary entry on the heap.");
+        dict_mem_error("Unable to allocate dictionary entry on the heap.");
     }
 
     entry->key = key;
@@ -310,7 +315,7 @@ void dict_unset(H_type *H,
 
             free_key_fnc(entry->key);
             free_val_fnc(entry->entry);
-            mem_free(entry);
+            dict_mem_free(entry);
 
             --(H->num_used_slots);
 

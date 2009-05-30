@@ -17,11 +17,22 @@
         A = (T *) (G->_adt); \
         G->_adt = NULL; \
         F(A, delegate_do_nothing ); \
-        mem_free(g); \
+        tree_mem_free(g); \
         G = NULL; \
         g = NULL; \
         return; \
     }
+
+static unsigned long int num_allocations = 0;
+
+#define tree_mem_alloc(x) mem_alloc(x); ++num_allocations
+#define tree_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
+#define tree_mem_free(x) mem_free(x); --num_allocations
+#define tree_mem_error(x) mem_error(x)
+
+unsigned long int tree_num_allocated_pointers(void) {
+    return num_allocations;
+}
 
 /**
  * Allocate a new N-ary tree on the heap. The struct_size is the size of the
@@ -34,9 +45,9 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree) {
 
     assert(sizeof(PTree) <= struct_size);
 
-    data = mem_alloc(struct_size + (sizeof(PTree *) * degree));
+    data = tree_mem_alloc(struct_size + (sizeof(PTree *) * degree));
     if (is_null(data)) {
-        mem_error("Unable to allocate a tree on the heap.");
+        tree_mem_error("Unable to allocate a tree on the heap.");
     }
 
     T = (PTree *) data;
@@ -80,7 +91,7 @@ static void T_free(PTree *tree, PDelegate free_tree_fnc) {
     tree->_degree = 0;
     tree->_fill = 0;
     free_tree_fnc(tree);
-    mem_free(tree);
+    tree_mem_free(tree);
     return;
 }
 

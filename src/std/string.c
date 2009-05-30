@@ -8,6 +8,17 @@
 
 #include <std-string.h>
 
+static unsigned long int num_allocations = 0;
+
+#define string_mem_alloc(x) mem_alloc(x); ++num_allocations
+#define string_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
+#define string_mem_free(x) mem_free(x); --num_allocations
+#define string_mem_error(x) mem_error(x)
+
+unsigned long int string_num_allocated_pointers(void) {
+    return num_allocations;
+}
+
 /**
  * Allocate space a new string on the heap.
  */
@@ -79,7 +90,7 @@ void string_convert_to_ascii(const PString * const S, char *ascii_version ) {
  */
 void string_free(PString *S ) {
     assert_not_null(S);
-    mem_free(S);
+    string_mem_free(S);
     return;
 }
 
@@ -120,23 +131,23 @@ PStringHeap *string_heap_alloc(void) {
 
     /* try to allocate the object with which we will use to store different sets
      * of strings. */
-    PStringHeap *heap = mem_alloc(sizeof(PStringHeap));
+    PStringHeap *heap = string_mem_alloc(sizeof(PStringHeap));
     if(NULL == heap) {
-        mem_error("Unable to allocate new string heap.");
+        string_mem_error("Unable to allocate new string heap.");
     }
 
     /* try to allocate the starting heap space for the strings */
-    PInternalString *pointer_heap = mem_calloc( \
+    PInternalString *pointer_heap = string_mem_calloc( \
         sizeof(PInternalString), \
         P_STRING_HEAP_START_SIZE \
     );
 
     if(NULL == pointer_heap) {
-        mem_error("Unable to allocate heap space for a new string heap.")
+        string_mem_error("Unable to allocate heap space for a new string heap.")
     }
 
     /* try to allocate the starting heap space for the tomb stones. */
-    PString *tombstone_heap = mem_calloc( \
+    PString *tombstone_heap = string_mem_calloc( \
         sizeof(PString), \
         P_STRING_HEAP_START_SIZE \
     );
@@ -164,13 +175,13 @@ static PString *string_external_alloc(PStringHeap *H ) {
 
     // try to either re-allocate space.
     if(H->num_used_external_strings >= H->num_external_strings) {
-        H->external_string_area = mem_realloc( \
+        H->external_string_area = string_mem_realloc( \
             H->external_string_area, \
             (H->num_external_strings * 2) \
         );
 
         if(NULL == H->external_string_area) {
-            mem_error("Unable to expand external string heap.");
+            string_mem_error("Unable to expand external string heap.");
         }
     }
 
@@ -180,10 +191,10 @@ static PString *string_external_alloc(PStringHeap *H ) {
 }
 
 static PInternalChar *string_char_alloc(uint32_t len ) {
-    PInternalChar C = mem_alloc(sizeof(PInternalChar) * len);
+    PInternalChar C = string_mem_alloc(sizeof(PInternalChar) * len);
 
     if(NULL == C) {
-        mem_error("Unable to allocate string on heap.");
+        string_mem_error("Unable to allocate string on heap.");
     }
 
     return C;

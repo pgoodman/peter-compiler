@@ -50,4 +50,6 @@ typedef struct PStringHeap {
 } PStringHeap;
 #endif
 
+unsigned long int string_num_allocated_pointers(void);
+
 #endif /* STDSTRING_H_ */

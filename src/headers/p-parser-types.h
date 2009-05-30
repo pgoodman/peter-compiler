@@ -12,9 +12,8 @@
 
 #include "p-lexer.h"
 #include "p-prod-common.h"
-#include "p-prod-dict.h"
 
-#define P_LEXEME_EPSILON -1
+#define P_LEXEME_EPSILON 0x11
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PParser {
@@ -23,7 +22,8 @@ typedef struct PParser {
     char is_closed;
 
     /* keep track of all of the productions for the parsing grammar. */
-    PParserProdDictionary *productions;
+    PParserProduction **productions;
+    unsigned int num_productions;
 
     /* keep track of rules used in productions, this does not keep track of
      * epsilon rules as that is statically defined anyway. */
@@ -31,19 +31,19 @@ typedef struct PParser {
 
     /* keep track of the important tokens, i.e. the tokens that should
      * actually appear in the parse tree. */
-    int *token_is_useful,
-        num_tokens;
+    unsigned char *token_is_useful;
+    unsigned int num_tokens;
 
     /* production used to start parsing. */
-    PParserFunc start_production;
+    unsigned char start_production;
 } PParser;
 
 /* types relating to how the internal call stack is re-written using these
  * rules.
  */
 typedef struct PParserRewriteRule {
-    PParserFunc func;
-    char lexeme;
+    unsigned char production,
+                  lexeme;
 } PParserRewriteRule;
 
 /* the result of creating a parser rewrite rule. */

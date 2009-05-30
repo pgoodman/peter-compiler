@@ -9,8 +9,6 @@
 #include <p-adt.h>
 
 #define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
-#define P_SIZE_OF_PARSER_FUNC (sizeof(PParserFunc) / sizeof(char))
-
 
 /**
  * Hash function that converts a rewrite rule (parser-func, lexeme) into a char
@@ -34,41 +32,19 @@ static uint32_t P_rewrite_rule_hash_fnc(void *rewrite_rule) {
 static char P_rewrite_rule_collision_fnc(void *rule1, void *rule2) {
     PParserRewriteRule *r1 = rule1,
                        *r2 = rule2;
-    return ((r1->func != r2->func) || (r1->lexeme != r2->lexeme));
+    return ((r1->production != r2->production) || (r1->lexeme != r2->lexeme));
 }
-
-/**
- * Hash function that converts a PParserFunc pointer into a char array. Hashing
- * parser functions lets us index the various productions in our top-down parsing
- * grammar. The parser production is used to index a P_Production.
- */
-static uint32_t P_production_hash_fnc(PParserFunc production) {
-    union {
-        PParserFunc prod;
-        char prod_as_chars[P_SIZE_OF_PARSER_FUNC];
-    } switcher;
-
-    switcher.prod = (PParserFunc) production;
-    return murmur_hash(switcher.prod_as_chars, P_SIZE_OF_PARSER_FUNC, 73);
-}
-
-/**
- * Check for a hash collision.
- */
-static char P_production_collision_fnc(PParserFunc fnc1, PParserFunc fnc2) {
-    return fnc1 != fnc2;
-}
-
 
 /**
  * Allocate a new parser on the heap. A parser, in this case, is a container
  * linking to all of top-down-parsing language data structures as well as to
  * helping deal with garbage.
  */
-PParser *parser_alloc(PParserFunc start_production,
+PParser *parser_alloc(unsigned char start_production,
+                      size_t num_productions,
                       size_t num_tokens,
                       size_t num_useful_tokens,
-                      short useful_tokens[]) {
+                      unsigned char useful_tokens[]) {
 
     PParser *P = mem_alloc(sizeof(PParser));
     size_t i;
@@ -77,13 +53,13 @@ PParser *parser_alloc(PParserFunc start_production,
         mem_error("Unable to allocate a new parser on the heap.");
     }
 
-    /* hash table mapping production function (PParserFunc) to the information
-     * that corresponds with them (P_Production). */
-    P->productions = prod_dict_alloc(
-        10,
-        &P_production_hash_fnc,
-        &P_production_collision_fnc
-    );
+    /* hash table mapping production to the information that corresponds with
+     * them (PParserProduction). */
+    P->num_productions = num_productions;
+    P->productions = mem_calloc(num_productions, sizeof(PParserProduction));
+    if(is_null(P->productions)) {
+        mem_error("Unable to allocate productions table on the heap.");
+    }
 
     /* hash table mapping parser rewrite rules to themselves. This is used
      * in order to not repeatedly heap allocate the same rule twice. A rewrite
@@ -98,9 +74,9 @@ PParser *parser_alloc(PParserFunc start_production,
 
     /* table for tokens and their usefulness. */
     P->num_tokens = num_tokens;
-    P->token_is_useful = mem_calloc(num_tokens, sizeof(short));
+    P->token_is_useful = mem_calloc(num_tokens, sizeof(unsigned char));
     if(is_null(P->token_is_useful)) {
-        mem_error("Unable to allocate token useefulness table on the heap.");
+        mem_error("Unable to allocate token usefulness table on the heap.");
     }
     for(i = 0; i < num_useful_tokens; ++i) {
         P->token_is_useful[useful_tokens[i]] = 1;
@@ -133,24 +109,23 @@ static void P_free_production_val(PParserProduction *P) {
     mem_free(P);
 }
 
-static void P_free_production_key(PParserFunc F) {
-    /* do nothing */
-}
-
-static void P_free_production_val_ignore(PParserProduction *P) {
-    /* do nothing */
-}
-
 /**
  * Free the parser adt.
  */
 void parser_free(PParser *P) {
+    unsigned int i;
+    PParserProduction *prod;
+
     assert_not_null(P);
-    prod_dict_free(
-        P->productions,
-        &P_free_production_val,
-        &P_free_production_key
-    );
+
+    for(i = 0; i < P->num_productions; ++i) {
+        prod = P->productions[i];
+        gen_list_free_chain(prod->alternatives, (PDelegate) &P_free_alternative_rules);
+        mem_free(prod);
+    }
+
+    mem_free(P->productions);
+    mem_free(P->token_is_useful);
     dict_free(P->rules, &delegate_mem_free, &delegate_do_nothing);
     mem_free(P);
 }
@@ -164,7 +139,7 @@ void parser_free(PParser *P) {
  * !!! Rules are *ordered*
  */
 void parser_add_production(PParser *P,
-                           PParserFunc semantic_handler_fnc,
+                           unsigned char production,
                            short num_seqs,
                            PParserRuleResult arg1, ...) {
     PParserRuleResult curr_seq;
@@ -174,17 +149,16 @@ void parser_add_production(PParser *P,
     va_list seqs;
 
     assert_not_null(P);
-    assert_not_null(semantic_handler_fnc);
+    assert(production < P->num_productions);
     assert(0 < num_seqs);
     assert(!P->is_closed);
-    assert(!prod_dict_is_set(P->productions, semantic_handler_fnc));
 
     prod = mem_alloc(sizeof(PParserProduction));
     if(is_null(prod)) {
         mem_error("Unable to allocate new production on the heap.");
     }
 
-    prod->production = semantic_handler_fnc;
+    prod->production = production;
     prod->max_num_useful_rewrite_rules = 0;
     prod->alternatives = gen_list_alloc_chain(num_seqs);
 
@@ -194,24 +168,17 @@ void parser_add_production(PParser *P,
     curr = prod->alternatives;
 
     for(; is_not_null(curr); ) {
-
         if(prod->max_num_useful_rewrite_rules < curr_seq.num_useful_elms) {
             prod->max_num_useful_rewrite_rules = curr_seq.num_useful_elms;
         }
 
         gen_list_set_elm(curr, curr_seq.rule);
         curr_seq = va_arg(seqs, PParserRuleResult);
-
         curr = (PGenericList *) list_get_next((PList *) curr);
     }
 
     /* add in this production */
-    prod_dict_set(
-        P->productions,
-        semantic_handler_fnc,
-        prod,
-        &P_free_production_val_ignore
-    );
+    P->productions[production] = prod;
 
     return;
 }
@@ -246,8 +213,8 @@ PParserRuleResult parser_rule_sequence(PParser *P,
 
         /* this is not a useful rule, make sure that we know not to record
          * it in any parse trees. */
-        if(is_null(curr_rule->func)
-           && (curr_rule->lexeme == P_LEXEME_EPSILON
+        if((P_LEXEME_EPSILON == curr_rule->production)
+           && (P_LEXEME_EPSILON == curr_rule->lexeme
                || !(P->token_is_useful[(int) curr_rule->lexeme]))) {
 
             --(result.num_useful_elms);
@@ -268,15 +235,15 @@ PParserRuleResult parser_rule_sequence(PParser *P,
  *   3) epsilon rules.
  */
 static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
-                                                 char tok,
-                                                 PParserFunc func) {
+                                                 unsigned char tok,
+                                                 unsigned char prod) {
     PParserRewriteRule rewrite_rule;
     PParserRewriteRule *R = NULL;
 
     assert_not_null(P);
 
     /* make a thunk out of it to search for in the hash table */
-    rewrite_rule.func = func;
+    rewrite_rule.production = prod;
     rewrite_rule.lexeme = tok;
 
     if(dict_is_set(P->rules, &rewrite_rule)) {
@@ -289,7 +256,7 @@ static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
         mem_error("Unable to allocate rewrite rule on the heap.");
     }
 
-    R->func = func;
+    R->production = prod;
     R->lexeme = tok;
 
     dict_set(P->rules, R, R, &delegate_do_nothing);
@@ -300,18 +267,19 @@ static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
 /**
  * Rewrite rule for a single production function
  */
-PParserRewriteRule *parser_rewrite_function(PParser *P, PParserFunc func) {
+PParserRewriteRule *parser_rewrite_function(PParser *P, unsigned char prod) {
     assert_not_null(P);
-    assert_not_null(func);
-    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, func);
+    assert(prod < P->num_productions);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, prod);
 }
 
 /**
  * Rewrite rule for a single token
  */
-PParserRewriteRule *parser_rewrite_token(PParser *P, char tok) {
+PParserRewriteRule *parser_rewrite_token(PParser *P, unsigned char tok) {
     assert_not_null(P);
-    return P_parser_rewrite_rule(P, tok, NULL);
+    assert(tok < P->num_tokens);
+    return P_parser_rewrite_rule(P, tok, P_LEXEME_EPSILON);
 }
 
 /**
@@ -319,5 +287,21 @@ PParserRewriteRule *parser_rewrite_token(PParser *P, char tok) {
  */
 PParserRewriteRule *parser_rewrite_epsilon(PParser *P) {
     assert_not_null(P);
-    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, NULL);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, P_LEXEME_EPSILON);
+}
+
+/**
+ * Return whether or not a rule is a production rule.
+ */
+int parser_rule_is_production(PParserRewriteRule *R) {
+    assert_not_null(R);
+    return R->production != P_LEXEME_EPSILON;
+}
+
+/**
+ * Return whether or not a rule is a token rule.
+ */
+int parser_rule_is_token(PParserRewriteRule *R) {
+    assert_not_null(R);
+    return R->lexeme != P_LEXEME_EPSILON;
 }

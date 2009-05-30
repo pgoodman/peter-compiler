@@ -20,6 +20,7 @@
 
 #include "p-prod-common.h"
 #include "p-parser-types.h"
+#include "p-adt.h"
 
 PParseTree *parser_parse_tokens(PParser *, PTokenGenerator *);
 void parser_free_parse_tree(PParseTree *tree);

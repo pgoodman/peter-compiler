@@ -8,14 +8,25 @@
 
 #include <p-lexer.h>
 
+static unsigned long int num_allocations = 0;
+
+#define token_mem_alloc(x) mem_alloc(x); ++num_allocations
+#define token_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
+#define token_mem_free(x) mem_free(x); --num_allocations
+#define token_mem_error(x) mem_error(x)
+
+unsigned long int token_num_allocated_pointers(void) {
+    return num_allocations;
+}
+
 /**
  * Allocate a new token.
  */
 PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col) {
 
-    PToken *tok = mem_alloc(sizeof(PToken *));
+    PToken *tok = token_mem_alloc(sizeof(PToken *));
     if(is_null(tok)) {
-        mem_error("Unable to allocate a token on the heap.");
+        token_mem_error("Unable to allocate a token on the heap.");
     }
 
     tok->lexeme = lexeme;
@@ -37,7 +48,7 @@ void token_free(PToken *tok) {
         tok->val = NULL;
     }
 
-    mem_free(tok);
+    token_mem_free(tok);
 }
 
 /**
@@ -50,7 +61,7 @@ static void L_generator_free(PTokenGenerator *G) {
     file_free(G->stream);
     G->stream = NULL;
 
-    mem_free(G);
+    token_mem_free(G);
 }
 
 /**
