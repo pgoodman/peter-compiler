@@ -156,7 +156,6 @@ clear_spaces:
 
 
 typedef enum {
-    P_GRAMMAR,
     P_PRODUCTIONS,
     P_PRODUCTION,
     P_PRODUCTION_RULES,
@@ -177,8 +176,7 @@ int main(void) {
 
     PTreeGenerator *tree_gen;
 
-    char production_names[8][16] = {
-        "Grammar",
+    char production_names[7][16] = {
         "Productions",
         "Production",
         "ProductionRules",
@@ -196,21 +194,17 @@ int main(void) {
     };
 
     P = parser_alloc(
-        P_GRAMMAR,
-        8, /* number of productions */
+        P_PRODUCTIONS, /* production to start matching with */
+        7, /* number of productions */
         6, /* number of tokens */
         4, /* number of useful tokens */
         useful_tokens /* array of useful tokens */
     );
 
-    parser_add_production(P, P_GRAMMAR, 1,
+    parser_add_production(P, P_PRODUCTIONS, 2,
         parser_rule_sequence(P, 2,
             parser_rewrite_function(P, P_PRODUCTION),
-            parser_rewrite_function(P, P_PRODUCTIONS)));
-
-    parser_add_production(P, P_PRODUCTIONS, 2,
-        parser_rule_sequence(P, 1,
-            parser_rewrite_function(P, P_GRAMMAR)),
+            parser_rewrite_function(P, P_PRODUCTIONS)),
         parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P)));
 
@@ -256,7 +250,9 @@ int main(void) {
     /* parse the grammar file */
     T = parser_parse_tokens(P, G);
 
-    tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
+    printf("root %p \n\n", (void *)T);
+
+    tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_PREORDER);
     while(generator_next(tree_gen)) {
         T = generator_current(tree_gen);
 
@@ -272,6 +268,7 @@ int main(void) {
         }
 
         if(T->type == 0) {
+
             printf("\"%p\" [label=\"%s\"]\n", (void *)T, production_names[((PProductionTree *) T)->production]);
         }
     }
@@ -280,8 +277,6 @@ int main(void) {
     generator_free(G);
     parser_free(P);
     parser_free_parse_tree(T);
-
-
 
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1

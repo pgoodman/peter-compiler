@@ -114,14 +114,12 @@ static void P_free_production_val(PParserProduction *P) {
  */
 void parser_free(PParser *P) {
     unsigned int i;
-    PParserProduction *prod;
+    PParserProduction prod;
 
     assert_not_null(P);
 
     for(i = 0; i < P->num_productions; ++i) {
-        prod = P->productions[i];
-        gen_list_free_chain(prod->alternatives, (PDelegate) &P_free_alternative_rules);
-        mem_free(prod);
+        gen_list_free_chain(P->productions[i].alternatives, (PDelegate) &P_free_alternative_rules);
     }
 
     mem_free(P->productions);
@@ -143,7 +141,7 @@ void parser_add_production(PParser *P,
                            short num_seqs,
                            PParserRuleResult arg1, ...) {
     PParserRuleResult curr_seq;
-    PParserProduction *prod = NULL;
+    PParserProduction *prod;
     PGenericList *curr = NULL;
 
     va_list seqs;
@@ -153,10 +151,7 @@ void parser_add_production(PParser *P,
     assert(0 < num_seqs);
     assert(!P->is_closed);
 
-    prod = mem_alloc(sizeof(PParserProduction));
-    if(is_null(prod)) {
-        mem_error("Unable to allocate new production on the heap.");
-    }
+    prod = P->productions + production;
 
     prod->production = production;
     prod->max_num_useful_rewrite_rules = 0;
@@ -176,9 +171,6 @@ void parser_add_production(PParser *P,
         curr_seq = va_arg(seqs, PParserRuleResult);
         curr = (PGenericList *) list_get_next((PList *) curr);
     }
-
-    /* add in this production */
-    P->productions[production] = prod;
 
     return;
 }
