@@ -22,7 +22,7 @@ typedef struct PParser {
     char is_closed;
 
     /* keep track of all of the productions for the parsing grammar. */
-    PParserProduction **productions;
+    PParserProduction *productions;
     unsigned int num_productions;
 
     /* keep track of rules used in productions, this does not keep track of

@@ -376,6 +376,30 @@ static void P_free_token_from_tree(PParseTree *tree) {
 }
 
 /**
+ * We've matched a non/terminal, advance to the next thing to match.
+ */
+static void P_frame_rule_succeeded(P_StackFrame *frame) {
+    assert_not_null(frame);
+    frame->curr_rule_list = (PGenericList *) list_get_next(
+        (PList *) frame->curr_rule_list
+    );
+}
+
+/**
+ * The current sequence of rules failed, go to the next one.
+ */
+static void P_frame_rule_sequence_failed(P_StackFrame *frame) {
+    assert_not_null(frame);
+
+    frame->curr_rule_list = (PGenericList *) gen_list_get_elm(
+        frame->alternative_rules
+    );
+    frame->alternative_rules = (PGenericList *) list_get_next(
+        (PList *) frame->alternative_rules
+    );
+}
+
+/**
  * Free a parse tree, in its entirety.
  */
 void parser_free_parse_tree(PParseTree *tree) {
@@ -459,7 +483,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
     assert_not_null(P);
     assert_not_null(G);
-    assert(is_not_null(P->productions[P->start_production]));
+    assert(is_not_null(P->productions + P->start_production));
 
     /* error reporting info */
     fpr.column = 0;
@@ -503,7 +527,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
      * involves registering the start of the token list as the furthest back
      * we can backtrack.
      */
-    curr_production = P->productions[P->start_production];
+    curr_production = P->productions + P->start_production;
 
     PARSER_DEBUG(printf("pushing production onto stack.\n");)
 
@@ -581,12 +605,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 PARSER_DEBUG(printf("backtracking.\n");)
 
                 /* switch rules */
-                frame->curr_rule_list = (PGenericList *) gen_list_get_elm(
-                    frame->alternative_rules
-                );
-                frame->alternative_rules = (PGenericList *) list_get_next(
-                    (PList *) frame->alternative_rules
-                );
+                P_frame_rule_sequence_failed(frame);
 
                 /* backtrack to where this production tried to start matching
                  * from.
@@ -617,7 +636,9 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 /* we have parsed all of the tokens. there is no need to do any
                  * work on the stack or the cache. */
                 } else {
+
                     PARSER_DEBUG(printf("done parsing.\n");)
+
                     j++; /* make GCC not optimize out this block. */
                     break;
                 }
@@ -653,12 +674,11 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                          * production in the tree and ignore that production. */
                         } else {
 
-                            parse_tree = (PParseTree *) tree_get_branch(
+                            frame->parse_tree = (PParseTree *) tree_get_branch(
                                 (PTree *) frame->parse_tree,
                                 0
                             );
 
-                            frame->parse_tree = parse_tree;
                             tree_add_branch(
                                 (PTree *) frame->caller->parse_tree,
                                 (PTree *) frame->parse_tree
@@ -695,9 +715,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 /* tell the caller (now: frame) to advance its current rule list
                  * to the next rewrite rule.
                  */
-                frame->curr_rule_list = (PGenericList *) list_get_next(
-                    (PList *) frame->curr_rule_list
-                );
+                P_frame_rule_succeeded(frame);
             }
 
         } else if(is_not_null(curr)) {
@@ -748,9 +766,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                         }
 
                         /* advance to the next rewrite rule */
-                        frame->curr_rule_list = (PGenericList *) list_get_next(
-                            (PList *) frame->curr_rule_list
-                        );
+                        P_frame_rule_succeeded(frame);
 
                         /* advance to a future token. */
                         curr = cached_result->end;
@@ -767,7 +783,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     P_frame_stack_push(&frame, P_frame_stack_alloc(
                         &unused,
-                        P->productions[curr_rule->production],
+                        P->productions + (curr_rule->production),
                         curr,
                         all_parse_trees,
                         record_tree
@@ -806,7 +822,6 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     /* store the match as a parse tree */
                     if(record_tree && P->token_is_useful[(int) curr_token->lexeme]) {
-                        printf("%s %d \n", curr_token->val->str, (unsigned int)curr_token->lexeme);
                         tree_add_branch(
                             (PTree *) frame->parse_tree,
                             (PTree *) curr
@@ -815,9 +830,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     /* advance the token and rewrite rule */
                     curr = curr->next;
-                    frame->curr_rule_list = (PGenericList *) list_get_next(
-                        (PList *) frame->curr_rule_list
-                    );
+                    P_frame_rule_succeeded(frame);
 
                 /* the tokens do not match, backtrack. */
                 } else {
@@ -836,9 +849,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * token. */
             } else {
 
-                frame->curr_rule_list = (PGenericList *) list_get_next(
-                    (PList *) frame->curr_rule_list
-                );
+                P_frame_rule_succeeded(frame);
             }
 
         /* the parser stack has something on it but we've reached the end of
@@ -853,9 +864,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
             if(is_not_null(frame->curr_rule_list)) {
                 curr_rule = gen_list_get_elm(frame->curr_rule_list);
                 if(P_LEXEME_EPSILON == curr_rule->lexeme) {
-                    frame->curr_rule_list = (PGenericList *) list_get_next(
-                        (PList *) frame->curr_rule_list
-                    );
+                    P_frame_rule_succeeded(frame);
                     continue;
                 }
             }

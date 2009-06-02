@@ -47,7 +47,7 @@ typedef struct {
 void *gen_dict_alloc(const size_t dict_struct_size,
                      uint32_t num_slots,
                      H_hash_fnc_type key_hash_fnc,
-                     H_collision_fnc_type val_collision_fnc);
+                     H_collision_fnc_type key_collision_fnc);
 
 H_type *dict_alloc(const uint32_t num_slots,
                    H_hash_fnc_type key_hash_fnc,

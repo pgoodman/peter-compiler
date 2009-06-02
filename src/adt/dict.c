@@ -123,7 +123,7 @@ static void H_grow(H_type *H ) {
 void *gen_dict_alloc(const size_t dict_struct_size,
                      uint32_t num_slots,
                      H_hash_fnc_type key_hash_fnc,
-                     H_collision_fnc_type val_collision_fnc) {
+                     H_collision_fnc_type key_collision_fnc) {
     H_type *H;
     H_Entry **elms;
     int i;
@@ -131,7 +131,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
 
     assert(sizeof(H_type) <= dict_struct_size);
     assert_not_null(key_hash_fnc);
-    assert_not_null(val_collision_fnc);
+    assert_not_null(key_collision_fnc);
 
     table = dict_mem_alloc(dict_struct_size);
     if(is_null(table)) {
@@ -158,7 +158,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
     H->num_slots = num_slots;
     H->num_used_slots = 0;
     H->key_hash_fnc = key_hash_fnc;
-    H->collision_fnc = val_collision_fnc;
+    H->collision_fnc = key_collision_fnc;
     H->prime_index = i;
     H->grow_table = 0;
 

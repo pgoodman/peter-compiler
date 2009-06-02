@@ -1,10 +1,6 @@
 
-Grammar
-    : Production Productionslef
-    ;
-
 Productions
-    : Grammar
+    : Production Productions
     : <>
     ;
 
