@@ -8,14 +8,11 @@
 
 #include <p-parser.h>
 
-#define P_SIZE_OF_THUNK (0 \
-         + sizeof(unsigned char) \
-         + sizeof(PGenericList *) \
-        ) / sizeof(char)
+#define P_SIZE_OF_THUNK (sizeof(P_Thunk) / sizeof(char))
 #define P_PRODUCTION_FAILED ((void *) 10)
 #define P_PRODUCTION_TRY_LR ((void *) 11)
 #define P_SIZE_OF_PARSE_TREE (sizeof(PParseTree *) / sizeof(char))
-#define PARSER_DEBUG(x)
+#define PARSER_DEBUG(x) x
 
 
 /* Type representing the necessary information to uniquely identify the result
@@ -113,22 +110,32 @@ typedef struct P_StackFrame {
  * Hash function that converts a thunk to a char array. Thunks are used as the
  * keys into a hash table for cached parse results.
  */
-static uint32_t P_thunk_hash_fnc(void *pointer) {
+static uint32_t P_thunk_hash_fnc(P_Thunk *thunk) {
     union {
         P_Thunk thunk;
-        char thunk_as_chars[P_SIZE_OF_THUNK];
+        char chars[P_SIZE_OF_THUNK];
     } switcher;
-    switcher.thunk = *((P_Thunk *) pointer);
-    return murmur_hash(switcher.thunk_as_chars, P_SIZE_OF_THUNK, 73);
+
+    switcher.thunk.list = thunk->list;
+    switcher.thunk.production = thunk->production;
+
+    return murmur_hash(switcher.chars, P_SIZE_OF_THUNK, 73);
 }
 
 /**
  * Check for thunk collisions.
  */
-static char P_thunk_collision_fnc(void *thunk1, void *thunk2) {
-    P_Thunk *t1 = thunk1,
-            *t2 = thunk2;
+static char P_thunk_collision_fnc(P_Thunk *t1, P_Thunk *t2) {
     return ((t1->list != t2->list) || (t1->production != t2->production));
+}
+
+/**
+ * Free a duplicate thunk.
+ */
+static void P_free_duplicate_thunk(P_Thunk *thunk) {
+    if(thunk != P_PRODUCTION_FAILED) {
+        mem_free(thunk);
+    }
 }
 
 /**
@@ -162,7 +169,6 @@ static void P_free_cached_result(void *result) {
  */
 static P_Thunk *P_alloc_thunk(unsigned char production, PTerminalTree *list) {
     P_Thunk *thunk = mem_alloc(sizeof(P_Thunk));
-
     if(is_null(thunk)) {
         mem_error("Unable to heap allocate a thunk.");
     }
@@ -254,16 +260,6 @@ static void P_frame_stack_pop(P_StackFrame **unused, P_StackFrame **stack) {
     frame->caller = (*unused);
     (*unused) = frame;
 
-    /*
-    frame->alternative_rules = NULL;
-    frame->backtrack_point = NULL;
-    frame->caller = NULL;
-    frame->curr_rule_list = NULL;
-    frame->do_backtrack = 0;
-    frame->parse_tree = NULL;
-    frame->production = NULL;
-    */
-
     return;
 }
 
@@ -285,6 +281,16 @@ static PTerminalTree *P_alloc_terminal_tree(PToken *tok, PDictionary *all_trees)
     dict_set(all_trees, T, T, &delegate_do_nothing);
 
     return T;
+}
+
+/**
+ * Allocate an epsilon tree on the heap.
+ */
+static PParseTree *P_alloc_epsilon_tree(PDictionary *all_trees) {
+    PParseTree *epsilon_tree = tree_alloc(sizeof(PParseTree), 0);
+    ((PParseTree *) epsilon_tree)->type = P_PARSE_TREE_EPSILON;
+    dict_set(all_trees, epsilon_tree, epsilon_tree, &delegate_do_nothing);
+    return epsilon_tree;
 }
 
 /**
@@ -378,7 +384,7 @@ static void P_free_token_from_tree(PParseTree *tree) {
 /**
  * We've matched a non/terminal, advance to the next thing to match.
  */
-static void P_frame_rule_succeeded(P_StackFrame *frame) {
+static void P_frame_set_rule_succeeded(P_StackFrame *frame) {
     assert_not_null(frame);
     frame->curr_rule_list = (PGenericList *) list_get_next(
         (PList *) frame->curr_rule_list
@@ -388,7 +394,7 @@ static void P_frame_rule_succeeded(P_StackFrame *frame) {
 /**
  * The current sequence of rules failed, go to the next one.
  */
-static void P_frame_rule_sequence_failed(P_StackFrame *frame) {
+static void P_frame_set_rule_sequence_failed(P_StackFrame *frame) {
     assert_not_null(frame);
 
     frame->curr_rule_list = (PGenericList *) gen_list_get_elm(
@@ -397,6 +403,69 @@ static void P_frame_rule_sequence_failed(P_StackFrame *frame) {
     frame->alternative_rules = (PGenericList *) list_get_next(
         (PList *) frame->alternative_rules
     );
+}
+
+/**
+ * Get the current rule from the frame.
+ */
+static PParserRewriteRule *P_frame_get_curr_rule(P_StackFrame *frame) {
+    assert_not_null(frame);
+    assert_not_null(frame->curr_rule_list);
+
+    return (PParserRewriteRule *) gen_list_get_elm(frame->curr_rule_list);
+}
+
+/**
+ * Check if the frame has a next rule.
+ */
+static int P_frame_has_next_rule(P_StackFrame *frame) {
+    assert_not_null(frame);
+    return is_not_null(frame->curr_rule_list);
+}
+
+/**
+ * Record the parse tree for the successful application of a parse tree.
+ */
+static void P_record_production_tree(PParseTree *temp_tree,
+                                     PParseTree *parse_tree,
+                                     PParserRewriteRule *curr_rule) {
+
+    unsigned short j = tree_get_num_branches((PTree *) temp_tree);
+
+    if(!parser_rule_is_non_excludable(curr_rule)
+    && j <= 1
+    && temp_tree->type == P_PARSE_TREE_PRODUCTION) {
+
+        /* this is a production with only one child filled,
+         * promote that single child node to the place of this
+         * production in the tree and ignore that production. */
+        if(j > 0) {
+            tree_force_add_branch(
+                (PTree *) parse_tree,
+                tree_get_branch(
+                    (PTree *) temp_tree,
+                    0
+                )
+            );
+        }
+
+    /* this node must be added to the tree, has more than one child, or must
+     * have its children included in the parse tree. */
+    } else {
+        if(parser_rule_subsume(curr_rule)) {
+            tree_force_add_branch_children(
+                (PTree *) parse_tree,
+                (PTree *) temp_tree
+            );
+        } else {
+            tree_force_add_branch(
+                (PTree *) parse_tree,
+                (PTree *) temp_tree
+            );
+        }
+    }
+
+    return;
 }
 
 /**
@@ -519,8 +588,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
      */
     thunk_table = dict_alloc(
         token_result.num_tokens,
-        &P_thunk_hash_fnc,
-        &P_thunk_collision_fnc
+        (PDictionaryHashFunc) &P_thunk_hash_fnc,
+        (PDictionaryCollisionFunc) &P_thunk_collision_fnc
     );
 
     /* get the starting production and push our first stack frame on. This
@@ -583,7 +652,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                        frame->backtrack_point
                    ),
                    P_PRODUCTION_FAILED,
-                   &delegate_do_nothing
+                   (PDictionaryFreeValueFunc) &P_free_duplicate_thunk
                 );
 
                 /* pop the frame */
@@ -605,7 +674,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 PARSER_DEBUG(printf("backtracking.\n");)
 
                 /* switch rules */
-                P_frame_rule_sequence_failed(frame);
+                P_frame_set_rule_sequence_failed(frame);
 
                 /* backtrack to where this production tried to start matching
                  * from.
@@ -623,7 +692,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
          * current rule list. if there is no parent frame then we have
          * successfully parsed the tokens.
          */
-        } else if(is_null(frame->curr_rule_list)) {
+        } else if(!P_frame_has_next_rule(frame)) {
 
             if(is_null(frame->caller)) {
 
@@ -656,43 +725,11 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                 /* merge the parse trees */
                 if(record_tree) {
-
-                    j = tree_get_num_branches((PTree *) frame->parse_tree);
-
-                    if(j <= 1 &&
-                       frame->parse_tree->type == P_PARSE_TREE_PRODUCTION) {
-
-                        /* this is a production that succeeded on an epsilon
-                         * transition. do not record this production in the
-                         * tree. */
-                        if(j == 0) {
-
-                            /*frame->parse_tree = NULL;*/
-
-                        /* this is a production with only one child filled,
-                         * promote that single child node to the place of this
-                         * production in the tree and ignore that production. */
-                        } else {
-
-                            frame->parse_tree = (PParseTree *) tree_get_branch(
-                                (PTree *) frame->parse_tree,
-                                0
-                            );
-
-                            tree_add_branch(
-                                (PTree *) frame->caller->parse_tree,
-                                (PTree *) frame->parse_tree
-                            );
-                        }
-
-                    /* this is a node with > 1 child nodes, we must record it. */
-                    } else {
-
-                        tree_add_branch(
-                            (PTree *) frame->caller->parse_tree,
-                            (PTree *) frame->parse_tree
-                        );
-                    }
+                    P_record_production_tree(
+                        frame->parse_tree,
+                        frame->caller->parse_tree,
+                        P_frame_get_curr_rule(frame->caller)
+                    );
                 }
 
                 /* cache the successful application of this production. */
@@ -715,7 +752,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 /* tell the caller (now: frame) to advance its current rule list
                  * to the next rewrite rule.
                  */
-                P_frame_rule_succeeded(frame);
+                P_frame_set_rule_succeeded(frame);
             }
 
         } else if(is_not_null(curr)) {
@@ -728,6 +765,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * stack.
              */
             if(parser_rule_is_production(curr_rule)) {
+
+match_production:
 
                 /* check if we have a cached this result of applying this
                  * particular production to our current position in the token
@@ -759,14 +798,14 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                         /* merge the trees */
                         if(record_tree) {
-                            tree_add_branch(
+                            tree_force_add_branch(
                                 (PTree *) frame->parse_tree,
                                 (PTree *) cached_result->tree
                             );
                         }
 
                         /* advance to the next rewrite rule */
-                        P_frame_rule_succeeded(frame);
+                        P_frame_set_rule_succeeded(frame);
 
                         /* advance to a future token. */
                         curr = cached_result->end;
@@ -801,8 +840,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 ++num_tok_comparisons;
 
                 /* record the farthest point we've gotten to. */
-                if((curr_token->line > fpr.line) ||
-                   (curr_token->line == fpr.line && curr_token->column > fpr.column)) {
+                if((curr_token->line > fpr.line)
+                || (curr_token->line == fpr.line && curr_token->column > fpr.column)) {
 
                     fpr.column = curr_token->column;
                     fpr.line = curr_token->line;
@@ -821,8 +860,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                     })
 
                     /* store the match as a parse tree */
-                    if(record_tree && P->token_is_useful[(int) curr_token->lexeme]) {
-                        tree_add_branch(
+                    if(record_tree && parser_rule_is_non_excludable(curr_rule)) {
+                        tree_force_add_branch(
                             (PTree *) frame->parse_tree,
                             (PTree *) curr
                         );
@@ -830,7 +869,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
                     /* advance the token and rewrite rule */
                     curr = curr->next;
-                    P_frame_rule_succeeded(frame);
+                    P_frame_set_rule_succeeded(frame);
 
                 /* the tokens do not match, backtrack. */
                 } else {
@@ -848,28 +887,43 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
              * next rule in the current rule list, but *don't* move to the next
              * token. */
             } else {
+match_epsilon:
 
-                P_frame_rule_succeeded(frame);
+                if(record_tree && parser_rule_is_non_excludable(curr_rule)) {
+                    tree_force_add_branch(
+                        (PTree *) frame->parse_tree,
+                        (PTree *) P_alloc_epsilon_tree(all_parse_trees)
+                    );
+                }
+
+                P_frame_set_rule_succeeded(frame);
             }
 
         /* the parser stack has something on it but we've reached the end of
          * input, there are two cases to deal with:
          *   i) we need to match a series of epsilon transitions, which might
-         *      lead to a successful parse.
+         *      lead to a successful parse. These epsilon transitions could be
+         *      indirect (i.e. in productions) and so wee need to continue
+         *      trying to match regardless of not having anything to match
+         *      against.
          *   ii) we need to backtrack because what we're parsing is either
          *       missing information or the current derivation is such that
          *       we expect too much information. */
         } else {
 
-            if(is_not_null(frame->curr_rule_list)) {
-                curr_rule = gen_list_get_elm(frame->curr_rule_list);
-                if(P_LEXEME_EPSILON == curr_rule->lexeme) {
-                    P_frame_rule_succeeded(frame);
-                    continue;
-                }
-            }
+            if(P_frame_has_next_rule(frame)) {
+                curr_rule = P_frame_get_curr_rule(frame);
 
-            frame->do_backtrack = 1;
+                if(parser_rule_is_epsilon(curr_rule)) {
+                    goto match_epsilon;
+                } else if(parser_rule_is_production(curr_rule)) {
+                    goto match_production;
+                } else {
+                    frame->do_backtrack = 1;
+                }
+            } else {
+                frame->do_backtrack = 1;
+            }
         }
     }
 

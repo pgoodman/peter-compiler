@@ -1,34 +1,43 @@
 
 Productions
-    : Production Productions
+    : Production ^Productions
     : <>
     ;
 
 Production
-    : <non_terminal> ProductionRules <semicolon>
+    : -<non_terminal> ^ProductionRules <semicolon>
     ;
 
 ProductionRules
-    : ProductionRule ProductionRules
+    : -ProductionRule ^ProductionRules
     : <>
     ;
 
 ProductionRule
-    : <colon> Rules Decoration
+    : <colon> ^Rules Decoration
     ;
 
 Rules
-    : Rule Rules
+    : ^Rule ^Rules
     : <>
     ;
 
 Rule
-    : <non_terminal>
-    : <terminal>
-    : <epsilon>
+    : RuleFlag -<non_terminal>
+    : RuleFlag -<terminal>
+    : RuleFlag -<epsilon>
     ;
 
 Decoration
-    : <code>
+    : -<code>
     : <>
     ;
+
+RuleFlag
+    : -NonExcludable
+    : -Subsumable
+    : <>
+    ;
+
+NonExcludable : <dash> ;
+Subsumable : <up_arrow> ;

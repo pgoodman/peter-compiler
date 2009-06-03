@@ -22,34 +22,10 @@ typedef struct PString {
 
 PString *string_alloc_char(const char * const str, const uint32_t len );
 void string_free(PString * );
-char string_equal(const PString * const, const PString * const );
+int string_equal(const PString * const, const PString * const );
 uint32_t string_length(const PString * const );
 void string_convert_to_ascii(const PString * const, char * );
 void delegate_string_free(void *);
-
-#if 0
-typedef struct PString {
-    PInternalString* string;
-    char ref_count;
-} PString;
-
-typedef struct PStringHeap {
-
-    /* size for our string and tomb stone heaps.
-     */
-    int num_internal_strings,
-        num_external_strings,
-
-        num_used_external_strings,
-        num_used_internal_strings;
-
-    /* various places where different things are stored. */
-    PString *external_string_area;
-    PInternalString *internal_string_area;
-
-} PStringHeap;
-#endif
-
 unsigned long int string_num_allocated_pointers(void);
 
 #endif /* STDSTRING_H_ */

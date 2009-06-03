@@ -15,7 +15,8 @@
 /* parse tree, only used for productions, leaves are tokens :) */
 typedef enum {
     P_PARSE_TREE_PRODUCTION,
-    P_PARSE_TREE_TERMINAL
+    P_PARSE_TREE_TERMINAL,
+    P_PARSE_TREE_EPSILON
 } PParseTreeType;
 
 typedef struct PParseTree {

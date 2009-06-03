@@ -8,6 +8,7 @@
 
 #include <p-adt.h>
 
+#define P_LEXEME_EPSILON ((unsigned char) 0xff)
 #define P_SIZE_OF_REWRITE_RULE (sizeof(PParserRewriteRule) / sizeof(char))
 
 /**
@@ -42,9 +43,7 @@ static char P_rewrite_rule_collision_fnc(void *rule1, void *rule2) {
  */
 PParser *parser_alloc(unsigned char start_production,
                       size_t num_productions,
-                      size_t num_tokens,
-                      size_t num_useful_tokens,
-                      unsigned char useful_tokens[]) {
+                      size_t num_tokens) {
 
     PParser *P = mem_alloc(sizeof(PParser));
     size_t i;
@@ -65,6 +64,8 @@ PParser *parser_alloc(unsigned char start_production,
      * in order to not repeatedly heap allocate the same rule twice. A rewrite
      * rule identifies a token to match, a production to call, or nothing
      * (epsilon rule) that is a blind accept.
+     *
+     * TODO: Use a proper Set adt here instead
      */
     P->rules = dict_alloc(
         15,
@@ -72,22 +73,8 @@ PParser *parser_alloc(unsigned char start_production,
         &P_rewrite_rule_collision_fnc
     );
 
-    /* table for tokens and their usefulness. */
     P->num_tokens = num_tokens;
-    P->token_is_useful = mem_calloc(num_tokens, sizeof(unsigned char));
-    if(is_null(P->token_is_useful)) {
-        mem_error("Unable to allocate token usefulness table on the heap.");
-    }
-    for(i = 0; i < num_useful_tokens; ++i) {
-        P->token_is_useful[useful_tokens[i]] = 1;
-    }
-
-    /* signal that this parser is open to have productions and their rules added
-     * to it.
-     */
     P->is_closed = 0;
-
-    /* the production to start parsing with. */
     P->start_production = start_production;
 
     return P;
@@ -123,7 +110,6 @@ void parser_free(PParser *P) {
     }
 
     mem_free(P->productions);
-    mem_free(P->token_is_useful);
     dict_free(P->rules, &delegate_mem_free, &delegate_do_nothing);
     mem_free(P);
 }
@@ -197,6 +183,7 @@ PParserRuleResult parser_rule_sequence(PParser *P,
 
     result.num_useful_elms = num_rules;
     result.rule = gen_list_alloc_chain(num_rules);
+
     curr_rule = arg1;
     curr = result.rule;
 
@@ -205,10 +192,8 @@ PParserRuleResult parser_rule_sequence(PParser *P,
 
         /* this is not a useful rule, make sure that we know not to record
          * it in any parse trees. */
-        if((P_LEXEME_EPSILON == curr_rule->production)
-           && (P_LEXEME_EPSILON == curr_rule->lexeme
-               || !(P->token_is_useful[(int) curr_rule->lexeme]))) {
-
+        if(P_LEXEME_EPSILON == curr_rule->production
+        && !curr_rule->flag) {
             --(result.num_useful_elms);
         }
 
@@ -227,73 +212,112 @@ PParserRuleResult parser_rule_sequence(PParser *P,
  *   3) epsilon rules.
  */
 static PParserRewriteRule *P_parser_rewrite_rule(PParser *P,
-                                                 unsigned char tok,
-                                                 unsigned char prod) {
-    PParserRewriteRule rewrite_rule;
-    PParserRewriteRule *R = NULL;
+                                                 const unsigned char tok,
+                                                 const unsigned char prod,
+                                                 unsigned char flag) {
+    PParserRewriteRule s_rule,
+                       *rule = NULL;
 
     assert_not_null(P);
 
     /* make a thunk out of it to search for in the hash table */
-    rewrite_rule.production = prod;
-    rewrite_rule.lexeme = tok;
+    s_rule.production = prod;
+    s_rule.lexeme = tok;
+    s_rule.flag = flag;
 
-    if(dict_is_set(P->rules, &rewrite_rule)) {
-        return ((PParserRewriteRule *) dict_get(P->rules, &rewrite_rule));
+    if(dict_is_set(P->rules, &s_rule)) {
+        return ((PParserRewriteRule *) dict_get(P->rules, &s_rule));
     }
 
     /* nope, need to allocate it :( */
-    R = mem_alloc(sizeof(PParserRewriteRule));
-    if(is_null(R)) {
+    rule = mem_alloc(sizeof(PParserRewriteRule));
+    if(is_null(rule)) {
         mem_error("Unable to allocate rewrite rule on the heap.");
     }
 
-    R->production = prod;
-    R->lexeme = tok;
+    rule->production = prod;
+    rule->lexeme = tok;
+    rule->flag = flag;
 
-    dict_set(P->rules, R, R, &delegate_do_nothing);
+    dict_set(P->rules, rule, rule, &delegate_do_nothing);
 
-    return R;
+    return rule;
 }
 
 /**
- * Rewrite rule for a single production function
+ * Rewrite rule for a single production.
  */
-PParserRewriteRule *parser_rewrite_function(PParser *P, unsigned char prod) {
+PParserRewriteRule *parser_rewrite_production(PParser *P,
+                                              unsigned char prod,
+                                              unsigned char flag) {
     assert_not_null(P);
     assert(prod < P->num_productions);
-    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, prod);
+    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, prod, flag);
 }
 
 /**
- * Rewrite rule for a single token
+ * Rewrite rule for a single token.
  */
-PParserRewriteRule *parser_rewrite_token(PParser *P, unsigned char tok) {
+PParserRewriteRule *parser_rewrite_token(PParser *P,
+                                         unsigned char tok,
+                                         unsigned char flag) {
     assert_not_null(P);
     assert(tok < P->num_tokens);
-    return P_parser_rewrite_rule(P, tok, P_LEXEME_EPSILON);
+    return P_parser_rewrite_rule(P, tok, P_LEXEME_EPSILON, flag);
 }
 
 /**
  * Rewrite rule for no token required.
  */
-PParserRewriteRule *parser_rewrite_epsilon(PParser *P) {
+PParserRewriteRule *parser_rewrite_epsilon(PParser *P,
+                                           unsigned char flag) {
     assert_not_null(P);
-    return P_parser_rewrite_rule(P, P_LEXEME_EPSILON, P_LEXEME_EPSILON);
+    return P_parser_rewrite_rule(
+        P,
+        P_LEXEME_EPSILON,
+        P_LEXEME_EPSILON,
+        flag
+    );
 }
 
 /**
  * Return whether or not a rule is a production rule.
  */
-int parser_rule_is_production(PParserRewriteRule *R) {
-    assert_not_null(R);
-    return R->production != P_LEXEME_EPSILON;
+int parser_rule_is_production(PParserRewriteRule *rule) {
+    assert_not_null(rule);
+    return rule->production != P_LEXEME_EPSILON;
 }
 
 /**
  * Return whether or not a rule is a token rule.
  */
-int parser_rule_is_token(PParserRewriteRule *R) {
-    assert_not_null(R);
-    return R->lexeme != P_LEXEME_EPSILON;
+int parser_rule_is_token(PParserRewriteRule *rule) {
+    assert_not_null(rule);
+    return rule->lexeme != P_LEXEME_EPSILON;
+}
+
+/**
+ * Return whether or not a rule is an epsilon rule.
+ */
+int parser_rule_is_epsilon(PParserRewriteRule *rule) {
+    assert_not_null(rule);
+    return (rule->lexeme == P_LEXEME_EPSILON)
+        && (rule->production == P_LEXEME_EPSILON);
+}
+
+/**
+ * Return whether or not the current rule can be exluded from the parse tree.
+ */
+int parser_rule_is_non_excludable(PParserRewriteRule *rule) {
+    assert_not_null(rule);
+    return (rule->flag == 1);
+}
+
+/**
+ * Return whether or not the children nodes in the parse tree should be
+ * promoted.
+ */
+int parser_rule_subsume(PParserRewriteRule *rule) {
+    assert_not_null(rule);
+    return (rule->flag == 2);
 }

@@ -78,8 +78,9 @@ void string_convert_to_ascii(const PString * const S, char *ascii_version ) {
     assert_not_null(S);
     assert_not_null(ascii_version);
 
-    for(i = 0; i < S->len; ++i)
+    for(i = 0; i < S->len; ++i) {
         ascii_version[i] = S->str[i];
+    }
 
     ascii_version[S->len] = 0;
     return;
@@ -103,110 +104,21 @@ void delegate_string_free(void *str ) {
 /**
  * Check if two strings contain the same characters.
  */
-char string_equal(const PString * const A, const PString * const B ) {
-    char eql = 0;
-    uint32_t i,
+int string_equal(const PString * const A, const PString * const B ) {
+    uint32_t i = 0,
              len;
+    PChar *a = NULL,
+          *b = NULL;
+
     assert_not_null(A);
     assert_not_null(B);
 
     len = A->len;
 
     if(len == B->len) {
-
-        PChar *a = A->str,
-              *b = B->str;
-
-        for(i = 0; i < len && a[i] == b[i]; ++i)
+        for(a = A->str, b = B->str, i = 0; i < len && a[i] == b[i]; ++i)
             ;
-
-        eql = (i == len);
     }
 
-    return eql;
+    return (i == len);
 }
-
-#if 0
-PStringHeap *string_heap_alloc(void) {
-
-    /* try to allocate the object with which we will use to store different sets
-     * of strings. */
-    PStringHeap *heap = string_mem_alloc(sizeof(PStringHeap));
-    if(NULL == heap) {
-        string_mem_error("Unable to allocate new string heap.");
-    }
-
-    /* try to allocate the starting heap space for the strings */
-    PInternalString *pointer_heap = string_mem_calloc( \
-        sizeof(PInternalString), \
-        P_STRING_HEAP_START_SIZE \
-    );
-
-    if(NULL == pointer_heap) {
-        string_mem_error("Unable to allocate heap space for a new string heap.")
-    }
-
-    /* try to allocate the starting heap space for the tomb stones. */
-    PString *tombstone_heap = string_mem_calloc( \
-        sizeof(PString), \
-        P_STRING_HEAP_START_SIZE \
-    );
-
-    heap->internal_string_area = pointer_heap;
-    heap->external_string_area = tombstone_heap;
-
-    heap->num_internal_strings = P_STRING_HEAP_START_SIZE;
-    heap->num_external_strings = P_STRING_HEAP_START_SIZE;
-
-    heap->num_used_internal_strings = 0;
-    heap->num_used_external_strings = 0;
-
-    return heap;
-}
-
-static PInternalString *string_internal_alloc(PStringHeap *H ) {
-    PInternalString *IS;
-
-    return IS;
-}
-
-static PString *string_external_alloc(PStringHeap *H ) {
-    PString *S;
-
-    // try to either re-allocate space.
-    if(H->num_used_external_strings >= H->num_external_strings) {
-        H->external_string_area = string_mem_realloc( \
-            H->external_string_area, \
-            (H->num_external_strings * 2) \
-        );
-
-        if(NULL == H->external_string_area) {
-            string_mem_error("Unable to expand external string heap.");
-        }
-    }
-
-    ++(H->num_used_external_strings);
-
-    return S;
-}
-
-static PInternalChar *string_char_alloc(uint32_t len ) {
-    PInternalChar C = string_mem_alloc(sizeof(PInternalChar) * len);
-
-    if(NULL == C) {
-        string_mem_error("Unable to allocate string on heap.");
-    }
-
-    return C;
-}
-
-PString *string_alloc(PStringHeap *H, int str_len ) {
-    PString *S;
-    PInternalString *IS;
-
-    assert_not_null(H);
-
-    return S;
-}
-
-#endif

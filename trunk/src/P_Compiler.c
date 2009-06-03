@@ -21,7 +21,22 @@ enum {
     L_EPSILON,
     L_COLON,
     L_SEMICOLON,
-    L_CODE
+    L_CODE,
+    L_DASH,
+    L_UP_ARROW
+};
+
+enum {
+    P_PRODUCTIONS,
+    P_PRODUCTION,
+    P_PRODUCTION_RULES,
+    P_PRODUCTION_RULE,
+    P_RULES,
+    P_RULE,
+    P_DECORATION,
+    P_RULE_FLAG,
+    P_NON_EXCLUDABLE,
+    P_SUBSUMABLE
 };
 
 typedef int (*char_predicate_t)(int);
@@ -139,6 +154,14 @@ clear_spaces:
             result.str = string_alloc_char(";", 1);
             lexeme = L_SEMICOLON;
             break;
+        case '-':
+            result.str = string_alloc_char("-", 1);
+            lexeme = L_DASH;
+            break;
+        case '^':
+            result.str = string_alloc_char("^", 1);
+            lexeme = L_UP_ARROW;
+            break;
         default:
             if(ident_char(C)) {
                 result = accumulate_chars(&ident_char, S, C, G);
@@ -154,109 +177,27 @@ clear_spaces:
     return token_alloc(lexeme, result.str, G->line, G->column);
 }
 
+static char production_names[10][16] = {
+    "Productions",
+    "Production",
+    "ProductionRules",
+    "ProductionRule",
+    "Rules",
+    "Rule",
+    "Decoration",
+    "RuleFlag",
+    "NonExludable",
+    "Subsumable"
+};
 
-typedef enum {
-    P_PRODUCTIONS,
-    P_PRODUCTION,
-    P_PRODUCTION_RULES,
-    P_PRODUCTION_RULE,
-    P_RULES,
-    P_RULE,
-    P_DECORATION
-} PProduction;
-
-int main(void) {
-
-    PParser *P;
-    PParseTree *T;
-    PTokenGenerator *G = token_generator_alloc(
-        "src/grammars/parser.g",
-        (PFunction) &lexer_grammar_token_generator
-    );
-
-    PTreeGenerator *tree_gen;
-
-    char production_names[7][16] = {
-        "Productions",
-        "Production",
-        "ProductionRules",
-        "ProductionRule",
-        "Rules",
-        "Rule",
-        "Decoration"
-    };
-
-    unsigned char useful_tokens[] = {
-        L_TERMINAL,
-        L_NON_TERMINAL,
-        L_CODE,
-        L_EPSILON
-    };
-
-    P = parser_alloc(
-        P_PRODUCTIONS, /* production to start matching with */
-        7, /* number of productions */
-        6, /* number of tokens */
-        4, /* number of useful tokens */
-        useful_tokens /* array of useful tokens */
-    );
-
-    parser_add_production(P, P_PRODUCTIONS, 2,
-        parser_rule_sequence(P, 2,
-            parser_rewrite_function(P, P_PRODUCTION),
-            parser_rewrite_function(P, P_PRODUCTIONS)),
-        parser_rule_sequence(P, 1,
-            parser_rewrite_epsilon(P)));
-
-    parser_add_production(P, P_PRODUCTION, 1,
-        parser_rule_sequence(P, 3,
-            parser_rewrite_token(P, L_NON_TERMINAL),
-            parser_rewrite_function(P, P_PRODUCTION_RULES),
-            parser_rewrite_token(P, L_SEMICOLON)));
-
-    parser_add_production(P, P_PRODUCTION_RULES, 2,
-        parser_rule_sequence(P, 2,
-            parser_rewrite_function(P, P_PRODUCTION_RULE),
-            parser_rewrite_function(P, P_PRODUCTION_RULES)),
-        parser_rule_sequence(P, 1,
-            parser_rewrite_epsilon(P)));
-
-    parser_add_production(P, P_PRODUCTION_RULE, 1,
-        parser_rule_sequence(P, 2,
-            parser_rewrite_token(P, L_COLON),
-            parser_rewrite_function(P, P_RULES)));
-
-    parser_add_production(P, P_RULES, 2,
-        parser_rule_sequence(P, 2,
-            parser_rewrite_function(P, P_RULE),
-            parser_rewrite_function(P, P_RULES)),
-        parser_rule_sequence(P, 1,
-            parser_rewrite_epsilon(P)));
-
-    parser_add_production(P, P_RULE, 3,
-        parser_rule_sequence(P, 1,
-            parser_rewrite_token(P, L_NON_TERMINAL)),
-        parser_rule_sequence(P, 1,
-            parser_rewrite_token(P, L_TERMINAL)),
-        parser_rule_sequence(P, 1,
-            parser_rewrite_token(P, L_EPSILON)));
-
-    parser_add_production(P, P_DECORATION, 2,
-        parser_rule_sequence(P, 1,
-            parser_rewrite_token(P, L_CODE)),
-        parser_rule_sequence(P, 1,
-            parser_rewrite_epsilon(P)));
-
-    /* parse the grammar file */
-    T = parser_parse_tokens(P, G);
-
-    printf("root %p \n\n", (void *)T);
-
-    tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_PREORDER);
+static void print_tree(PParseTree *T) {
+    PTreeGenerator *tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
     while(generator_next(tree_gen)) {
         T = generator_current(tree_gen);
 
         if(T->_._parent != NULL) {
+
+            /* terminal */
             if(T->type == 1) {
                 printf("\"%p\" -> \"%p\" \n", (void *)T->_._parent, (void *)T);
                 if(((PTerminalTree *)T)->token->val != NULL) {
@@ -267,13 +208,111 @@ int main(void) {
             }
         }
 
+        /* production */
         if(T->type == 0) {
-
             printf("\"%p\" [label=\"%s\"]\n", (void *)T, production_names[((PProductionTree *) T)->production]);
+            if(tree_get_num_branches((PTree *) T) == 0) {
+                printf("\"%p\" [color=gray]\n", (void *)T);
+            }
+        /* epsilon */
+        } else if (T->type == 2) {
+
         }
     }
 
     generator_free(tree_gen);
+}
+
+int main(void) {
+
+    PParser *P;
+    PParseTree *T;
+    PTokenGenerator *G = token_generator_alloc(
+        "src/grammars/parser.g",
+        (PFunction) &lexer_grammar_token_generator
+    );
+
+    P = parser_alloc(
+        P_PRODUCTIONS, /* production to start matching with */
+        10, /* number of productions */
+        8 /* number of tokens */
+    );
+
+    parser_add_production(P, P_PRODUCTIONS, 2,
+        parser_rule_sequence(P, 2,
+            parser_rewrite_production(P, P_PRODUCTION, 0),
+            parser_rewrite_production(P, P_PRODUCTIONS, 2)),
+        parser_rule_sequence(P, 1,
+            parser_rewrite_epsilon(P, 0)));
+
+    parser_add_production(P, P_PRODUCTION, 1,
+        parser_rule_sequence(P, 3,
+            parser_rewrite_token(P, L_NON_TERMINAL, 1),
+            parser_rewrite_production(P, P_PRODUCTION_RULES, 2),
+            parser_rewrite_token(P, L_SEMICOLON, 0)));
+
+    parser_add_production(P, P_PRODUCTION_RULES, 2,
+        parser_rule_sequence(P, 2,
+            parser_rewrite_production(P, P_PRODUCTION_RULE, 1),
+            parser_rewrite_production(P, P_PRODUCTION_RULES, 2)),
+        parser_rule_sequence(P, 1,
+            parser_rewrite_epsilon(P, 0)));
+
+    parser_add_production(P, P_PRODUCTION_RULE, 1,
+        parser_rule_sequence(P, 3,
+            parser_rewrite_token(P, L_COLON, 0),
+            parser_rewrite_production(P, P_RULES, 2),
+            parser_rewrite_production(P, P_DECORATION, 0)));
+
+    parser_add_production(P, P_RULES, 2,
+        parser_rule_sequence(P, 2,
+            parser_rewrite_production(P, P_RULE, 2),
+            parser_rewrite_production(P, P_RULES, 2)),
+        parser_rule_sequence(P, 1,
+            parser_rewrite_epsilon(P, 0)));
+
+    parser_add_production(P, P_RULE, 3,
+        parser_rule_sequence(P, 2,
+            parser_rewrite_production(P, P_RULE_FLAG, 0),
+            parser_rewrite_token(P, L_NON_TERMINAL, 1)),
+        parser_rule_sequence(P, 2,
+            parser_rewrite_production(P, P_RULE_FLAG, 0),
+            parser_rewrite_token(P, L_TERMINAL, 1)),
+        parser_rule_sequence(P, 2,
+            parser_rewrite_production(P, P_RULE_FLAG, 0),
+            parser_rewrite_token(P, L_EPSILON, 1)));
+
+    parser_add_production(P, P_DECORATION, 2,
+        parser_rule_sequence(P, 1,
+            parser_rewrite_token(P, L_CODE, 1)),
+        parser_rule_sequence(P, 1,
+            parser_rewrite_epsilon(P, 0)));
+
+    parser_add_production(P, P_RULE_FLAG, 3,
+        parser_rule_sequence(P, 1,
+            parser_rewrite_production(P, P_NON_EXCLUDABLE, 1)),
+        parser_rule_sequence(P, 1,
+            parser_rewrite_production(P, P_SUBSUMABLE, 1)),
+        parser_rule_sequence(P, 1,
+            parser_rewrite_epsilon(P, 0)));
+
+    parser_add_production(P, P_NON_EXCLUDABLE, 1,
+        parser_rule_sequence(P, 1,
+            parser_rewrite_token(P, L_DASH, 0)));
+
+    parser_add_production(P, P_SUBSUMABLE, 1,
+        parser_rule_sequence(P, 1,
+            parser_rewrite_token(P, L_UP_ARROW, 0)));
+
+    /* parse the grammar file */
+    T = parser_parse_tokens(P, G);
+
+
+    printf("root %p \n\n", (void *)T);
+
+    print_tree(T);
+
+
     generator_free(G);
     parser_free(P);
     parser_free_parse_tree(T);

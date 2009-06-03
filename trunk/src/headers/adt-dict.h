@@ -19,10 +19,7 @@ typedef void * H_val_type;
  * current size of the hash table.
  */
 typedef uint32_t (*H_hash_fnc_type)(H_key_type);
-
-/* hash collision checker, compares two keys. */
 typedef char (*H_collision_fnc_type)(H_key_type, H_key_type);
-
 typedef void (*H_free_val_fnc_type)(H_val_type);
 typedef void (*H_free_key_fnc_type)(H_key_type);
 
@@ -73,6 +70,9 @@ char dict_is_set(H_type *H, H_key_type key);
 
 /* this is the type to be used by outside programs */
 typedef H_type PDictionary;
+typedef H_hash_fnc_type PDictionaryHashFunc;
+typedef H_collision_fnc_type PDictionaryCollisionFunc;
+typedef H_free_val_fnc_type PDictionaryFreeValueFunc;
 
 /* generic helper functions for simple key types */
 uint32_t dict_pointer_hash_fnc(void *pointer);

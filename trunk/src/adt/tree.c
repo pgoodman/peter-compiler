@@ -40,17 +40,11 @@ unsigned long int tree_num_allocated_pointers(void) {
  * is the number of branches that this tree should have.
  */
 void *tree_alloc(const size_t struct_size, const unsigned short degree) {
-    char *data;
     PTree *T = NULL;
 
     assert(sizeof(PTree) <= struct_size);
 
-    data = tree_mem_alloc(struct_size + (sizeof(PTree *) * degree));
-    if (is_null(data)) {
-        tree_mem_error("Unable to allocate a tree on the heap.");
-    }
-
-    T = (PTree *) data;
+    T = tree_mem_alloc(struct_size);
     T->_branches = NULL;
     T->_degree = degree;
     T->_fill = 0;
@@ -58,7 +52,7 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree) {
     T->_parent = NULL;
 
     if (degree > 0) {
-        T->_branches = (PTree **) (data + (struct_size / sizeof(char)));
+        T->_branches = tree_mem_alloc(sizeof(PTree *) * degree);
     }
 
     return T;
@@ -91,6 +85,9 @@ static void T_free(PTree *tree, PDelegate free_tree_fnc) {
     tree->_degree = 0;
     tree->_fill = 0;
     free_tree_fnc(tree);
+    if(is_not_null(tree->_branches)) {
+        tree_mem_free(tree->_branches);
+    }
     tree_mem_free(tree);
     return;
 }
@@ -225,20 +222,55 @@ void tree_trim(PTree *T, PDictionary *garbage_set) {
  * Set a tree 'branch' as one of the branches of 'parent'. Return 1 if
  * successful, 0 on failure.
  */
-char tree_add_branch(PTree *parent, PTree *branch) {
+static void T_add_branch(PTree *parent, PTree *branch, int force) {
     PTree *child = (PTree *) branch;
 
     assert_not_null(parent);
     assert_not_null(branch);
-    assert(parent->_fill < parent->_degree);
+
+    if(force && parent->_fill < parent->_degree) {
+        parent->_degree = (0 == parent->_degree) ? 1 : parent->_degree * 2;
+
+        parent->_branches = mem_realloc(
+            parent->_branches,
+            (parent->_degree * sizeof(PTree *))
+        );
+
+        if(is_null(parent->_branches)) {
+            mem_error("Unable to grow parse tree node.");
+        }
+    } else {
+        assert(0);
+    }
 
     parent->_branches[parent->_fill] = child;
     child->_parent = parent;
     child->_parent_branch = parent->_fill;
 
     ++(parent->_fill);
+}
 
-    return 1;
+void tree_add_branch(PTree *parent, PTree *branch) {
+    T_add_branch(parent, branch, 0);
+}
+
+void tree_force_add_branch(PTree *parent, PTree *branch) {
+    T_add_branch(parent, branch, 1);
+}
+
+void tree_force_add_branch_children(PTree *parent, PTree *branch) {
+    short i = 0;
+
+    assert_not_null(parent);
+    assert_not_null(branch);
+
+    if(0 == branch->_fill) {
+        return;
+    }
+
+    for(; i < branch->_fill; ++i) {
+        T_add_branch(parent, branch->_branches[i], 1);
+    }
 }
 
 /**
