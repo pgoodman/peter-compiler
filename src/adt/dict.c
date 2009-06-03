@@ -47,9 +47,11 @@ static H_Entry *H_get_entry(H_type *H, H_key_type key) {
 
     entry = H->slots[H->key_hash_fnc(key) % H->num_slots];
     for(; is_not_null(entry); entry = entry->next) {
-        if(!H->collision_fnc(entry->key, key)) {
-            return entry;
+        if(H->collision_fnc(entry->key, key)) {
+            continue;
         }
+
+        return entry;
     }
 
     return NULL;
