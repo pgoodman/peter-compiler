@@ -17,9 +17,14 @@
 #include "adt-list.h"
 #include "adt-dict.h"
 #include "func-delegate.h"
-#include "p-prod-common.h"
-#include "p-parser-types.h"
+
+#include "p-common-types.h"
+#include "p-types.h"
 #include "p-adt.h"
+
+#include "p-cache.h"
+#include "p-production.h"
+#include "p-tree.h"
 
 PParseTree *parser_parse_tokens(PParser *, PTokenGenerator *);
 void parser_free_parse_tree(PParseTree *tree);

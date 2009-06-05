@@ -11,7 +11,7 @@
 
 
 #include "p-lexer.h"
-#include "p-prod-common.h"
+#include "p-common-types.h"
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PParser {

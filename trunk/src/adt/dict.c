@@ -38,27 +38,23 @@ unsigned long int dict_num_allocated_pointers(void) {
 }
 
 /**
- * Locate an entry and its associated key into the hash table in a dictionary.
+ * Allocate a new dictionary entry.
  */
-static H_Entry *H_get_entry(H_type *H, H_key_type key) {
-    H_Entry *entry;
-
-    assert_not_null(H);
-
-    entry = H->slots[H->key_hash_fnc(key) % H->num_slots];
-    for(; is_not_null(entry); entry = entry->next) {
-        if(H->collision_fnc(entry->key, key)) {
-            continue;
-        }
-
-        return entry;
+static H_Entry *H_entry_alloc(H_key_type key, H_val_type val) {
+    H_Entry *entry = dict_mem_alloc(sizeof(H_Entry));
+    if(is_null(entry)) {
+        dict_mem_error("Unable to allocate dictionary entry on the heap.");
     }
 
-    return NULL;
+    entry->key = key;
+    entry->entry = val;
+    entry->next = NULL;
+
+    return entry;
 }
 
 /* Set an entry to a dictionary. */
-static void H_add_entry(H_type *H, H_Entry *E) {
+static void H_entry_add(H_type *H, H_Entry *E) {
     uint32_t i = H->key_hash_fnc(E->key) % H->num_slots;
     H_Entry *temp,
             *prev;
@@ -74,9 +70,27 @@ static void H_add_entry(H_type *H, H_Entry *E) {
 }
 
 /**
+ * Locate an entry and its associated key into the hash table in a dictionary.
+ */
+static H_Entry *H_entry_get(H_type *H, H_key_type key) {
+    H_Entry *entry;
+
+    assert_not_null(H);
+
+    entry = H->slots[H->key_hash_fnc(key) % H->num_slots];
+    for(; is_not_null(entry); entry = entry->next) {
+        if(!H->collision_fnc(entry->key, key)) {
+            return entry;
+        }
+    }
+
+    return NULL;
+}
+
+/**
  * Allocate the slots used by a vector.
  */
-static H_Entry **H_alloc_slots(uint32_t num_slots ) {
+static H_Entry **H_slots_alloc(uint32_t num_slots ) {
     H_Entry **slots = dict_mem_calloc(num_slots, sizeof(H_Entry *));
     if(is_null(slots)) {
         dict_mem_error("Unable to allocate hash table slots.");
@@ -87,7 +101,7 @@ static H_Entry **H_alloc_slots(uint32_t num_slots ) {
 /**
  * Double the size of the hash table and re-hash all the values.
  */
-static void H_grow(H_type *H ) {
+static void H_slots_grow(H_type *H ) {
     H_Entry **old_elms = NULL,
             *entry,
             *next;
@@ -104,17 +118,20 @@ static void H_grow(H_type *H ) {
     old_size = H->num_slots;
 
     H->num_slots = H_primes[(unsigned int) H->prime_index];
-    H->slots = H_alloc_slots(H->num_slots);
+    H->slots = H_slots_alloc(H->num_slots);
 
     /* re-hash the old objects into the new table */
     for(j = 0; j < old_size; ++j) {
         for(entry = old_elms[j]; is_not_null(entry); entry = next) {
             next = entry->next;
-            H_add_entry(H, entry);
+            H_entry_add(H, entry);
         }
     }
 
     dict_mem_free(old_elms);
+
+    H->grow_table = 0;
+
     return;
 }
 
@@ -152,7 +169,7 @@ void *gen_dict_alloc(const size_t dict_struct_size,
         std_error("Error, the hash table size given is too large.");
     }
 
-    elms = H_alloc_slots(num_slots);
+    elms = H_slots_alloc(num_slots);
 
     /* initialize the vector */
     H = (H_type *) table;
@@ -172,13 +189,12 @@ void *gen_dict_alloc(const size_t dict_struct_size,
  */
 H_type *dict_alloc(const uint32_t num_slots,
                    H_hash_fnc_type key_hash_fnc,
-                   H_collision_fnc_type collision_fnc) {
-
+                   H_collision_fnc_type key_collision_fnc) {
     return (H_type *) gen_dict_alloc(
         sizeof(H_type),
         num_slots,
         key_hash_fnc,
-        collision_fnc
+        key_collision_fnc
     );
 }
 
@@ -186,8 +202,8 @@ H_type *dict_alloc(const uint32_t num_slots,
  * Free a hash table.
  */
 void dict_free(H_type *H,
-               H_free_val_fnc_type free_val_fnc,
-               H_free_key_fnc_type free_key_fnc) {
+               H_free_key_fnc_type free_key_fnc,
+               H_free_val_fnc_type free_val_fnc) {
 
     uint32_t i;
     H_Entry *entry,
@@ -199,17 +215,11 @@ void dict_free(H_type *H,
 
     /* free the elements stored in the hash table. */
     for(i = 0; i < H->num_slots; ++i) {
-        if(is_null(H->slots[i])) {
-            continue;
-        }
-
-        entry = H->slots[i];
-        while(is_not_null(entry)) {
+        for(entry = H->slots[i]; is_not_null(entry); entry = next) {
             next = entry->next;
             free_key_fnc(entry->key);
             free_val_fnc(entry->entry);
             dict_mem_free(entry);
-            entry = next;
         }
     }
 
@@ -219,63 +229,49 @@ void dict_free(H_type *H,
 }
 
 /**
- * Allocate a new dictionary entry.
- */
-static H_Entry *H_alloc_entry(H_key_type key, H_val_type val) {
-    H_Entry *entry = dict_mem_alloc(sizeof(H_Entry));
-    if(is_null(entry)) {
-        dict_mem_error("Unable to allocate dictionary entry on the heap.");
-    }
-
-    entry->key = key;
-    entry->entry = val;
-    entry->next = NULL;
-
-    return entry;
-}
-
-/**
  * Set a record into a hash table. This will return 1 if a previous element
  * existed, 0 if it did not. In any case, the value will be set.
  */
 void dict_set(H_type *H,
               H_key_type key,
               H_val_type val,
-              H_free_val_fnc_type free_on_overwrite_fnc) {
+              H_free_val_fnc_type free_val_fnc) {
 
     uint32_t i;
     H_Entry *entry;
 
     assert_not_null(H);
     assert_not_null(key);
-    assert_not_null(free_on_overwrite_fnc);
+    assert_not_null(free_val_fnc);
 
     if(H->grow_table) {
-        H_grow(H);
-        H->grow_table = 0;
+        H_slots_grow(H);
     }
+
+    printf("\t dict(%p, %d) \n", (void *)key, H->key_hash_fnc(key));
 
     i = H->key_hash_fnc(key) % H->num_slots;
 
     if(is_null(H->slots[i])) {
-        H->slots[i] = H_alloc_entry(key, val);
+        entry = H_entry_alloc(key, val);
     } else {
 
         /* look through the bucket to see if we need to overwrite an existing
          * entry. */
         for(entry = H->slots[i]; is_not_null(entry); entry = entry->next) {
             if(!H->collision_fnc(entry->key, key)) {
-                free_on_overwrite_fnc(entry->entry);
+                free_val_fnc(entry->entry);
                 entry->entry = val;
                 return;
             }
         }
 
         /* put this entry at the start of the bucket */
-        entry = H_alloc_entry(key, val);
+        entry = H_entry_alloc(key, val);
         entry->next = H->slots[i];
-        H->slots[i] = entry;
     }
+
+    H->slots[i] = entry;
 
     ++(H->num_used_slots);
 
@@ -289,8 +285,8 @@ void dict_set(H_type *H,
  */
 void dict_unset(H_type *H,
                 H_key_type key,
-                H_free_val_fnc_type free_val_fnc,
-                H_free_key_fnc_type free_key_fnc) {
+                H_free_key_fnc_type free_key_fnc,
+                H_free_val_fnc_type free_val_fnc) {
 
     H_Entry *entry = NULL,
             *prev = NULL,
@@ -334,7 +330,7 @@ void dict_unset(H_type *H,
  * Get a record from a hash table.
  */
 H_val_type dict_get(H_type *H, H_key_type key) {
-    H_Entry *entry = H_get_entry(H, key);
+    H_Entry *entry = H_entry_get(H, key);
     return (is_null(entry) ? NULL : entry->entry);
 }
 
@@ -342,7 +338,7 @@ H_val_type dict_get(H_type *H, H_key_type key) {
  * Check if a record exists in a hash table.
  */
 char dict_is_set(H_type *H, H_key_type key) {
-    return is_not_null(H_get_entry(H, key));
+    return is_not_null(H_entry_get(H, key));
 }
 
 /**

@@ -9,7 +9,7 @@
 #ifndef PADT_H_
 #define PADT_H_
 
-#include "p-parser-types.h"
+#include "p-types.h"
 #include "p-parser.h"
 
 PParser *parser_alloc(unsigned char start_production,
@@ -38,14 +38,14 @@ PParserRewriteRule *parser_rewrite_token(PParser *P,
 PParserRewriteRule *parser_rewrite_epsilon(PParser *P,
                                            unsigned char flag);
 
-int parser_rule_is_production(PParserRewriteRule *rule);
+int P_adt_rule_is_production(PParserRewriteRule *rule);
 
-int parser_rule_is_token(PParserRewriteRule *rule);
+int P_adt_rule_is_token(PParserRewriteRule *rule);
 
-int parser_rule_is_epsilon(PParserRewriteRule *rule);
+int P_adt_rule_is_epsilon(PParserRewriteRule *rule);
 
-int parser_rule_is_non_excludable(PParserRewriteRule *rule);
+int P_adt_rule_is_non_excludable(PParserRewriteRule *rule);
 
-int parser_rule_subsume(PParserRewriteRule *rule);
+int P_adt_rule_use_children_instead(PParserRewriteRule *rule);
 
 #endif /* PADT_H_ */

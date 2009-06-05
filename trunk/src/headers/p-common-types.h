@@ -49,7 +49,7 @@ typedef struct PTerminalTree {
 typedef struct PParserProduction {
     PGenericList *alternatives;
     unsigned char production;
-    short max_num_useful_rewrite_rules;
+    unsigned short max_num_useful_rewrite_rules;
 } PParserProduction;
 
 #endif /* PPRODCOMMON_H_ */

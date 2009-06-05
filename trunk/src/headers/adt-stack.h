@@ -15,7 +15,7 @@
 
 typedef struct PStack {
     PGenericList *_head,
-                *_unused;
+                 *_unused;
 } PStack;
 
 void *stack_alloc(const size_t );

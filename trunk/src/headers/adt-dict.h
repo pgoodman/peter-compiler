@@ -51,8 +51,8 @@ H_type *dict_alloc(const uint32_t num_slots,
                    H_collision_fnc_type collision_fnc);
 
 void dict_free(H_type *H,
-               H_free_val_fnc_type free_entry_fnc,
-               H_free_key_fnc_type free_key_fnc);
+               H_free_key_fnc_type free_key_fnc,
+               H_free_val_fnc_type free_entry_fnc);
 
 void dict_set(H_type *H,
               H_key_type key,
@@ -61,8 +61,8 @@ void dict_set(H_type *H,
 
 void dict_unset(H_type *H,
                 H_key_type key,
-                H_free_val_fnc_type free_val_fnc,
-                H_free_key_fnc_type free_key_fnc);
+                H_free_key_fnc_type free_key_fnc,
+                H_free_val_fnc_type free_val_fnc);
 
 H_val_type dict_get(H_type *H, H_key_type key);
 

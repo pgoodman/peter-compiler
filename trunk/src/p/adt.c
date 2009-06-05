@@ -110,7 +110,7 @@ void parser_free(PParser *P) {
     }
 
     mem_free(P->productions);
-    dict_free(P->rules, &delegate_mem_free, &delegate_do_nothing);
+    dict_free(P->rules, &delegate_do_nothing, &delegate_mem_free);
     mem_free(P);
 }
 
@@ -283,7 +283,7 @@ PParserRewriteRule *parser_rewrite_epsilon(PParser *P,
 /**
  * Return whether or not a rule is a production rule.
  */
-int parser_rule_is_production(PParserRewriteRule *rule) {
+int P_adt_rule_is_production(PParserRewriteRule *rule) {
     assert_not_null(rule);
     return rule->production != P_LEXEME_EPSILON;
 }
@@ -291,7 +291,7 @@ int parser_rule_is_production(PParserRewriteRule *rule) {
 /**
  * Return whether or not a rule is a token rule.
  */
-int parser_rule_is_token(PParserRewriteRule *rule) {
+int P_adt_rule_is_token(PParserRewriteRule *rule) {
     assert_not_null(rule);
     return rule->lexeme != P_LEXEME_EPSILON;
 }
@@ -299,7 +299,7 @@ int parser_rule_is_token(PParserRewriteRule *rule) {
 /**
  * Return whether or not a rule is an epsilon rule.
  */
-int parser_rule_is_epsilon(PParserRewriteRule *rule) {
+int P_adt_rule_is_epsilon(PParserRewriteRule *rule) {
     assert_not_null(rule);
     return (rule->lexeme == P_LEXEME_EPSILON)
         && (rule->production == P_LEXEME_EPSILON);
@@ -308,7 +308,7 @@ int parser_rule_is_epsilon(PParserRewriteRule *rule) {
 /**
  * Return whether or not the current rule can be exluded from the parse tree.
  */
-int parser_rule_is_non_excludable(PParserRewriteRule *rule) {
+int P_adt_rule_is_non_excludable(PParserRewriteRule *rule) {
     assert_not_null(rule);
     return (rule->flag == 1);
 }
@@ -317,7 +317,7 @@ int parser_rule_is_non_excludable(PParserRewriteRule *rule) {
  * Return whether or not the children nodes in the parse tree should be
  * promoted.
  */
-int parser_rule_subsume(PParserRewriteRule *rule) {
+int P_adt_rule_use_children_instead(PParserRewriteRule *rule) {
     assert_not_null(rule);
     return (rule->flag == 2);
 }

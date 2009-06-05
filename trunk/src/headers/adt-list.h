@@ -36,4 +36,6 @@ void gen_list_free_elm(PGenericList *, PDelegate );
 void *gen_list_get_elm(PGenericList * );
 void gen_list_set_elm(PGenericList *, void * ) ;
 
+unsigned long int list_num_allocated_pointers(void);
+
 #endif /* LIST_H_ */
