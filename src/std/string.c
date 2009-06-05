@@ -25,7 +25,7 @@ unsigned long int string_num_allocated_pointers(void) {
 static PString *string_alloc(uint32_t len) {
     PString *S;
 
-    S= mem_alloc(sizeof(PString)+(sizeof(PChar) * (len+1)));
+    S= string_mem_alloc(sizeof(PString)+(sizeof(PChar) * (len+1)));
     if(NULL == S) {
         mem_error("Unable to allocate string on heap.");
     }

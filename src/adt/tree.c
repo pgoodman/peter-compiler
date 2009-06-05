@@ -84,10 +84,10 @@ static PDelegate T_valid_free_callback(PDelegate ft,
 static void T_free(PTree *tree, PDelegate free_tree_fnc) {
     tree->_degree = 0;
     tree->_fill = 0;
-    free_tree_fnc(tree);
     if(is_not_null(tree->_branches)) {
         tree_mem_free(tree->_branches);
     }
+    free_tree_fnc(tree);
     tree_mem_free(tree);
     return;
 }
@@ -433,7 +433,7 @@ static void *T_generator_next_po(PTreeGenerator *G) {
  * Allocate a tree generator on the heap and initialize that generator.
  */
 PTreeGenerator *tree_generator_alloc(void *tree,
-        const PTreeTraversal traverse_type) {
+                                     const PTreeTraversal traverse_type) {
     PTree *T;
     PTreeGenerator *G;
 

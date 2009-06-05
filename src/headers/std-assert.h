@@ -15,7 +15,8 @@
 
 typedef enum {
     P_ASSERT_NORMAL,
-    P_ASSERT_NOT_NULL
+    P_ASSERT_NOT_NULL,
+    P_ASSERT_NULL
 } PAssertionType;
 
 #if defined(P_DEBUG) && P_DEBUG == 1
@@ -27,6 +28,7 @@ void assert_print_stack_trace(PAssertionType, unsigned int, const char *);
 
 #define assert(e) _assert((e),P_ASSERT_NORMAL)
 #define assert_not_null(e) _assert((NULL!=(e)),P_ASSERT_NOT_NULL)
+#define assert_null(e) _assert((NULL==(e)),P_ASSERT_NULL)
 
 
 #else

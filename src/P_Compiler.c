@@ -219,7 +219,6 @@ static void print_tree(PParseTree *T) {
 
         }
     }
-
     generator_free(tree_gen);
 }
 
@@ -307,11 +306,7 @@ int main(void) {
     /* parse the grammar file */
     T = parser_parse_tokens(P, G);
 
-
-    printf("root %p \n\n", (void *)T);
-
     print_tree(T);
-
 
     generator_free(G);
     parser_free(P);
@@ -323,11 +318,14 @@ int main(void) {
 #endif
 
     printf(
-        "dict: %ld \ntree: %ld\ntokens: %ld \nstrings: %ld \n",
+        "dict: %ld \ntree: %ld\ntokens: %ld \nstrings: %ld \nproductions: %ld \ncache: %ld \nlists: %ld \n",
         dict_num_allocated_pointers(),
         tree_num_allocated_pointers(),
         token_num_allocated_pointers(),
-        string_num_allocated_pointers()
+        string_num_allocated_pointers(),
+        prod_num_allocated_pointers(),
+        cache_num_allocated_pointers(),
+        list_num_allocated_pointers()
     );
 
     printf("done.\n");

@@ -23,6 +23,8 @@ void assert_print_stack_trace(PAssertionType type,
         error = "Assertion failed";
     } else if(P_ASSERT_NOT_NULL == type) {
         error = "Null pointer error";
+    } else if(P_ASSERT_NULL == type) {
+        error = "Non-null error";
     } else {
         error = "";
     }
