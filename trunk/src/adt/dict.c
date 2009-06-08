@@ -248,8 +248,6 @@ void dict_set(H_type *H,
         H_slots_grow(H);
     }
 
-    printf("\t dict(%p, %d) \n", (void *)key, H->key_hash_fnc(key));
-
     i = H->key_hash_fnc(key) % H->num_slots;
 
     if(is_null(H->slots[i])) {

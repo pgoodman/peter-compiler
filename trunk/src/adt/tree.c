@@ -165,22 +165,22 @@ void *tree_parent(PTree *T) {
 /**
  * Clear off all of the branches, without doing any proper cleaning up on them.
  */
-void tree_clear(PTree *T, int do_clear) {
+void tree_clear(PTree *tree, int do_clear) {
     int i = 0;
 
-    assert_not_null(T);
+    assert_not_null(tree);
 
     if (do_clear) {
-        for (; i < T->_fill; ++i) {
-            if (is_not_null(T->_branches[i])) {
-                T->_branches[i]->_parent = NULL;
-                T->_branches[i]->_parent_branch = 0;
-                T->_branches[i] = NULL;
+        for (; i < tree->_fill; ++i) {
+            if (is_not_null(tree->_branches[i])) {
+                tree->_branches[i]->_parent = NULL;
+                tree->_branches[i]->_parent_branch = 0;
+                tree->_branches[i] = NULL;
             }
         }
     }
 
-    T->_fill = 0;
+    tree->_fill = 0;
 
     return;
 }
@@ -227,8 +227,9 @@ static void T_add_branch(PTree *parent, PTree *branch, int force) {
 
     assert_not_null(parent);
     assert_not_null(branch);
+    assert(parent->_fill < parent->_degree || force);
 
-    if(force && parent->_fill < parent->_degree) {
+    if(parent->_fill >= parent->_degree && force) {
         parent->_degree = (0 == parent->_degree) ? 1 : parent->_degree * 2;
 
         parent->_branches = mem_realloc(
@@ -239,8 +240,6 @@ static void T_add_branch(PTree *parent, PTree *branch, int force) {
         if(is_null(parent->_branches)) {
             mem_error("Unable to grow parse tree node.");
         }
-    } else {
-        assert(0);
     }
 
     parent->_branches[parent->_fill] = child;
@@ -259,7 +258,8 @@ void tree_force_add_branch(PTree *parent, PTree *branch) {
 }
 
 void tree_force_add_branch_children(PTree *parent, PTree *branch) {
-    short i = 0;
+    unsigned short i = 0,
+                   fill;
 
     assert_not_null(parent);
     assert_not_null(branch);
@@ -268,7 +268,8 @@ void tree_force_add_branch_children(PTree *parent, PTree *branch) {
         return;
     }
 
-    for(; i < branch->_fill; ++i) {
+    fill = branch->_fill;
+    for(; i < fill; ++i) {
         T_add_branch(parent, branch->_branches[i], 1);
     }
 }
@@ -435,13 +436,13 @@ static void *T_generator_next_po(PTreeGenerator *G) {
 PTreeGenerator *tree_generator_alloc(void *tree,
                                      const PTreeTraversal traverse_type) {
     PTree *T;
-    PTreeGenerator *G;
+    PTreeGenerator *gen;
 
     assert_not_null(tree);
 
     T = (PTree *) tree;
-    G = generator_alloc(sizeof(PTreeGenerator));
-    G->_adt = NULL;
+    gen = generator_alloc(sizeof(PTreeGenerator));
+    gen->_adt = NULL;
 
     /* initialize the various types of generators */
     switch (traverse_type) {
@@ -449,33 +450,42 @@ PTreeGenerator *tree_generator_alloc(void *tree,
     /* post-order traversal, doesn't use the generic ADT methods of the
      * generator */
     case TREE_TRAVERSE_POSTORDER:
-        G->_adt = stack_alloc(sizeof(PStack));
-        G->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
-        generator_init(G, (PFunction) &T_generator_next_po,
-                (PDelegate) &T_generator_free_s);
-        stack_push(G->_adt, T);
+        gen->_adt = stack_alloc(sizeof(PStack));
+        gen->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
+        generator_init(
+            gen,
+            (PFunction) &T_generator_next_po,
+            (PDelegate) &T_generator_free_s
+        );
+        stack_push(gen->_adt, T);
         break;
 
         /* depth-first traversal */
     case TREE_TRAVERSE_PREORDER:
-        G->_adt = stack_alloc(sizeof(PStack));
-        G->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
-        generator_init(G, (PFunction) &T_generator_next_df,
-                (PDelegate) &T_generator_free_s);
-        stack_push(G->_adt, T);
+        gen->_adt = stack_alloc(sizeof(PStack));
+        gen->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
+        generator_init(
+            gen,
+            (PFunction) &T_generator_next_df,
+            (PDelegate) &T_generator_free_s
+        );
+        stack_push(gen->_adt, T);
         break;
 
         /* breadth-first traversal */
     case TREE_TRAVERSE_LEVELORDER:
-        G->_adt = queue_alloc(sizeof(PQueue));
-        G->_reclaim_adt = (PTreeGeneratorReclaimFunction) &queue_empty;
-        generator_init(G, (PFunction) &T_generator_next_bf,
-                (PDelegate) &T_generator_free_q);
-        queue_push(G->_adt, T);
+        gen->_adt = queue_alloc(sizeof(PQueue));
+        gen->_reclaim_adt = (PTreeGeneratorReclaimFunction) &queue_empty;
+        generator_init(
+            gen,
+            (PFunction) &T_generator_next_bf,
+            (PDelegate) &T_generator_free_q
+        );
+        queue_push(gen->_adt, T);
         break;
     }
 
-    return G;
+    return gen;
 }
 
 /**

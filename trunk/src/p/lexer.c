@@ -22,15 +22,15 @@ unsigned long int token_num_allocated_pointers(void) {
 /**
  * Allocate a new token.
  */
-PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col) {
+PToken *token_alloc(char token, PString *lexeme, uint32_t line, uint32_t col) {
 
     PToken *tok = token_mem_alloc(sizeof(PToken *));
     if(is_null(tok)) {
         token_mem_error("Unable to allocate a token on the heap.");
     }
 
+    tok->token = token;
     tok->lexeme = lexeme;
-    tok->val = val;
     tok->line = line;
     tok->column = col;
 
@@ -43,9 +43,8 @@ PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col) {
 void token_free(PToken *tok) {
     assert_not_null(tok);
 
-    if(is_not_null(tok->val)) {
-        string_free(tok->val);
-        tok->val = NULL;
+    if(is_not_null(tok->lexeme)) {
+        string_free(tok->lexeme);
     }
 
     token_mem_free(tok);

@@ -70,8 +70,8 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
         num_cached_successes = 0,
         num_cached_failures = 0;
 
-    /* uint64_t seems to cause strange problems when compiling with GCC. This
-     * might be an issue with vendor-pstdint.h. */
+    /* useful counter, be it for hinting to GCC that a block shouldn't be
+     * optimized out, or for actually counting something. */
     unsigned long int j = 0;
 
     /* for parse error info, the farthest point reached (fpr) in the token
@@ -117,11 +117,11 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
 
 
     /* get the starting production and push our first stack frame on. This
-     * involves registering the start of the token list as the furthest back
+     * involves registering the start of the token list as the farthest back
      * we can backtrack.
      */
     PARSER_DEBUG(printf("pushing production onto stack.\n");)
-
+    ++num_func_calls;
     P_production_push(
         production_stack,
         parser_cache,
@@ -156,7 +156,7 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
                 }
 
                 /* cascade the failure to the calling production. */
-                P_production_break(production_stack);
+                P_production_cascade(production_stack, parser_cache);
 
             /* there is at least one rule to backtrack to. */
             } else {
@@ -172,37 +172,56 @@ PParseTree *parser_parse_tokens(PParser *P, PTokenGenerator *G) {
          * successfully parsed the tokens.
          */
         } else if(!P_production_has_rule(production_stack)) {
-            if(P_production_is_root(production_stack)) {
 
-                /* there are no tokens to parse but we have a single frame on
-                 * on stack. this is a parse error, so we will backtrack. */
-                if(is_not_null(curr)) {
-                    P_production_break(production_stack);
+            /* we have parsed all of the tokens. there is no need to do any
+             * work on the stack or the cache. */
+            if(P_production_is_root(production_stack) && is_null(curr)) {
+                PARSER_DEBUG(printf("done parsing.\n");)
 
-                /* we have parsed all of the tokens. there is no need to do any
-                 * work on the stack or the cache. */
-                } else {
+                j++; /* make GCC not optimize out this block. */
+                break;
 
-                    PARSER_DEBUG(printf("done parsing.\n");)
-
-                    j++; /* make GCC not optimize out this block. */
-                    break;
-                }
-
-            /* we can't prove that this is a successful parse of all of the
-             * tokens and so we assume that there exists more to parse. save
-             * the result of the application of this production to the cache
-             * and yield control to the parent frame.
-             */
             } else {
 
-                PARSER_DEBUG(printf("production succeeded.\n");)
+                cached_result = P_production_get_cache(
+                    production_stack,
+                    parser_cache
+                );
 
-                ++num_cached_successes;
+                /* we had a left recursive application, let's restart it to grow the left
+                 * recursive derivation further. */
+                if(P_cache_value_is_left_recursive(cached_result)) {
 
-                /* pop the production and advance to the next rule of the
-                 * calling production. */
-                P_production_succeeded(production_stack, parser_cache, curr);
+                    PARSER_DEBUG(printf("growing left recursion. \n");)
+
+                    P_production_grow_lr(
+                        production_stack,
+                        parser_cache,
+                        cached_result,
+                        & curr
+                    );
+
+                /* there are tokens to parse but we have a single frame on
+                 * on stack. this is a parse error, so we will backtrack. */
+                } else if(P_production_is_root(production_stack) && is_not_null(curr)) {
+
+                    PARSER_DEBUG(printf("no rules left. \n");)
+                    P_production_break(production_stack);
+
+                /* we can't prove that this is a successful parse of all of the
+                 * tokens and so we assume that there exists more to parse. save
+                 * the result of the application of this production to the cache
+                 * and yield control to the parent frame.
+                 */
+                } else {
+                    PARSER_DEBUG(printf("production succeeded.\n");)
+
+                    ++num_cached_successes;
+
+                    /* pop the production and advance to the next rule of the
+                     * calling production. */
+                    P_production_succeeded(production_stack, parser_cache, curr);
+                }
             }
 
         } else if(is_not_null(curr)) {
@@ -238,6 +257,24 @@ match_production:
                         PARSER_DEBUG(printf("cached production failed.\n");)
                         P_production_break(production_stack);
 
+                    /* the cached result is missing, i.e. the cache value was
+                     * initialized by a production already on the stack but that
+                     * has (in)directly called itself through left recursion. */
+                    } else if(P_cache_value_is_missing(cached_result)) {
+
+                        PARSER_DEBUG(printf("detected left recursion. \n");)
+
+                        ++num_func_calls;
+
+                        P_cache_value_enable_left_recursion(cached_result);
+                        P_production_push_lr(
+                            production_stack,
+                            parser_cache,
+                            all_parse_trees,
+                            P->productions + (curr_rule->production),
+                            curr
+                        );
+
                     /* the cached result was a success, we need to merge the
                      * cached tree with our current parse tree, advance to the
                      * next rewrite rule in our current rule list, and advance
@@ -261,7 +298,6 @@ match_production:
                  * new frame onto the stack.
                  */
                 } else {
-
                     PARSER_DEBUG(printf("pushing production onto stack.\n");)
 
                     ++num_func_calls;
@@ -286,9 +322,7 @@ match_production:
                 ++num_tok_comparisons;
 
                 /* record the farthest point we've gotten to. */
-                if((curr_token->line > fpr.line)
-                || (curr_token->line == fpr.line && curr_token->column > fpr.column)) {
-
+                if(P_tree_progress_was_made(curr, fpr.line, fpr.column)) {
                     fpr.column = curr_token->column;
                     fpr.line = curr_token->line;
                 }
@@ -297,10 +331,10 @@ match_production:
                  * list and the next rewrite rule in the current rule list.
                  * also, store the matched token into the frame's partial parse
                  * tree. */
-                if(curr_token->lexeme == curr_rule->lexeme) {
+                if(curr_token->token == curr_rule->token) {
 
-                    PARSER_DEBUG(if(is_not_null(curr_token->val)) {
-                        printf("\t matched: %s\n", curr_token->val->str);
+                    PARSER_DEBUG(if(is_not_null(curr_token->lexeme)) {
+                        printf("\t matched: %s\n", curr_token->lexeme->str);
                     } else {
                         printf("\t matched \n");
                     })
@@ -323,8 +357,8 @@ match_production:
                 } else {
 
                     PARSER_DEBUG(printf(
-                        "didn't match, expected:%d got:%d\n",
-                        curr_rule->lexeme, curr_token->lexeme
+                        "\t didn't match, expected:%d got:%d\n",
+                        curr_rule->token, curr_token->token
                     );)
 
                     P_production_break(production_stack);
@@ -336,6 +370,9 @@ match_production:
              * token. */
             } else {
 match_epsilon:
+
+                PARSER_DEBUG(printf("\t matched epsilon. \n");)
+
                 if(P_adt_rule_is_non_excludable(curr_rule)) {
                     parse_tree = P_tree_alloc_epsilon();
                     P_tree_set_add(all_parse_trees, parse_tree);
@@ -360,6 +397,8 @@ match_epsilon:
          *       missing information or the current derivation is such that
          *       we expect too much information. */
         } else {
+
+            PARSER_DEBUG(printf("end of input. \n");)
 
             if(P_production_has_rule(production_stack)) {
                 curr_rule = P_production_get_rule(production_stack);
@@ -408,6 +447,8 @@ match_epsilon:
 
         parse_tree = P_production_get_parse_tree(production_stack);
 
+        printf("removing valid trees from garbage... \n");
+
         /* go over our reduced parse tree and remove any references to trees
          * listed in our all trees hash table to that we can free all of the
          * remaining trees in there at once. */
@@ -424,12 +465,20 @@ match_epsilon:
         printf("Num trees in garbage: %d \n", all_parse_trees->num_used_slots);
     }
 
-    printf("freeing resources...\n");
+    printf("freeing resources... \n");
 
     /* free out the resources no longer needed. */
     P_tree_set_free(all_parse_trees);
+
+    printf("garbage trees freed. \n");
+
     P_cache_free(parser_cache);
+
+    printf("cache freed. \n");
+
     P_Production_free(production_stack);
+
+    printf("production stack freed. \n");
 
     printf("returning parse tree...\n");
 

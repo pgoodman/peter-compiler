@@ -20,7 +20,7 @@ typedef struct PParser {
     char is_closed;
 
     /* keep track of all of the productions for the parsing grammar. */
-    PParserProduction *productions;
+    P_Production *productions;
     unsigned int num_productions,
                  num_tokens;
 
@@ -37,7 +37,7 @@ typedef struct PParser {
  */
 typedef struct PParserRewriteRule {
     unsigned char production,
-                  lexeme,
+                  token,
                   flag;
 } PParserRewriteRule;
 

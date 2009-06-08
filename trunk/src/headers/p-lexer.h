@@ -15,8 +15,8 @@
 #include "std-input.h"
 
 typedef struct PToken {
-    char lexeme;
-    PString *val;
+    char token;
+    PString *lexeme;
     uint32_t line,
              column;
 } PToken;
@@ -29,8 +29,10 @@ typedef struct PTokenGenerator {
     char start_char;
 } PTokenGenerator;
 
-PToken *token_alloc(char lexeme, PString *val, uint32_t line, uint32_t col);
+PToken *token_alloc(char token, PString *lexeme, uint32_t line, uint32_t col);
+
 void token_free(PToken *tok);
+
 PTokenGenerator *token_generator_alloc(const char *, PFunction);
 
 unsigned long int token_num_allocated_pointers(void);
