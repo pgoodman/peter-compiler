@@ -46,10 +46,10 @@ typedef struct PTerminalTree {
  * This is used to allocate one and only one parse tree with max_rule_elms
  * branch pointers.
  */
-typedef struct PParserProduction {
+typedef struct P_Production {
     PGenericList *alternatives;
     unsigned char production;
     unsigned short max_num_useful_rewrite_rules;
-} PParserProduction;
+} P_Production;
 
 #endif /* PPRODCOMMON_H_ */

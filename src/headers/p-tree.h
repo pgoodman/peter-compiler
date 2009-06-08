@@ -43,6 +43,10 @@ void P_tree_record_production(PParseTree *temp_tree,
                               PParseTree *parse_tree,
                               PParserRewriteRule *curr_rule);
 
+int P_tree_progress_was_made(PTerminalTree *tree,
+                             unsigned int line,
+                             unsigned int column);
+
 void parser_free_parse_tree(PParseTree *tree);
 
 #endif /* PTREE_H_ */

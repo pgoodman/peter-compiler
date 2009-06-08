@@ -8,8 +8,12 @@
 
 #include <p-cache.h>
 
-#define P_SIZE_OF_CACHE_KEY (sizeof(P_ProductionCacheKey) / sizeof(char))
+#define C_SIZE_OF_KEY (sizeof(P_ProductionCacheKey) / sizeof(char))
+#define C_SIZE_OF_VAL (sizeof(P_ProductionCacheValue) / sizeof(char))
+#define C_SIZE_OF_KEYVAL ((sizeof(P_ProductionCacheKey) + sizeof(P_ProductionCacheValue)) / sizeof(char))
+
 #define P_PRODUCTION_FAILED ((void *) 10)
+#define P_PRODUCTION_INITIAL ((void *) 11)
 
 #define cache_mem_alloc(x) mem_alloc(x); ++num_allocations
 #define cache_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
@@ -30,12 +34,12 @@ static uint32_t C_key_hash_fnc(P_ProductionCacheKey *thunk) {
 
     union {
         P_ProductionCacheKey thunk;
-        char chars[P_SIZE_OF_CACHE_KEY];
+        char chars[C_SIZE_OF_KEY];
     } switcher;
     assert_not_null(thunk);
 
     /* first clear out any random stack garbage left from previous calls */
-    for(i = 0; i < P_SIZE_OF_CACHE_KEY; ++i) {
+    for(i = 0; i < C_SIZE_OF_KEY; ++i) {
         switcher.chars[i] = 0;
     }
 
@@ -43,7 +47,7 @@ static uint32_t C_key_hash_fnc(P_ProductionCacheKey *thunk) {
     switcher.thunk.terminal_tree = thunk->terminal_tree;
     switcher.thunk.production = thunk->production;
 
-    return murmur_hash(switcher.chars, P_SIZE_OF_CACHE_KEY, 73);
+    return murmur_hash(switcher.chars, C_SIZE_OF_KEY, 73);
 }
 
 /**
@@ -67,45 +71,7 @@ static void C_key_free(P_ProductionCacheKey *key) {
  * Free a cached result.
  */
 static void C_value_free(P_ProductionCacheValue *val) {
-    assert_not_null(val);
-    if(P_PRODUCTION_FAILED != val) {
-        cache_mem_free(val);
-    }
-}
 
-/**
- * Allocate a new thunk on the heap.
- */
-static P_ProductionCacheKey *C_key_alloc(unsigned char production,
-                                         PTerminalTree *terminal_tree) {
-
-    P_ProductionCacheKey *thunk = cache_mem_alloc(sizeof(P_ProductionCacheKey));
-    if(is_null(thunk)) {
-        mem_error("Unable to heap allocate a thunk.");
-    }
-
-    thunk->terminal_tree = terminal_tree;
-    thunk->production = production;
-
-    return thunk;
-}
-
-/**
- * Allocate a new cached result of parsing on the heap.
- */
-static P_ProductionCacheValue *C_value_alloc(PTerminalTree *end,
-                                             PParseTree *tree) {
-
-    P_ProductionCacheValue *val = cache_mem_alloc(sizeof(P_ProductionCacheValue));
-    if(is_null(val)) {
-        mem_error("Unable to cache the result of a production on the heap.");
-    }
-
-    val->end = end;
-    val->tree = tree;
-    val->is_left_recursive = 0;
-
-    return val;
 }
 
 /**
@@ -144,17 +110,35 @@ static uint32_t hash_it(P_ProductionCacheKey *key) {
 void P_cache_store_initial(P_ProductionCache *cache,
                            unsigned char production,
                            PTerminalTree *start_position) {
+    char *data;
+    P_ProductionCacheKey *key;
+    P_ProductionCacheValue *val;
 
     assert_not_null(cache);
     assert_null(P_cache_get(cache, production, start_position));
 
+    /* allocate the cache key and value at once */
+    data = cache_mem_calloc(C_SIZE_OF_KEYVAL, sizeof(char));
+    if(is_null(data)) {
+        mem_error("Unable to allocate parser cache entry.");
+    }
+
+    /* initialize the key/value pair */
+    key = (P_ProductionCacheKey *) data;
+    val = (P_ProductionCacheValue *) (data + C_SIZE_OF_VAL);
+
+    key->production = production;
+    key->terminal_tree = start_position;
+
+    val->end = NULL;
+    val->is_left_recursive = 0;
+    val->tree = P_PRODUCTION_INITIAL;
+
+    /* set the cache entry */
     dict_set(
         cache,
-        C_key_alloc(
-            production,
-            start_position
-        ),
-        P_PRODUCTION_FAILED,
+        key,
+        val,
         (PDelegate) &C_value_free
     );
 }
@@ -167,23 +151,12 @@ void P_cache_store_success(P_ProductionCache *cache,
                            PTerminalTree *start_position,
                            PTerminalTree *end_position,
                            PParseTree *parse_tree) {
-    P_ProductionCacheKey thunk;
-
+    P_ProductionCacheValue *value;
     assert_not_null(cache);
-    assert_not_null(P_cache_get(cache, production, start_position));
-
-    thunk.terminal_tree = start_position;
-    thunk.production = production;
-
-    dict_set(
-        cache,
-        &thunk,
-        C_value_alloc(
-            end_position,
-            parse_tree
-        ),
-        (PDelegate) &C_value_free
-    );
+    value = P_cache_get(cache, production, start_position);
+    assert_not_null(value);
+    value->end = end_position;
+    value->tree = parse_tree;
 }
 
 /**
@@ -192,19 +165,12 @@ void P_cache_store_success(P_ProductionCache *cache,
 void P_cache_store_failure(P_ProductionCache *cache,
                            unsigned char production,
                            PTerminalTree *start_position) {
-    P_ProductionCacheKey thunk;
-
-    assert_not_null(cache);
-    assert_not_null(P_cache_get(cache, production, start_position));
-
-    thunk.terminal_tree = start_position;
-    thunk.production = production;
-
-    dict_set(
+    P_cache_store_success(
         cache,
-        &thunk,
-        P_PRODUCTION_FAILED,
-        (PDelegate) &C_value_free
+        production,
+        start_position,
+        NULL,
+        P_PRODUCTION_FAILED
     );
 }
 
@@ -227,9 +193,10 @@ P_ProductionCacheValue *P_cache_get(P_ProductionCache *cache,
 /**
  * Get the parse tree stored in a cache value.
  */
-PParseTree *P_cache_value_get_tree(P_ProductionCacheValue *val) {
+PParseTree *P_cache_value_get_tree(const P_ProductionCacheValue *val) {
     assert_not_null(val);
-    assert(val != P_PRODUCTION_FAILED);
+    assert(val->tree != P_PRODUCTION_FAILED);
+    assert(val->tree != P_PRODUCTION_INITIAL);
 
     return val->tree;
 }
@@ -237,16 +204,52 @@ PParseTree *P_cache_value_get_tree(P_ProductionCacheValue *val) {
 /**
  * Get where the cache value parsed to.
  */
-PTerminalTree *P_cache_value_get_terminal(P_ProductionCacheValue *val) {
+PTerminalTree *P_cache_value_get_terminal(const P_ProductionCacheValue *val) {
     assert_not_null(val);
-    assert(val != P_PRODUCTION_FAILED);
+    assert(val->tree != P_PRODUCTION_FAILED);
+    assert(val->tree != P_PRODUCTION_INITIAL);
     return val->end;
 }
 
 /**
  * Return whether or not a cached result is a failure.
  */
-int P_cache_value_is_failure(P_ProductionCacheValue *result) {
-    assert_not_null(result);
-    return result == P_PRODUCTION_FAILED;
+int P_cache_value_is_failure(const P_ProductionCacheValue *val) {
+    assert_not_null(val);
+    return val->tree == P_PRODUCTION_FAILED;
+}
+
+/**
+ * Return whether or not a cached result is has been initialized but not yet
+ * had a result stored to it.
+ */
+int P_cache_value_is_missing(const P_ProductionCacheValue *val) {
+    assert_not_null(val);
+    return val->tree == P_PRODUCTION_INITIAL;
+}
+
+/**
+ * Set this cached result to be a left-recursive result.
+ */
+void P_cache_value_enable_left_recursion(P_ProductionCacheValue *val) {
+    assert_not_null(val);
+    assert(val->tree != P_PRODUCTION_FAILED);
+    val->is_left_recursive = 1;
+    val->tree = P_PRODUCTION_FAILED;
+}
+
+/**
+ * Set this cached result to be a non-left-recursive result.
+ */
+void P_cache_value_disable_left_recursion(P_ProductionCacheValue *val) {
+    assert_not_null(val);
+    val->is_left_recursive = 0;
+}
+
+/**
+ * Check if a chached result is left recursive.
+ */
+int P_cache_value_is_left_recursive(const P_ProductionCacheValue *val) {
+    assert_not_null(val);
+    return (int) val->is_left_recursive;
 }

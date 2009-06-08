@@ -65,9 +65,19 @@ P_ProductionCacheValue *P_cache_get(P_ProductionCache *thunk_table,
                                     unsigned char production,
                                     PTerminalTree *start_position);
 
-int P_cache_value_is_failure(P_ProductionCacheValue *result);
-PParseTree *P_cache_value_get_tree(P_ProductionCacheValue *val);
-PTerminalTree *P_cache_value_get_terminal(P_ProductionCacheValue *val);
+int P_cache_value_is_failure(const P_ProductionCacheValue *result);
+
+int P_cache_value_is_missing(const P_ProductionCacheValue *result);
+
+PParseTree *P_cache_value_get_tree(const P_ProductionCacheValue *val);
+
+PTerminalTree *P_cache_value_get_terminal(const P_ProductionCacheValue *val);
+
+void P_cache_value_enable_left_recursion(P_ProductionCacheValue *result);
+
+void P_cache_value_disable_left_recursion(P_ProductionCacheValue *result);
+
+int P_cache_value_is_left_recursive(const P_ProductionCacheValue *result);
 
 unsigned long int cache_num_allocated_pointers(void);
 

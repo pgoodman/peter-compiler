@@ -36,7 +36,10 @@ enum {
     P_DECORATION,
     P_RULE_FLAG,
     P_NON_EXCLUDABLE,
-    P_SUBSUMABLE
+    P_SUBSUMABLE,
+
+    P_TEMP,
+    P_TEMP2
 };
 
 typedef int (*char_predicate_t)(int);
@@ -46,9 +49,9 @@ typedef struct {
 } accumulate_result_t;
 
 static accumulate_result_t accumulate_chars(char_predicate_t predicate,
-                                 char *S,
-                                 char C,
-                                 PTokenGenerator *G) {
+                                            char *S,
+                                            char C,
+                                            PTokenGenerator *G) {
     int i;
     accumulate_result_t result;
 
@@ -76,8 +79,8 @@ static int ident_char(int C) {
 static PToken *lexer_grammar_token_generator(PTokenGenerator *G) {
     char C,
          S[31],
-         lexeme = -1,
          next_start_char = -1;
+    unsigned char token = 0xFF;
     accumulate_result_t result;
 
     assert_not_null(G);
@@ -132,7 +135,7 @@ clear_spaces:
 
             if('>' == C) {
                 result.str = string_alloc_char("", 0);
-                lexeme = L_EPSILON;
+                token = L_EPSILON;
                 break;
             }
 
@@ -144,29 +147,29 @@ clear_spaces:
                 );
             }
 
-            lexeme = L_TERMINAL;
+            token = L_TERMINAL;
             break;
         case ':':
             result.str = string_alloc_char(":", 1);
-            lexeme = L_COLON;
+            token = L_COLON;
             break;
         case ';':
             result.str = string_alloc_char(";", 1);
-            lexeme = L_SEMICOLON;
+            token = L_SEMICOLON;
             break;
         case '-':
             result.str = string_alloc_char("-", 1);
-            lexeme = L_DASH;
+            token = L_DASH;
             break;
         case '^':
             result.str = string_alloc_char("^", 1);
-            lexeme = L_UP_ARROW;
+            token = L_UP_ARROW;
             break;
         default:
             if(ident_char(C)) {
                 result = accumulate_chars(&ident_char, S, C, G);
                 next_start_char = result.next;
-                lexeme = L_NON_TERMINAL;
+                token = L_NON_TERMINAL;
             } else {
                 std_error("Unrecognized character in grammar file.");
                 return NULL;
@@ -174,10 +177,10 @@ clear_spaces:
     }
 
     G->start_char = next_start_char;
-    return token_alloc(lexeme, result.str, G->line, G->column);
+    return token_alloc(token, result.str, G->line, G->column);
 }
 
-static char production_names[10][16] = {
+static char production_names[12][16] = {
     "Productions",
     "Production",
     "ProductionRules",
@@ -187,7 +190,10 @@ static char production_names[10][16] = {
     "Decoration",
     "RuleFlag",
     "NonExludable",
-    "Subsumable"
+    "Subsumable",
+
+    "Temp",
+    "Temp2"
 };
 
 static void print_tree(PParseTree *T) {
@@ -200,8 +206,8 @@ static void print_tree(PParseTree *T) {
             /* terminal */
             if(T->type == 1) {
                 printf("\"%p\" -> \"%p\" \n", (void *)T->_._parent, (void *)T);
-                if(((PTerminalTree *)T)->token->val != NULL) {
-                    printf("\"%p\" [label=\"%s\" color=blue] \n", (void *)T, (char *)((PTerminalTree *)T)->token->val->str);
+                if(((PTerminalTree *)T)->token->lexeme != NULL) {
+                    printf("\"%p\" [label=\"%s\" color=blue] \n", (void *)T, (char *)((PTerminalTree *)T)->token->lexeme->str);
                 }
             } else {
                 printf("\"%p\" -> \"%p\"\n", (void *)T->_._parent, (void *)T);
@@ -233,9 +239,14 @@ int main(void) {
 
     P = parser_alloc(
         P_PRODUCTIONS, /* production to start matching with */
-        10, /* number of productions */
+        12, /* number of productions */
         8 /* number of tokens */
     );
+
+    parser_add_production(P, P_TEMP2, 1,
+        parser_rule_sequence(P, 2,
+            parser_rewrite_epsilon(P, 0),
+            parser_rewrite_production(P, P_TEMP, 2)));
 
     parser_add_production(P, P_PRODUCTIONS, 2,
         parser_rule_sequence(P, 2,
@@ -243,6 +254,10 @@ int main(void) {
             parser_rewrite_production(P, P_PRODUCTIONS, 2)),
         parser_rule_sequence(P, 1,
             parser_rewrite_epsilon(P, 0)));
+
+    parser_add_production(P, P_TEMP, 1,
+        parser_rule_sequence(P, 1,
+            parser_rewrite_production(P, P_PRODUCTIONS, 2)));
 
     parser_add_production(P, P_PRODUCTION, 1,
         parser_rule_sequence(P, 3,

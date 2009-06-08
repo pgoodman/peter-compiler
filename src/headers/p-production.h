@@ -56,11 +56,17 @@
  *       future use.
  */
 typedef struct P_StackFrame {
-    PParserProduction *production;
+    P_Production *production;
     PGenericList *curr_rule_list, /* list of rewrite rules */
                  *alternative_rules; /* list of lists of rewrite rules */
+    PParserRewriteRule *left_recursive_rule; /* the left recursive rule, if any */
     PTerminalTree *backtrack_point;
-    char do_backtrack;
+    char do_backtrack,
+         is_direct_left_recursion;
+
+    unsigned int fpr_line,
+                 fpr_column;
+
     PParseTree *parse_tree;
     struct P_StackFrame *caller;
 } P_StackFrame;
@@ -79,8 +85,14 @@ void P_Production_free(P_ProductionStack *stack);
 void P_production_push(P_ProductionStack *stack,
                        P_ProductionCache *cache,
                        PDictionary *all_trees,
-                       PParserProduction *prod,
+                       P_Production *prod,
                        PTerminalTree *backtrack_point);
+
+void P_production_push_lr(P_ProductionStack *stack,
+                          P_ProductionCache *cache,
+                          PDictionary *all_trees,
+                          P_Production *prod,
+                          PTerminalTree *backtrack_point);
 
 void P_production_succeeded(P_ProductionStack *stack,
                             P_ProductionCache *cache,
@@ -95,6 +107,8 @@ void P_production_cache_succeeded(P_ProductionStack *stack,
 void P_production_continue(P_ProductionStack *stack);
 
 void P_production_break(P_ProductionStack *stack);
+
+void P_production_cascade(P_ProductionStack *stack, P_ProductionCache *cache);
 
 int P_production_rule_failed(P_ProductionStack *stack);
 
@@ -112,6 +126,13 @@ int P_production_has_rule(P_ProductionStack *stack);
 
 PParseTree *P_production_get_parse_tree(P_ProductionStack *stack);
 
+P_ProductionCacheValue *P_production_get_cache(P_ProductionStack *stack,
+                                               P_ProductionCache *cache);
+
+void P_production_grow_lr(P_ProductionStack *stack,
+                          P_ProductionCache *cache,
+                          P_ProductionCacheValue *cached_result,
+                          PTerminalTree **curr);
 
 unsigned long int prod_num_allocated_pointers(void);
 

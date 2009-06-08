@@ -232,6 +232,22 @@ void P_tree_set_remove(P_TreeSet *set, PParseTree *tree) {
 }
 
 /**
+ * Check if progress was made in parsing.
+ */
+int P_tree_progress_was_made(PTerminalTree *tree,
+                             unsigned int line,
+                             unsigned int column) {
+    PToken *tok;
+    if(is_null(tree)) {
+        return 0;
+    } else {
+        tok = tree->token;
+        return (tok->line > line)
+            || (tok->line == line && tok->column > column);
+    }
+}
+
+/**
  * Free a parse tree, in its entirety.
  */
 void parser_free_parse_tree(PParseTree *tree) {

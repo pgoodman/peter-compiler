@@ -1,8 +1,10 @@
 
 Productions
-    : Production ^Productions
+    : ^Temp Production
     : <>
     ;
+
+Temp : ^Productions ;
 
 Production
     : -<non_terminal> ^ProductionRules <semicolon>
