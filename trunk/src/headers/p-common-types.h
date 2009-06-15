@@ -9,47 +9,86 @@
 #ifndef PPRODCOMMON_H_
 #define PPRODCOMMON_H_
 
-#include "p-lexer.h"
 #include "adt-tree.h"
 
-/* parse tree, only used for productions, leaves are tokens :) */
+#include "p-lexer.h"
+
+/**
+ * Parse Tree Types
+ */
+
+/* The type of a parse tree. */
 typedef enum {
     P_PARSE_TREE_PRODUCTION,
     P_PARSE_TREE_TERMINAL,
     P_PARSE_TREE_EPSILON
-} PParseTreeType;
+} PT_Type;
 
+/* A parse tree. */
 typedef struct PParseTree {
     PTree _;
-    PParseTreeType type;
+    PT_Type type;
 } PParseTree;
 
-typedef struct PProductionTree {
-    PParseTree _;
-    unsigned char production,
-                  /* the rule from the production's definition that matched */
-                  rule;
-} PProductionTree;
+/* epsilon tree */
+typedef PParseTree PT_Epsilon;
 
-typedef struct PTerminalTree {
+/* a parse tree representing a non-terminal symbol, i.e. the result of applying
+ * a production rule to the token stream. */
+typedef struct PT_NonTerminal {
     PParseTree _;
-    PToken *token;
-    struct PTerminalTree *prev,
-                         *next;
-} PTerminalTree;
+
+    /* the rule from the production's definition that matched */
+    G_NonTerminal production;
+
+    unsigned char rule;
+} PT_NonTerminal;
+
+/* a parse tree representing a terminal symbol, i.e. a token */
+typedef struct PT_Terminal {
+    PParseTree _;
+
+    G_Terminal terminal;
+
+    PString *lexeme;
+
+    uint32_t line,
+             column;
+
+    uint32_t id;
+
+    struct PT_Terminal *prev,
+                       *next;
+} PT_Terminal;
+
+/* a set of parse trees */
+typedef PDictionary PT_Set;
+
+/* -------------------------------------------------------------------------- */
 
 /**
- * Type representing a single production and all of its rules 'alternatives'
- * from a top-down parsing grammar. The list is of rules is explicitly ordered.
- *
- * The 'max_rule_elms' is maximum number of non/terminals in all of its rules.
- * This is used to allocate one and only one parse tree with max_rule_elms
- * branch pointers.
+ * Grammar types
  */
-typedef struct P_Production {
-    PGenericList *alternatives;
-    unsigned char production;
-    unsigned short max_num_useful_rewrite_rules;
-} P_Production;
+typedef short G_Terminal;
+typedef short G_NonTerminal;
+
+typedef struct G_Symbol {
+    union {
+        G_NonTerminal non_terminal;
+        G_Terminal terminal;
+    } value;
+    unsigned char flag;
+} G_Symbol;
+
+typedef struct G_Phrase {
+    G_Symbol *symbols;
+    unsigned int num_symbols;
+} G_Phrase;
+
+typedef struct G_Production {
+    G_Phrase *phrases;
+    G_NonTerminal production;
+    unsigned int num_phrases;
+} G_ProductionRule;
 
 #endif /* PPRODCOMMON_H_ */

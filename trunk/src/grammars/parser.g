@@ -16,7 +16,7 @@ ProductionRules
     ;
 
 ProductionRule
-    : <colon> ^Rules Decoration
+    : <colon> ^Rules
     ;
 
 Rules
@@ -28,11 +28,6 @@ Rule
     : RuleFlag -<non_terminal>
     : RuleFlag -<terminal>
     : RuleFlag -<epsilon>
-    ;
-
-Decoration
-    : -<code>
-    : <>
     ;
 
 RuleFlag
