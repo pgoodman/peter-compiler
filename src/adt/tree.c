@@ -8,20 +8,7 @@
 
 #include <adt-tree.h>
 
-#define FREE_GENERATOR_FUNC(N, T, F) \
-    static void N(void *g ) {\
-        PTreeGenerator *G = NULL; \
-        T *A = NULL; \
-        assert_not_null(g); \
-        G = (PTreeGenerator *) g; \
-        A = (T *) (G->_adt); \
-        G->_adt = NULL; \
-        F(A, delegate_do_nothing ); \
-        tree_mem_free(g); \
-        G = NULL; \
-        g = NULL; \
-        return; \
-    }
+/* -------------------------------------------------------------------------- */
 
 static unsigned long int num_allocations = 0;
 
@@ -34,29 +21,7 @@ unsigned long int tree_num_allocated_pointers(void) {
     return num_allocations;
 }
 
-/**
- * Allocate a new N-ary tree on the heap. The struct_size is the size of the
- * structure which *must* contain a PTree as its first field, and the degree
- * is the number of branches that this tree should have.
- */
-void *tree_alloc(const size_t struct_size, const unsigned short degree) {
-    PTree *T = NULL;
-
-    assert(sizeof(PTree) <= struct_size);
-
-    T = tree_mem_alloc(struct_size);
-    T->_branches = NULL;
-    T->_degree = degree;
-    T->_fill = 0;
-    T->_parent_branch = 0;
-    T->_parent = NULL;
-
-    if (degree > 0) {
-        T->_branches = tree_mem_alloc(sizeof(PTree *) * degree);
-    }
-
-    return T;
-}
+/* -------------------------------------------------------------------------- */
 
 /**
  * Figure out a valid memory freeing callback for freeing things.
@@ -90,6 +55,63 @@ static void T_free(PTree *tree, PDelegate free_tree_fnc) {
     free_tree_fnc(tree);
     tree_mem_free(tree);
     return;
+}
+
+/**
+ * Set a tree 'branch' as one of the branches of 'parent'. Return 1 if
+ * successful, 0 on failure.
+ */
+static void T_add_branch(PTree *parent, PTree *branch, int force) {
+    PTree *child = (PTree *) branch;
+
+    assert_not_null(parent);
+    assert_not_null(branch);
+    assert(parent->_fill < parent->_degree || force);
+
+    if(parent->_fill >= parent->_degree && force) {
+        parent->_degree = (0 == parent->_degree) ? 1 : parent->_degree * 2;
+
+        parent->_branches = mem_realloc(
+            parent->_branches,
+            (parent->_degree * sizeof(PTree *))
+        );
+
+        if(is_null(parent->_branches)) {
+            mem_error("Unable to grow parse tree node.");
+        }
+    }
+
+    parent->_branches[parent->_fill] = child;
+    child->_parent = parent;
+    child->_parent_branch = parent->_fill;
+
+    ++(parent->_fill);
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Allocate a new N-ary tree on the heap. The struct_size is the size of the
+ * structure which *must* contain a PTree as its first field, and the degree
+ * is the number of branches that this tree should have.
+ */
+void *tree_alloc(const size_t struct_size, const unsigned short degree) {
+    PTree *T = NULL;
+
+    assert(sizeof(PTree) <= struct_size);
+
+    T = tree_mem_alloc(struct_size);
+    T->_branches = NULL;
+    T->_degree = degree;
+    T->_fill = 0;
+    T->_parent_branch = 0;
+    T->_parent = NULL;
+
+    if (degree > 0) {
+        T->_branches = tree_mem_alloc(sizeof(PTree *) * degree);
+    }
+
+    return T;
 }
 
 /**
@@ -218,37 +240,6 @@ void tree_trim(PTree *T, PDictionary *garbage_set) {
     return;
 }
 
-/**
- * Set a tree 'branch' as one of the branches of 'parent'. Return 1 if
- * successful, 0 on failure.
- */
-static void T_add_branch(PTree *parent, PTree *branch, int force) {
-    PTree *child = (PTree *) branch;
-
-    assert_not_null(parent);
-    assert_not_null(branch);
-    assert(parent->_fill < parent->_degree || force);
-
-    if(parent->_fill >= parent->_degree && force) {
-        parent->_degree = (0 == parent->_degree) ? 1 : parent->_degree * 2;
-
-        parent->_branches = mem_realloc(
-            parent->_branches,
-            (parent->_degree * sizeof(PTree *))
-        );
-
-        if(is_null(parent->_branches)) {
-            mem_error("Unable to grow parse tree node.");
-        }
-    }
-
-    parent->_branches[parent->_fill] = child;
-    child->_parent = parent;
-    child->_parent_branch = parent->_fill;
-
-    ++(parent->_fill);
-}
-
 void tree_add_branch(PTree *parent, PTree *branch) {
     T_add_branch(parent, branch, 0);
 }
@@ -292,6 +283,23 @@ void tree_replace_branch(PTree *old_child, PTree *new_child) {
     old_child->_parent_branch = 0;
     old_child->_parent = NULL;
 }
+
+/* -------------------------------------------------------------------------- */
+
+#define FREE_GENERATOR_FUNC(N, T, F) \
+    static void N(void *g ) {\
+        PTreeGenerator *G = NULL; \
+        T *A = NULL; \
+        assert_not_null(g); \
+        G = (PTreeGenerator *) g; \
+        A = (T *) (G->_adt); \
+        G->_adt = NULL; \
+        F(A, delegate_do_nothing ); \
+        tree_mem_free(g); \
+        G = NULL; \
+        g = NULL; \
+        return; \
+    }
 
 FREE_GENERATOR_FUNC(T_generator_free_s, PStack, stack_free)
 FREE_GENERATOR_FUNC(T_generator_free_q, PQueue, queue_free)
@@ -417,7 +425,7 @@ static void *T_generator_next_po(PTreeGenerator *G) {
 
                     curr = stack_peek(S);
 
-                    /* no sub-trees to explore, this is a leaf node */
+                /* no sub-trees to explore, this is a leaf node */
                 } else {
                     stack_push(S, NULL);
                     break;
@@ -429,6 +437,8 @@ static void *T_generator_next_po(PTreeGenerator *G) {
 
     return ret;
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a tree generator on the heap and initialize that generator.
@@ -498,12 +508,3 @@ void tree_generator_reuse(PTreeGenerator *G, void *tree) {
     G->_reclaim_adt(G->_adt, &delegate_do_nothing);
     G->_adt = tree;
 }
-
-/**
- * Get a specific branch from the tree.
- */
-/*void *tree_get_branch(void *T, unsigned short branch) {
- assert_not_null(T);
- assert(branch < ((PTree *) T)->_fill);
- return (((PTree *) T)->_branches[branch]);
- }*/

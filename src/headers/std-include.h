@@ -13,6 +13,12 @@
 #ifndef STDHEADER_H_
 #define STDHEADER_H_
 
+#ifdef MSDOS
+#   define MSFT(x) x
+#else
+#   define MSFT(x)
+#endif
+
 #define is_null(x) (NULL == (x))
 #define is_not_null(x) (NULL != (x))
 

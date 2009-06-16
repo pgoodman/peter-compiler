@@ -8,7 +8,7 @@
 
 #include <adt-dict.h>
 
-#define P_DICT_LOAD_FACTOR 0.65
+#define D_LOAD_FACTOR 0.65
 
 /**
  * Credit for primes table: Aaron Krowne
@@ -36,6 +36,8 @@ static unsigned long int num_allocations = 0;
 unsigned long int dict_num_allocated_pointers(void) {
     return num_allocations;
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a new dictionary entry.
@@ -134,6 +136,8 @@ static void H_slots_grow(H_type *H ) {
 
     return;
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a generic hash table on the heap. A generic hash table allows the
@@ -273,7 +277,7 @@ void dict_set(H_type *H,
 
     ++(H->num_used_slots);
 
-    if(P_DICT_LOAD_FACTOR <= ((float)H->num_used_slots / (float)H->num_slots)) {
+    if(D_LOAD_FACTOR <= ((float)H->num_used_slots / (float)H->num_slots)) {
         H->grow_table = 1;
     }
 }
@@ -338,6 +342,8 @@ H_val_type dict_get(H_type *H, H_key_type key) {
 char dict_is_set(H_type *H, H_key_type key) {
     return is_not_null(H_entry_get(H, key));
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Hash a pointer.

@@ -11,8 +11,43 @@
 
 #define P_MAX_RECURSION_DEPTH 50
 
-#include "p-lexer.h"
 #include "p-common-types.h"
+
+#define S_MAX_LOOKAHEAD 16
+#define S_MAX_LEXEME_LENGTH 1024
+#define S_INPUT_BUFFER_SIZE ((3 * S_MAX_LEXEME_LENGTH) + (2 * S_MAX_LOOKAHEAD))
+
+/* The scanner data structure. It deals with handling input lexemes for a
+ * particular body of text. The scanner is responsible for driving the state
+ * machine that matches lexemes and returns tokens. */
+typedef struct PScanner {
+
+    struct {
+        unsigned char start[S_INPUT_BUFFER_SIZE],
+                      *end,
+                      *next_char,
+                      *flush_point;
+    } buffer;
+
+    struct {
+        unsigned char *curr_start,
+                      *curr_end,
+                      *prev_start,
+                      *prev_line_num,
+                      *prev_length,
+                      term_char;
+    } lexeme;
+
+    struct {
+        int file_descriptor;
+        char eof_read;
+        uint32_t line,
+                 column;
+    } input;
+
+} PScanner;
+
+/* -------------------------------------------------------------------------- */
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PGrammar {
