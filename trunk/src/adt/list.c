@@ -12,10 +12,13 @@
 #define list_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
 #define list_mem_free(x) mem_free(x); --num_allocations
 #define list_mem_error(x) mem_error(x)
+
 static unsigned long int num_allocations = 0;
 unsigned long int list_num_allocated_pointers(void) {
     return num_allocations;
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a new linked list.
@@ -76,6 +79,8 @@ char list_has_next(PList *L) {
     assert_not_null(L);
     return is_not_null(L->_next);
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a generic list on the heap.

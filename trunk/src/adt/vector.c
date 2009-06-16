@@ -52,6 +52,8 @@ static void V_resize(PVector *V, uint32_t i) {
     return;
 }
 
+/* -------------------------------------------------------------------------- */
+
 /**
  * Allocate a generic vector on the heap.
  */
@@ -181,6 +183,8 @@ void *vector_get(PVector *V, uint32_t i) {
     return V->_elms[i];
 }
 
+/* -------------------------------------------------------------------------- */
+
 /**
  * Get the next element in a vector.
  */
@@ -226,6 +230,8 @@ static void V_generator_free(void *g) {
     G = NULL;
     return;
 }
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a new vector generator on the heap. Note: we are allowed to have

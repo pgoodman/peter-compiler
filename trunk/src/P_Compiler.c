@@ -12,9 +12,7 @@
 #include <std-include.h>
 #include <std-string.h>
 
-#include <adt-dict.h>
-
-#include <p-lexer.h>
+#include <p-scanner.h>
 #include <p-grammar.h>
 #include <p-parser.h>
 

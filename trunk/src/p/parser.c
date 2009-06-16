@@ -234,7 +234,7 @@ static void F_free_all(PParser *parser) {
 
     unsigned int i;
 
-    register P_Frame **stack = (P_Frame **) parser->call.stack;
+    register P_Frame *stack[] = parser->call.stack;
 
     for(i = 0; i < P_MAX_RECURSION_DEPTH && is_not_null(stack[i]); ++i) {
         mem_free(stack[i]);
