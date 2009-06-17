@@ -246,10 +246,11 @@ G_Symbol *G_production_rule_get_symbol(G_ProductionRule *rule,
     assert_not_null(rule);
     assert(phrase < rule->num_phrases);
 
-    if(symbol >= rule->phrases[phrase]->num_symbols) {
+    if(symbol >= ((rule->phrases) + phrase)->num_symbols) {
         return NULL;
     }
-    return rule->phrases[phrase]->symbols + symbol;
+
+    return ((rule->phrases) + phrase)->symbols + symbol;
 }
 
 /**

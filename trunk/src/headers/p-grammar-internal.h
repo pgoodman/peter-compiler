@@ -11,13 +11,12 @@
 
 #include "p-types.h"
 #include "p-parser.h"
-#include "p-grammar.h"
 
 void G_lock(PGrammar *grammar);
 
-int G_production_rule_has_phrase(G_ProductionRule *rule, unsigned int phrase);
+int G_production_rule_has_phrase(G_ProductionRule *, unsigned int phrase);
 
-G_Symbol *G_production_rule_get_symbol(G_ProductionRule *rule,
+G_Symbol *G_production_rule_get_symbol(G_ProductionRule *,
                                        unsigned int phrase,
                                        unsigned int symbol);
 

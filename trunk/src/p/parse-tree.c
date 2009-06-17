@@ -7,32 +7,36 @@
  */
 
 #include <p-parse-tree.h>
+#include <p-grammar-internal.h>
 
 /**
  * Allocate a new terminal tree.
  */
-static PT_Terminal *PT_alloc_terminal(PToken *tok,
+static PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
+                                      PString *lexeme,
+                                      uint32_t line,
+                                      uint32_t column,
                                       uint32_t id) {
     PT_Terminal *tree = NULL;
 
-    assert_not_null(tok);
-    assert_not_null(all_trees);
+    tree = tree_alloc(sizeof(PT_Terminal), 0);
+    tree->_.type = P_PARSE_TREE_TERMINAL;
 
-    T = tree_alloc(sizeof(PT_Terminal), 0);
-    T->token = tok;
-    T->next = NULL;
-    T->prev = NULL;
-    T->id = id;
-    T->_.type = P_PARSE_TREE_TERMINAL;
+    tree->terminal = terminal;
+    tree->lexeme = lexeme;
+    tree->line = line;
+    tree->column = column;
+    tree->next = NULL;
+    tree->prev = NULL;
 
-    return T;
+    return tree;
 }
 
 /**
  * Allocate a new non-terminal tree.
  */
-PT_NonTerminal *PT_alloc_non_terminal(unsigned short num_branches,
-                                      G_NonTerminal production) {
+PT_NonTerminal *PT_alloc_non_terminal(G_NonTerminal production,
+                                      unsigned short num_branches) {
     PT_NonTerminal *tree;
     tree = tree_alloc(sizeof(PT_NonTerminal), num_branches);
     tree->_.type = P_PARSE_TREE_PRODUCTION;
@@ -53,44 +57,40 @@ PT_Epsilon *PT_alloc_epsilon(void) {
 /**
  * Return a linked list of all tokens in the current file being parsed.
  */
-P_TerminalTreeList PT_alloc_terminals(PT_Set *all_trees,
-                                      PTokenGenerator *gen) {
+PT_Terminal *PT_alloc_terminals(PT_Set *all_trees,
+                                PToken tokens[],
+                                int num_tokens) {
 
-    P_TerminalTreeList list;
+    PT_Terminal *curr = NULL,
+                *next = NULL;
 
-    PT_Terminal *prev = NULL,
-                *curr = NULL;
+    unsigned int id;
 
-    uint32_t id = 0;
-
-    assert_not_null(gen);
     assert_not_null(all_trees);
 
-    list.list = NULL;
-    list.num_tokens = 0;
+    for(id = num_tokens; id > 0; ) {
 
-    /* build up a list of all of the tokens. */
-    if(!generator_next(gen)) {
-        return list;
+        --id;
+
+        curr = PT_alloc_terminal(
+            tokens[id].terminal,
+            tokens[id].lexeme,
+            tokens[id].line,
+            tokens[id].column,
+            id
+        );
+
+        curr->next = next;
+        curr->prev = NULL;
+
+        if(is_not_null(next)) {
+            next->prev = curr;
+        }
+
+        next = curr;
     }
 
-    /* generate the first token */
-    list.list = P_tree_alloc_terminal(generator_current(gen), id++);
-    prev = list.list;
-    parse_tree_set_add(all_trees, prev);
-
-    /* generate the rest of the tokens */
-    while(generator_next(gen)) {
-        curr = P_tree_alloc_terminal(generator_current(gen), id++);
-        parse_tree_set_add(all_trees, curr);
-        prev->next = curr;
-        curr->prev = prev;
-        prev = curr;
-    }
-
-    list.num_tokens = id;
-
-    return list;
+    return curr;
 }
 
 /**
@@ -148,7 +148,7 @@ void parser_free_parse_tree(PParseTree *parse_tree) {
 
     tree_free(
         (PTree *) parse_tree,
-        (PDelegate) &P_tree_free_token
+        (PDelegate) &delegate_do_nothing
     );
 }
 
@@ -162,7 +162,7 @@ void PT_free_intermediate(PParseTree *parse_tree) {
 
     assert_not_null(parse_tree);
 
-    pt_as_tree = parse_tree->_;
+    pt_as_tree = (PTree *) parse_tree;
 
     /* free up the related token */
     if(parse_tree->type == P_PARSE_TREE_TERMINAL) {
@@ -189,4 +189,53 @@ void PT_free_intermediate(PParseTree *parse_tree) {
     }
 
     tree_free(pt_as_tree, &delegate_do_nothing);
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Allocate a set of trees.
+ */
+PT_Set *PTS_alloc(void) {
+    return dict_alloc(
+        53,
+        &dict_pointer_hash_fnc,
+        &dict_pointer_collision_fnc
+    );
+}
+
+/**
+ * Free a set of trees.
+ */
+void PTS_free(PT_Set *set) {
+    assert_not_null(set);
+    dict_free(
+        set,
+        &delegate_do_nothing,
+        (PDelegate) &PT_free_intermediate
+    );
+}
+
+/**
+ * Add a parse tree to the tree set.
+ */
+void PTS_add(PT_Set *set, PParseTree *tree) {
+    assert_not_null(set);
+    assert_not_null(tree);
+    dict_set(set, tree, tree, &delegate_do_nothing);
+}
+
+/**
+ * Rmove a tree from the tree set.
+ */
+void PTS_remove(PT_Set *set, PParseTree *tree) {
+    assert_not_null(set);
+    assert_not_null(tree);
+
+    dict_unset(
+        set,
+        tree,
+        &delegate_do_nothing,
+        &delegate_do_nothing
+    );
 }

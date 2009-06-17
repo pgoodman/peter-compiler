@@ -139,13 +139,6 @@ static void I_read(PScanner *scanner, unsigned char *start, int how_much) {
     return read(scanner->input.file_descriptor, start, how_much);
 }
 
-/**
- * Return the next input character and advance past it.
- */
-static void I_advance(PScanner *scanner) {
-
-}
-
 
 /* -------------------------------------------------------------------------- */
 
@@ -165,7 +158,7 @@ static int B_fill(PScanner *scanner, unsigned char *starting_from) {
 
     unsigned char *end = scanner->buffer.end;
 
-    if(!scanner->input.line = 0) {
+    if(!scanner->input.line) {
         *starting_from = '\n';
         ++starting_from;
     }
@@ -223,7 +216,9 @@ static int B_flush(PScanner *scanner, int force_flush) {
     unsigned int copy_amount = 0,
                  shift_amount = 0;
 
-    unsigned char *left_edge;
+    unsigned char *left_edge,
+                  *buffer_start = scanner->buffer.start,
+                  *buffer_end = scanner->buffer.end;
 
     if(NO_MORE_CHARS(scanner)) {
         return 0;
@@ -240,7 +235,7 @@ static int B_flush(PScanner *scanner, int force_flush) {
             left_edge = min(left_edge, scanner->lexeme.prev_start);
         }
 
-        shift_amount = left_edge - scanner->buffer.start;
+        shift_amount = left_edge - buffer_start;
 
         /* we're not adding enough room to the buffer in order to accommodate a
          * lexeme of unusual length. */
@@ -254,9 +249,137 @@ static int B_flush(PScanner *scanner, int force_flush) {
              * previous one, setting the parser into a similar state to what
              * it would be in if it had just opened a file. */
             L_prev_clear(scanner);
-            left_edge = L_current_mark(scanner);
+            left_edge = L_current_mark_start(scanner);
+
+            shift_amount = left_edge - buffer_start;
+        }
+
+        /* shift the buffer */
+        copy_amount = buffer_end - left_edge;
+        COPY(buffer_start, left_edge, copy_amount);
+
+        /* fill in the now free area of the buffer */
+        if(!B_fill(scanner, buffer_start + copy_amount)) {
+            std_error("Internal Error: Cannot fill buffer, buffer is full.");
+        }
+
+        if(is_not_null(scanner->lexeme.prev_start)) {
+            scanner->lexeme.prev_start -= shift_amount;
+        }
+
+        /* this works even if we forced the buffer full because we used
+         * L_current_mark_start to move the current lexeme's pointer information
+         * to the next char in the buffer as that becomes the shift boundary. */
+        scanner->lexeme.curr_start -= shift_amount;
+        scanner->lexeme.curr_end -= shift_amount;
+        scanner->buffer.next_char -= shift_amount;
+    }
+
+    return 1;
+}
+
+/**
+ * Return the next input character in the buffer and then advance the buffer
+ * past it. Returns 0 if end-of-file is reached. Returns -1 if the buffer is
+ * too full to be flushed.
+ */
+static char B_advance(PScanner *scanner) {
+    char next;
+
+    if(NO_MORE_CHARS(scanner)) {
+        return 0;
+    }
+
+    if(!scanner->input.eof_read && B_flush(scanner, 0) < 0) {
+        return -1;
+    }
+
+    next = *(scanner->buffer.next_char);
+    if('\n' == next) {
+        ++(scanner->input.line);
+        scanner->input.column = 0;
+    }
+
+    ++(scanner->buffer.next_char);
+
+    return next;
+}
+
+/**
+ * Look at one of the next/previous characters in the input buffer. Returns
+ * EOF if trying to look beyond the end of the file, 0 if trying to look beyond
+ * either end of the buffer.
+ */
+static char B_look(PScanner *scanner, int n) {
+    unsigned char *ch = (scanner->buffer.next_char - n);
+
+    if(ch >= scanner->buffer.end) {
+        if(scanner->input.eof_read) {
+            return EOF;
+        }
+        return 0;
+    } else if(ch < scanner->buffer.start) {
+        return 0;
+    }
+
+    return *ch;
+}
+
+/**
+ * Push back n characters of input from the buffer. Intuitively, when trying
+ * to match a lexeme against a pattern we might need to backtrack and undo a
+ * decision. Such a reversal would require un-looking at characters.
+ *
+ * Returns 1 if all n characters were pushed back, 0 otherwise.
+ */
+static int B_pushback(PScanner *scanner, int n) {
+
+    unsigned char *curr_lexeme_start = scanner->lexeme.curr_start,
+                  *next_char = scanner->buffer.next_char;
+
+    unsigned int new_line = scanner->input.line,
+                 new_column;
+
+    /* backtrack in the buffer */
+    while(--n >= 0 && next_char > curr_lexeme_start) {
+        --next_char;
+
+        if('\n' == *next_char) {
+            --new_line;
+        } else if('\0' == *next_char) {
+            break;
         }
     }
+
+    /* figure out what column we're looking at on whatever line we have ended
+     * up on. */
+    if(new_line == scanner->lexeme.curr_line) {
+        new_column = (next_char - curr_lexeme_start)
+                   + scanner->lexeme.curr_column;
+
+    } else if(new_line == scanner->input.line) {
+        new_column = scanner->input.column
+                   - (scanner->buffer.next_char - next_char);
+    } else {
+        /* the annoying case: we are *somewhere*, and we don't know where. what
+         * we do know is that we are in-between where we have pushed back to and
+         * the start of the current lexeme. we are neither on the same line as
+         * where we were, nor are we on the same line as where the lexeme
+         * started and so we just need to find the next '\n'.
+         */
+        for(new_column = 0; '\n' != *(next_char - new_column); ++new_column)
+            ;
+    }
+
+    scanner->buffer.next_char = next_char;
+    scanner->input.line = new_line;
+    scanner->input.column = new_column;
+
+    if(next_char < scanner->lexeme.curr_end) {
+        scanner->lexeme.curr_end = next_char;
+    }
+
+    return (-1 == n);
 }
 
 /* -------------------------------------------------------------------------- */
