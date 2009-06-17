@@ -9,9 +9,9 @@
 #ifndef PPARSERTYPES_H_
 #define PPARSERTYPES_H_
 
-#define P_MAX_RECURSION_DEPTH 50
-
 #include "p-common-types.h"
+
+/* -------------------------------------------------------------------------- */
 
 #define S_MAX_LOOKAHEAD 16
 #define S_MAX_LEXEME_LENGTH 1024
@@ -31,11 +31,17 @@ typedef struct PScanner {
 
     struct {
         unsigned char *curr_start,
-                      *curr_end,
-                      *prev_start,
-                      *prev_line_num,
-                      *prev_length,
-                      term_char;
+                      *curr_end;
+        uint32_t curr_line,
+                 curr_column;
+
+        unsigned char *prev_start,
+                      *prev_length;
+
+        uint32_t prev_line,
+                 prev_column;
+
+        unsigned char term_char;
     } lexeme;
 
     struct {
@@ -166,6 +172,8 @@ typedef struct P_Frame {
 } P_Frame;
 
 /* -------------------------------------------------------------------------- */
+
+#define P_MAX_RECURSION_DEPTH 50
 
 /* The current state of the parser. */
 typedef struct PParser {

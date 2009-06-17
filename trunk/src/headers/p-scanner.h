@@ -10,6 +10,7 @@
 #define PSCANNER_H_
 
 #include <fcntl.h>
+#include <unistd.h>
 #include <string.h>
 
 #include "std-include.h"
