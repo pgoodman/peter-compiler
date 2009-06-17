@@ -12,7 +12,6 @@
 #include <std-include.h>
 #include <std-string.h>
 
-#include <p-scanner.h>
 #include <p-grammar.h>
 #include <p-parser.h>
 
@@ -56,6 +55,8 @@ static char production_names[12][16] = {
 
     "Temp"
 };
+
+#if 0
 
 typedef int (*char_predicate_t)(int);
 typedef struct {
@@ -199,6 +200,7 @@ clear_spaces:
 
     return (void *) 1;
 }
+#endif
 
 /* -------------------------------------------------------------------------- */
 
@@ -323,20 +325,57 @@ static PGrammar *make_grammar(void) {
 /* -------------------------------------------------------------------------- */
 
 int main(void) {
-    PParseTree *T;
 
+    PParseTree *T;
+    int i = 0;
     PGrammar *grammar = make_grammar();
-    PTokenGenerator *token_generator = token_generator_alloc(
-        "src/grammars/parser.g",
-        (PFunction) &lexer_grammar_token_generator
-    );
+    PToken tokens[20];
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("Productions", 11);
+    tokens[i].line = 2;
+    tokens[i++].column = 1;
+
+    tokens[i].terminal = L_COLON;
+    tokens[i].lexeme = string_alloc_char(":", 1);
+    tokens[i].line = 3;
+    tokens[i++].column = 5;
+
+    tokens[i].terminal = L_UP_ARROW;
+    tokens[i].lexeme = string_alloc_char("^", 1);
+    tokens[i].line = 3;
+    tokens[i++].column = 7;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("Temp", 4);
+    tokens[i].line = 3;
+    tokens[i++].column = 8;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("Production", 10);
+    tokens[i].line = 3;
+    tokens[i++].column = 13;
+
+    tokens[i].terminal = L_COLON;
+    tokens[i].lexeme = string_alloc_char(":", 1);
+    tokens[i].line = 4;
+    tokens[i++].column = 5;
+
+    tokens[i].terminal = L_EPSILON;
+    tokens[i].lexeme = string_alloc_char("<>", 2);
+    tokens[i].line = 4;
+    tokens[i++].column = 7;
+
+    tokens[i].terminal = L_SEMICOLON;
+    tokens[i].lexeme = string_alloc_char(":", 1);
+    tokens[i].line = 5;
+    tokens[i++].column = 5;
 
     /* parse the grammar file */
-    T = parse_tokens(grammar, token_generator);
+    T = parse_tokens(grammar, tokens, i);
 
     print_tree(T);
 
-    generator_free(token_generator);
     grammar_free(grammar);
     parser_free_parse_tree(T);
 

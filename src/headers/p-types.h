@@ -11,6 +11,13 @@
 
 #include "p-common-types.h"
 
+typedef struct PToken {
+    G_Terminal terminal;
+    PString *lexeme;
+    uint32_t line,
+             column;
+} PToken;
+
 /* -------------------------------------------------------------------------- */
 
 #define S_MAX_LOOKAHEAD 16
@@ -68,10 +75,10 @@ typedef struct PGrammar {
 
     G_Symbol *symbols;
 
-    short num_productions,
-          num_tokens,
-          num_phrases,
-          num_symbols;
+    unsigned short num_productions,
+                   num_tokens,
+                   num_phrases,
+                   num_symbols;
 
     /* for counting where we are in building the parser */
     short counter[3];

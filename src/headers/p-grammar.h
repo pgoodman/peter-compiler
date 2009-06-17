@@ -6,8 +6,8 @@
  *     Version: $Id$
  */
 
-#ifndef PADT_H_
-#define PADT_H_
+#ifndef P_GRAMMAR_H_
+#define P_GRAMMAR_H_
 
 #include "p-types.h"
 #include "p-parser.h"
@@ -38,4 +38,4 @@ void grammar_add_epsilon_symbol(PGrammar *grammar,
 
 short grammar_get_num_production_rules(PGrammar *grammar);
 
-#endif /* PADT_H_ */
+#endif /* P_GRAMMAR_H_ */

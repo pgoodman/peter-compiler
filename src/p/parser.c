@@ -19,29 +19,29 @@
  */
 static void P_init(PParser *parser,
                    PGrammar *grammar,
-                   PTokenGenerator *token_generator) {
+                   PToken tokens[],
+                   int num_tokens) {
 
     PT_Set *tree_set;
-    P_TerminalTreeList token_result;
+    PT_Terminal *first_terminal;
     int i;
 
-    assert_not_null(token_generator);
     assert_not_null(grammar);
 
     tree_set = PTS_alloc();
-    token_result = PT_alloc_terminals(tree_set, token_generator);
+    first_terminal = PT_alloc_terminals(tree_set, tokens, num_tokens);
 
+    /*
     if(token_result.num_tokens == 0) {
         PTS_free(tree_set);
         return NULL;
     }
-
-    parser = mem_alloc(sizeof(PParser));
+    */
 
     parser->trees = tree_set;
-    parser->num_tokens = token_result.num_tokens;
+    parser->num_tokens = num_tokens;
     parser->farthest_id_reached = 0;
-    parser->call->frame = -1;
+    parser->call.frame = -1;
     parser->must_backtrack = 0;
 
     G_lock(grammar);
@@ -56,57 +56,188 @@ static void P_init(PParser *parser,
     for(i = 0; i < P_MAX_RECURSION_DEPTH; ++i) {
         parser->call.stack[i] = NULL;
     }
-
-    return parser;
 }
 
 /* -------------------------------------------------------------------------- */
 
 /**
- * Allocate a set of trees.
+ * Free all of the parser's stack frames.
  */
-static PT_Set *PTS_alloc(void) {
-    return dict_alloc(
-        53,
-        &dict_pointer_hash_fnc,
-        &dict_pointer_collision_fnc
+static void F_free_all(PParser *parser) {
+
+    unsigned int i;
+
+    register P_Frame **stack = (P_Frame **) parser->call.stack;
+
+    for(i = 0; i < P_MAX_RECURSION_DEPTH && is_not_null(stack[i]); ++i) {
+        mem_free(stack[i]);
+        stack[i] = NULL;
+    }
+
+    parser->call.frame = -1;
+}
+
+/**
+ * Update the tree of one of the stack frames.
+ */
+static void F_record_tree(P_Frame *frame, PParseTree *parse_tree) {
+    PT_add_branch(
+        frame->parse_tree,
+        parse_tree,
+        G_production_rule_get_symbol(
+            frame->production.rule,
+            frame->production.phrase,
+            frame->production.symbol
+        )
     );
 }
 
 /**
- * Free a set of trees.
+ * Update one of the stack frames as a successful application of a non-terminal
+ * to the token stream.
  */
-static void PTS_free(PT_Set *set) {
-    assert_not_null(set);
-    dict_free(
-        set,
-        &delegate_do_nothing,
-        (PDelegate) &PT_free_intermediate
+static void F_update_success(PParser *parser,
+                             unsigned int which_frame,
+                             P_IntermediateResult *result) {
+
+    P_Frame *frame = parser->call.stack[which_frame],
+            *caller;
+
+    result->intermediate_tree = frame->parse_tree;
+
+    /* record a successful application of this frame. */
+    if(which_frame > 0) {
+        caller = parser->call.stack[which_frame - 1];
+
+        result->intermediate_tree = frame->parse_tree;
+        F_record_tree(caller, frame->parse_tree);
+
+        ++(caller->production.symbol);
+    }
+}
+
+/**
+ * Push a new stack frame onto the parser's frame stack.
+ */
+static P_Frame *F_push(PParser *parser) {
+
+    unsigned int i;
+
+    ++(parser->call.frame);
+
+    /* TODO better error here */
+    if(parser->call.frame >= P_MAX_RECURSION_DEPTH) {
+        printf("Parse Error: maximum recursion depth exceeded.\n");
+        exit(1);
+    }
+
+    i = parser->call.frame;
+
+    if(is_null(parser->call.stack[i])) {
+        parser->call.stack[i] = mem_calloc(1, sizeof(P_Frame));
+        if(is_null(parser->call.stack[i])) {
+            mem_error("Unable to allocate new parser frame.");
+        }
+    }
+
+    return parser->call.stack[i];
+}
+
+/**
+ * Initialize a parser stack frame.
+ */
+static P_Frame *F_init(P_Frame *frame,
+                       G_ProductionRule *rule,
+                       PT_Terminal *backtrack_point) {
+
+    frame->backtrack_point = backtrack_point;
+    frame->farthest_id_reached = backtrack_point->id;
+
+    frame->left_recursion.is_direct = 0;
+    frame->left_recursion.is_used = 0;
+    frame->left_recursion.symbol = NULL;
+
+    frame->production.phrase = 0;
+    frame->production.symbol = 0;
+    frame->production.rule = rule;
+
+    /* TODO start bigger.. ? */
+    frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
+        rule->production,
+        2
+    );
+
+    return frame;
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Free the intermediate results table.
+ */
+static void IR_free_all(PParser *parser, PGrammar *grammar) {
+
+    register uint32_t i,
+                      j;
+
+    uint32_t i_max = grammar->num_productions,
+             j_max = parser->num_tokens,
+             k;
+
+    register P_IntermediateResult **results = parser->intermediate_results;
+
+    for(i = 0; i < i_max; ++i) {
+        k = i * j_max;
+        for(j = 0; j < j_max; ++j) {
+            if(is_not_null(results[k + j])) {
+                mem_free(results[k + j]);
+            }
+        }
+    }
+
+    mem_free(results);
+
+    parser->intermediate_results = NULL;
+    parser->num_tokens = 0;
+}
+
+/**
+ * Get an intermediate result.
+ */
+static P_IntermediateResult *IR_get(PParser *parser,
+                                    G_NonTerminal production,
+                                    uint32_t id) {
+
+    assert(production < parser->num_tokens);
+    assert(id <= parser->num_tokens);
+
+    return ((parser->intermediate_results)
+        [((uint32_t) production * parser->num_tokens) + (uint32_t) id]
     );
 }
 
 /**
- * Add a parse tree to the tree set.
+ * Create the initial intermediate result.
  */
-static void PTS_add(PT_Set *set, PParseTree *tree) {
-    assert_not_null(set);
-    assert_not_null(tree);
-    dict_set(set, tree, tree, &delegate_do_nothing);
-}
+static void IR_create(PParser *parser, G_NonTerminal production, uint32_t id) {
 
-/**
- * Rmove a tree from the tree set.
- */
-static void PTS_remove(PT_Set *set, PParseTree *tree) {
-    assert_not_null(set);
-    assert_not_null(tree);
+    P_IntermediateResult *result;
+    uint32_t i = ((uint32_t) production * parser->num_tokens) + (uint32_t) id;
 
-    dict_unset(
-        set,
-        tree,
-        &delegate_do_nothing,
-        &delegate_do_nothing
-    );
+    assert(production < parser->num_tokens);
+    assert(id <= parser->num_tokens);
+    assert_null(parser->intermediate_results[i]);
+
+    result = mem_alloc(sizeof(P_IntermediateResult));
+    if(is_null(result)) {
+        mem_error("Unable to allocate new itermediate result.");
+    }
+
+    result->end_token = NULL;
+    result->intermediate_tree = IR_INITIAL;
+    result->is_left_recursive = 0;
+
+    parser->intermediate_results[i] = result;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -116,7 +247,8 @@ static void PTS_remove(PT_Set *set, PParseTree *tree) {
  * recursive seed.
  */
 static int LR_intermediate_result_has_seed(P_IntermediateResult *result) {
-    assert_not_numm(result);
+    assert_not_null(result);
+
     return result->intermediate_tree != IR_INITIAL
         && result->intermediate_tree != IR_FAILED
         && result->is_left_recursive;
@@ -129,7 +261,7 @@ static PT_Terminal *LR_grow(PParser *parser,
                             P_IntermediateResult *result,
                             PT_Terminal *token) {
 
-    P_Frame *frame = parser->call.stack[parser->call.frame],
+    P_Frame *frame = parser->call.stack[(unsigned int) parser->call.frame],
             *caller;
     int i;
 
@@ -228,185 +360,6 @@ static void LR_mark_origin(PParser *parser) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Free all of the parser's stack frames.
- */
-static void F_free_all(PParser *parser) {
-
-    unsigned int i;
-
-    register P_Frame *stack[] = parser->call.stack;
-
-    for(i = 0; i < P_MAX_RECURSION_DEPTH && is_not_null(stack[i]); ++i) {
-        mem_free(stack[i]);
-        stack[i] = NULL;
-    }
-
-    parser->call.frame = -1;
-}
-
-/**
- * Update the tree of one of the stack frames.
- */
-static void F_record_tree(P_Frame *frame, PParseTree *parse_tree) {
-    PT_add_branch(
-        frame->parse_tree,
-        parse_tree,
-        G_production_rule_get_symbol(
-            frame->production.rule,
-            frame->production.phrase,
-            frame->production.symbol
-        )
-    );
-}
-
-/**
- * Update one of the stack frames as a successful application of a non-terminal
- * to the token stream.
- */
-static void F_update_success(PParser *parser,
-                             unsigned int which_frame,
-                             P_IntermediateResult *result) {
-
-    P_Frame *frame = parser->call.frame[which_frame],
-            *caller;
-
-    result->intermediate_tree = frame->parse_tree;
-
-    /* record a successful application of this frame. */
-    if(which_frame > 0) {
-        caller = parser->call.stack[which_frame - 1];
-
-        result->intermediate_tree = frame->parse_tree;
-        F_record_tree(caller, frame->parse_tree);
-
-        ++(caller->production.symbol);
-    }
-}
-
-/**
- * Push a new stack frame onto the parser's frame stack.
- */
-static P_Frame *F_push(PParser *parser) {
-
-    unsigned int i;
-
-    ++(parser->call.frame);
-
-    /* TODO better error here */
-    if(parser->call.frame >= P_MAX_RECURSION_DEPTH) {
-        printf("Parse Error: maximum recursion depth exceeded.\n");
-        exit(1);
-    }
-
-    i = parser->call.frame;
-
-    if(is_null(parser->call.stack[i])) {
-        parser->call.stack[i] = mem_calloc(1, sizeof(P_Frame));
-        if(is_null(parser->call.stack[i])) {
-            mem_error("Unable to allocate new parser frame.");
-        }
-    }
-
-    return parser->call.stack[i];
-}
-
-/**
- * Initialize a parser stack frame.
- */
-static P_Frame *F_init(P_Frame *frame,
-                       G_ProductionRule *rule,
-                       PT_Terminal *backtrack_point) {
-
-    frame->backtrack_point = backtrack_point;
-    frame->farthest_id_reached = backtrack_point->id;
-
-    frame->left_recursion.is_direct = 0;
-    frame->left_recursion.is_used = 0;
-    frame->left_recursion.symbol = NULL;
-
-    frame->production.phrase = 0;
-    frame->production.symbol = 0;
-    frame->production.rule = rule;
-
-    /* TODO start bigger.. ? */
-    frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
-        2,
-        rule->production
-    );
-}
-
-/* -------------------------------------------------------------------------- */
-
-/**
- * Free the intermediate results table.
- */
-static void IR_free_all(PParser *parser, PGrammar *grammar) {
-
-    register uint32_t i,
-                      j;
-
-    uint32_t i_max = grammar->num_productions,
-             j_max = parser->num_tokens;
-
-    register P_IntermediateResult **results = parser->intermediate_results;
-
-    for(i = 0; i < i_max; ++i) {
-        for(j = 0; j < j_max; ++j) {
-            if(is_not_null(results[i][j])) {
-                mem_free(results[i][j]);
-            }
-        }
-    }
-
-    mem_free(results);
-
-    parser->intermediate_results = NULL;
-    parser->num_tokens = 0;
-}
-
-/**
- * Get an intermediate result.
- */
-static P_IntermediateResult *IR_get(PParser *parser,
-                                    G_NonTerminal *production,
-                                    uint32_t id) {
-
-    assert(production < parser->num_tokens);
-    assert(id <= parser->num_tokens);
-
-    return ((parser->intermediate_results)
-        [(uint32_t) production][(uint32_t) id]
-    );
-}
-
-/**
- * Create the initial intermediate result.
- */
-static void IR_create(PParser *parser, G_NonTerminal *production, uint32_t id) {
-
-    P_IntermediateResult *result;
-
-    assert(production < parser->num_tokens);
-    assert(id <= parser->num_tokens);
-    assert_null(
-        parser->intermediate_results[(uint32_t) production][(uint32_t) id]
-    );
-
-    result = mem_alloc(sizeof(P_IntermediateResult));
-    if(is_null(result)) {
-        mem_error("Unable to allocate new itermediate result.");
-    }
-
-    result->end_token = NULL;
-    result->intermediate_tree = IR_INITIAL;
-    result->is_left_recursive = 0;
-
-    parser->intermediate_results[(uint32_t) production][(uint32_t) id] = result;
-}
-
-/* -------------------------------------------------------------------------- */
-
-/**
  * Parse the tokens from a token generator. This parser operates on a simplified
  * TDPL (Top-Down Parsing Language). It supports *local* backtracking. As such,
  * this parser cannot be used to parse ambiguous grammar because expression rules
@@ -441,7 +394,7 @@ static void IR_create(PParser *parser, G_NonTerminal *production, uint32_t id) {
  *       ii) allow for left-recursion, as described in the following article:
  *           http://portal.acm.org/citation.cfm?id=1328408.1328424
  */
-PParseTree *parse_tokens(PGrammar *grammar, PTokenGenerator *token_generator) {
+PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens) {
 
     PParser parser;
     P_Frame *frame;
@@ -451,7 +404,7 @@ PParseTree *parse_tokens(PGrammar *grammar, PTokenGenerator *token_generator) {
     PParseTree *temp_parse_tree;
     PTreeGenerator *tree_generator;
 
-    P_init(&parser, grammar, token_generator);
+    P_init(&parser, grammar, tokens, num_tokens);
 
     /* useful counter, be it for hinting to GCC that a block shouldn't be
      * optimized out, or for actually counting something. */
