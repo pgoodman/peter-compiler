@@ -39,14 +39,15 @@ typedef struct PScanner {
     struct {
         unsigned char *curr_start,
                       *curr_end;
+
         uint32_t curr_line,
                  curr_column;
 
-        unsigned char *prev_start,
-                      *prev_length;
+        unsigned char *prev_start;
 
         uint32_t prev_line,
-                 prev_column;
+                 prev_column,
+                 prev_length;
 
         unsigned char term_char;
     } lexeme;
@@ -69,7 +70,8 @@ typedef struct PGrammar {
     unsigned char is_locked;
 
     /* keep track of all of the productions for the parsing grammar. */
-    G_ProductionRule *production_rules;
+    G_ProductionRule *production_rules,
+                     *non_terminal_production_rules;
 
     G_Phrase *phrases;
 
@@ -78,10 +80,8 @@ typedef struct PGrammar {
     unsigned short num_productions,
                    num_tokens,
                    num_phrases,
-                   num_symbols;
-
-    /* for counting where we are in building the parser */
-    short counter[3];
+                   num_symbols,
+                   counter[4];
 
     G_NonTerminal start_production_rule;
 

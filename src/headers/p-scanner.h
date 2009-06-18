@@ -17,6 +17,8 @@
 #include "std-include.h"
 #include "p-types.h"
 
+PScanner *scanner_alloc(void);
 
+void scanner_free(PScanner *scanner);
 
 #endif /* PSCANNER_H_ */

@@ -15,6 +15,8 @@
 #include <p-grammar.h>
 #include <p-parser.h>
 
+#define P(x) printf(x)
+
 enum {
     L_NON_TERMINAL,
     L_TERMINAL,
@@ -37,7 +39,6 @@ enum {
     P_RULE_FLAG,
     P_NON_EXCLUDABLE,
     P_SUBSUMABLE,
-
     P_TEMP
 };
 
@@ -215,8 +216,8 @@ static void print_tree(PParseTree *T) {
             /* terminal */
             if(T->type == 1) {
                 printf("\"%p\" -> \"%p\" \n", (void *)T->_._parent, (void *)T);
-                if(((PT_Terminal *)T)->token->lexeme != NULL) {
-                    printf("\"%p\" [label=\"%s\" color=blue] \n", (void *)T, (char *)((PTerminalTree *)T)->token->lexeme->str);
+                if(((PT_Terminal *)T)->lexeme != NULL) {
+                    printf("\"%p\" [label=\"%s\" color=blue] \n", (void *)T, (char *)((PT_Terminal *)T)->lexeme->str);
                 }
             } else {
                 printf("\"%p\" -> \"%p\"\n", (void *)T->_._parent, (void *)T);
@@ -225,7 +226,7 @@ static void print_tree(PParseTree *T) {
 
         /* production */
         if(T->type == 0) {
-            printf("\"%p\" [label=\"%s\"]\n", (void *)T, production_names[((PProductionTree *) T)->production]);
+            printf("\"%p\" [label=\"%s\"]\n", (void *)T, production_names[((PT_NonTerminal *) T)->production]);
             if(tree_get_num_branches((PTree *) T) == 0) {
                 printf("\"%p\" [color=gray]\n", (void *)T);
             }
@@ -240,8 +241,11 @@ static void print_tree(PParseTree *T) {
 /* -------------------------------------------------------------------------- */
 
 static PGrammar *make_grammar(void) {
+    PGrammar *G;
 
-    PGrammar *G = grammar_alloc(
+    P("\t allocating grammar. \n");
+
+    G = grammar_alloc(
         P_PRODUCTIONS, /* production to start matching with */
         11, /* number of productions */
         8, /* number of tokens */
@@ -249,8 +253,11 @@ static PGrammar *make_grammar(void) {
         29 /* number of phrase symbols */
     );
 
+    P("\t grammar allocated. \n");
+    P("\t initializing grammar. \n");
+
             grammar_add_non_terminal_symbol(G, P_TEMP, 0, 1);
-            grammar_add_non_terminal_symbol(G, P_PRODUCTION, 0);
+            grammar_add_non_terminal_symbol(G, P_PRODUCTION, 0, 0);
         grammar_add_phrase(G);
             grammar_add_epsilon_symbol(G, 0);
         grammar_add_phrase(G);
@@ -319,6 +326,8 @@ static PGrammar *make_grammar(void) {
         grammar_add_phrase(G);
     grammar_add_production_rule(G, P_SUBSUMABLE);
 
+    P("\t grammar initialized. \n");
+
     return G;
 }
 
@@ -326,10 +335,11 @@ static PGrammar *make_grammar(void) {
 
 int main(void) {
 
-    PParseTree *T;
     int i = 0;
-    PGrammar *grammar = make_grammar();
+    PGrammar *grammar;
     PToken tokens[20];
+
+    P("Making tokens...\n");
 
     tokens[i].terminal = L_NON_TERMINAL;
     tokens[i].lexeme = string_alloc_char("Productions", 11);
@@ -371,14 +381,26 @@ int main(void) {
     tokens[i].line = 5;
     tokens[i++].column = 5;
 
-    /* parse the grammar file */
-    T = parse_tokens(grammar, tokens, i);
+    P("\t Tokens made.\n");
+    P("Making grammar...\n");
 
-    print_tree(T);
+    grammar = make_grammar();
 
+    P("\t Grammar made.\n");
+
+    P("Calling parse_tokens().. \n\n");
+    parse_tokens(grammar, tokens, i);
+    P("\n\t parse_tokens() returned. \n");
+
+    P("Freeing grammar...\n");
     grammar_free(grammar);
-    parser_free_parse_tree(T);
+    P("\t Grammar freed.\n");
 
+    P("Freeing token lexemes...\n");
+    for(; --i >= 0; ) {
+        string_free(tokens[i].lexeme);
+    }
+    P("\t Token lexemes freed.\n");
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
