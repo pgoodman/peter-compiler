@@ -9,15 +9,29 @@
 #include <p-grammar.h>
 #include <p-grammar-internal.h>
 
-#define PRODUCTION_RULE_COUNTER 0
-#define PHRASE_COUNTER 1
-#define SYMBOL_COUNTER 2
+#define C_PRODUCTION_RULES 0
+#define C_PRODUCTION_RULE_PHRASES 1
+#define C_PHRASES 2
+#define C_SYMBOLS 3
 
 #define P_SYMBOL_IS_NON_TERMINAL 1
 #define P_SYMBOL_IS_TERMINAL 2
 #define P_SYMBOL_IS_EPSILON 4
 #define P_SYMBOL_IS_NON_EXCLUDABLE 8
 #define P_SYMBOL_RAISE_CHILDREN 16
+
+/* -------------------------------------------------------------------------- */
+
+static G_Symbol *G_get_next_symbol(PGrammar *grammar) {
+
+    assert_not_null(grammar);
+    assert(!grammar->is_locked);
+    assert(grammar->counter[C_SYMBOLS] < grammar->num_symbols);
+
+    return grammar->symbols + ((grammar->counter[C_SYMBOLS])++);
+}
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Allocate a new parser on the heap. A parser, in this case, is a container
@@ -53,9 +67,10 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
     grammar->is_locked = 0;
     grammar->start_production_rule = start_production;
 
-    grammar->counter[PRODUCTION_RULE_COUNTER] = -1;
-    grammar->counter[PHRASE_COUNTER] = -1;
-    grammar->counter[SYMBOL_COUNTER] = -1;
+    grammar->counter[C_PRODUCTION_RULES] = 0;
+    grammar->counter[C_PRODUCTION_RULE_PHRASES] = 0;
+    grammar->counter[C_PHRASES] = 0;
+    grammar->counter[C_SYMBOLS] = 0;
 
     grammar->production_rules = (G_ProductionRule *) (
         data + (sizeof(PGrammar) / sizeof(char))
@@ -64,7 +79,7 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
     grammar->phrases = (G_Phrase *) (
         data + (
             (sizeof(PGrammar) +
-            (num_productions * sizeof(G_ProductionRule)))
+            (2 * num_productions * sizeof(G_ProductionRule)))
             / sizeof(char)
         )
     );
@@ -72,7 +87,7 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
     grammar->symbols = (G_Symbol *) (
         data + (
             (sizeof(PGrammar) +
-            (num_productions * sizeof(G_ProductionRule)) +
+            (2 * num_productions * sizeof(G_ProductionRule)) +
             (num_phrases * sizeof(G_Phrase)))
             / sizeof(char)
         )
@@ -111,22 +126,28 @@ void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production) {
     assert(!grammar->is_locked);
     assert(production < grammar->num_productions);
 
-    which_rule = (++(grammar->counter[PRODUCTION_RULE_COUNTER]));
+    which_rule = grammar->counter[C_PRODUCTION_RULES];
+
+    printf("adding rule %d as %d \n", production, which_rule);
 
     assert(which_rule < grammar->num_productions);
 
-    rule = grammar->production_rules + which_rule;
+    rule = grammar->production_rules + ((unsigned int) production);
 
-    if(0 == grammar->counter[PRODUCTION_RULE_COUNTER]) {
-        rule->num_phrases = grammar->counter[PHRASE_COUNTER];
+    if(0 == which_rule) {
+        rule->num_phrases = grammar->counter[C_PHRASES];
         rule->phrases = grammar->phrases;
     } else {
-        prev_rule = (grammar->production_rules + (which_rule - 1));
-        rule->phrases = (prev_rule->phrases) + prev_rule->num_phrases;
-        rule->num_phrases = (
-            (grammar->phrases + grammar->counter[PHRASE_COUNTER]) - rule->phrases
-        );
+        rule->phrases = grammar->phrases
+                      + grammar->counter[C_PRODUCTION_RULE_PHRASES];
+
+        rule->num_phrases = grammar->counter[C_PHRASES]
+                          - grammar->counter[C_PRODUCTION_RULE_PHRASES];
     }
+
+    grammar->counter[C_PRODUCTION_RULE_PHRASES] = grammar->counter[C_PHRASES];
+
+    ++(grammar->counter[C_PRODUCTION_RULES]);
 
     rule->production = production;
     return;
@@ -150,31 +171,27 @@ void grammar_add_phrase(PGrammar *grammar) {
     assert_not_null(grammar);
     assert(!grammar->is_locked);
 
-    which_phrase = (++(grammar->counter[PHRASE_COUNTER]));
+    which_phrase = grammar->counter[C_PHRASES];
 
     assert(which_phrase < grammar->num_phrases);
 
-    if(0 == grammar->counter[PHRASE_COUNTER]) {
-        phrase->num_symbols = grammar->counter[SYMBOL_COUNTER];
+    phrase = grammar->phrases + which_phrase;
+
+    /* this is the first phrase being added */
+    if(0 == which_phrase) {
+        phrase->num_symbols = grammar->counter[C_SYMBOLS];
         phrase->symbols = grammar->symbols;
+
+    /* this is the nth phrase being added. */
     } else {
         prev_phrase = grammar->phrases + (which_phrase - 1);
         phrase->symbols = prev_phrase->symbols + prev_phrase->num_symbols;
         phrase->num_symbols = (
-            (grammar->symbols + grammar->counter[SYMBOL_COUNTER]) - phrase->symbols
+            (grammar->symbols + grammar->counter[C_SYMBOLS]) - phrase->symbols
         );
     }
-}
 
-static G_Symbol *G_get_next_symbol(PGrammar *grammar) {
-    assert_not_null(grammar);
-    assert(!grammar->is_locked);
-
-    ++(grammar->counter[SYMBOL_COUNTER]);
-
-    assert(grammar->counter[SYMBOL_COUNTER] < grammar->num_symbols);
-
-    return grammar->symbols + grammar->counter[SYMBOL_COUNTER];
+    ++(grammar->counter[C_PHRASES]);
 }
 
 /**
@@ -241,16 +258,23 @@ int G_production_rule_has_phrase(G_ProductionRule *rule, unsigned int phrase) {
  * symbol does not exist then return null.
  */
 G_Symbol *G_production_rule_get_symbol(G_ProductionRule *rule,
-                                       unsigned int phrase,
-                                       unsigned int symbol) {
-    assert_not_null(rule);
-    assert(phrase < rule->num_phrases);
+                                       unsigned int which_phrase,
+                                       unsigned int which_symbol) {
 
-    if(symbol >= ((rule->phrases) + phrase)->num_symbols) {
+    G_Phrase *phrase;
+
+    assert_not_null(rule);
+    assert(which_phrase < rule->num_phrases);
+
+    phrase = rule->phrases + which_phrase;
+
+    /* we've got all of the symbols from this particular phrase, i.e. we've
+     * successfully matched all of the symbols in a phrase. */
+    if(which_symbol >= phrase->num_symbols) {
         return NULL;
     }
 
-    return ((rule->phrases) + phrase)->symbols + symbol;
+    return phrase->symbols + which_symbol;
 }
 
 /**

@@ -24,6 +24,8 @@
 
 /* -------------------------------------------------------------------------- */
 
+#define MIN(a,b) (((a) < (b)) ? (a) : (b))
+
 #define NO_MORE_CHARS(s) \
     ((s)->input.eof_read && (s)->buffer.next_char > (s)->buffer.end)
 
@@ -76,25 +78,35 @@ static void L_prev_clear(PScanner *scanner) {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Close any open file descriptors.
+ */
+static void I_close(PScanner *scanner) {
+    if(-1 != scanner->input.file_descriptor) {
+        close(scanner->input.file_descriptor);
+        scanner->input.file_descriptor = -1;
+    }
+}
+
+/**
  * Open a new file for the scanner to use. If the file cannot be opened then
  * 0 is returned, else 1.
  */
 static int I_open(PScanner *scanner, const char *file_name) {
 
     int file_descriptor;
-    char *end_of_buffer;
+    unsigned char *end_of_buffer;
 
     assert_not_null(scanner);
     assert_not_null(file_name);
 
     /* close any file that was previously open. */
-    I_file_close(scanner);
+    I_close(scanner);
 
     /* prepare the scanner's buffer for this file. this means putting the end of
      * the buffer just *after* the actual end of the buffer, setting the
      * starting flush point, and making sure any lexeme information that exists
      * in the scanner already has been cleared out. */
-    end_of_buffer = (scanner->buffer.start) + S_INPUT_BUFFER_SIZE;
+    end_of_buffer = scanner->buffer.start + S_INPUT_BUFFER_SIZE;
 
     scanner->buffer.end = end_of_buffer;
     scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
@@ -123,19 +135,9 @@ static int I_open(PScanner *scanner, const char *file_name) {
 }
 
 /**
- * Close any open file descriptors.
- */
-static void I_close(PScanner *scanner) {
-    if(-1 != scanner->input.file_descriptor) {
-        close(scanner->input.file_descriptor);
-        scanner->input.file_descriptor = -1;
-    }
-}
-
-/**
  * Read a chunk of data from the file into the scanner's buffer.
  */
-static void I_read(PScanner *scanner, unsigned char *start, int how_much) {
+static int I_read(PScanner *scanner, unsigned char *start, int how_much) {
     return read(scanner->input.file_descriptor, start, how_much);
 }
 
@@ -232,7 +234,10 @@ static int B_flush(PScanner *scanner, int force_flush) {
 
         left_edge = scanner->lexeme.prev_start;
         if(is_not_null(scanner->lexeme.prev_start)) {
-            left_edge = min(left_edge, scanner->lexeme.prev_start);
+            left_edge = MIN(
+                left_edge,
+                scanner->lexeme.prev_start
+            );
         }
 
         shift_amount = left_edge - buffer_start;
@@ -385,7 +390,9 @@ static int B_pushback(PScanner *scanner, int n) {
 /* -------------------------------------------------------------------------- */
 
 PScanner *scanner_alloc(void) {
+    PScanner *scanner = NULL;
 
+    return scanner;
 }
 
 void scanner_free(PScanner *scanner) {

@@ -207,9 +207,9 @@ static void IR_free_all(PParser *parser, PGrammar *grammar) {
 static P_IntermediateResult *IR_get(PParser *parser,
                                     G_NonTerminal production,
                                     uint32_t id) {
-
-    assert(production < parser->num_tokens);
     assert(id <= parser->num_tokens);
+
+    D( printf("intermediate result for production %d, token %d \n", (int) production, (int) id); )
 
     return ((parser->intermediate_results)
         [((uint32_t) production * parser->num_tokens) + (uint32_t) id]
@@ -224,7 +224,6 @@ static void IR_create(PParser *parser, G_NonTerminal production, uint32_t id) {
     P_IntermediateResult *result;
     uint32_t i = ((uint32_t) production * parser->num_tokens) + (uint32_t) id;
 
-    assert(production < parser->num_tokens);
     assert(id <= parser->num_tokens);
     assert_null(parser->intermediate_results[i]);
 
@@ -397,20 +396,27 @@ static void LR_mark_origin(PParser *parser) {
 PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens) {
 
     PParser parser;
-    P_Frame *frame;
-    P_IntermediateResult *intermediate_result;
-    G_Symbol *symbol;
-    PT_Terminal *token;
-    PParseTree *temp_parse_tree;
-    PTreeGenerator *tree_generator;
-
-    P_init(&parser, grammar, tokens, num_tokens);
+    P_Frame *frame = NULL;
+    P_IntermediateResult *intermediate_result = NULL;
+    G_Symbol *symbol = NULL;
+    PParseTree *temp_parse_tree = NULL;
+    PTreeGenerator *tree_generator = NULL;
+    PT_Terminal *token = NULL;
 
     /* useful counter, be it for hinting to GCC that a block shouldn't be
      * optimized out, or for actually counting something. */
     unsigned int j = 0;
 
-    assert_not_null(parser);
+    D( printf("initializing parser.\n"); )
+
+    P_init(&parser, grammar, tokens, num_tokens);
+
+    /* get all of the tokens as terminal trees */
+    token = PT_alloc_terminals(
+        parser.trees,
+        tokens,
+        num_tokens
+    );
 
     /* get the starting production and push our first stack frame on. This
      * involves registering the start of the token list as the farthest back
@@ -418,12 +424,10 @@ PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens) {
      */
     D( printf("pushing production onto stack.\n"); )
 
-    /* push on our first stack frame. */
-
     /* push on our first stack frame */
     frame = F_init(
         F_push(&parser),
-        grammar->production_rules[grammar->start_production_rule],
+        grammar->production_rules + grammar->start_production_rule,
         token
     );
     PTS_add(parser.trees, frame->parse_tree);
@@ -431,16 +435,22 @@ PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens) {
 
 begin_parsing:
 
+    D( printf("beginning main parse.\n"); )
+
     while(0 <= parser.call.frame) {
 
-        frame = parser.call.stack[parser.call.frame];
+        frame = parser.call.stack[j = parser.call.frame];
+
+        D( printf("\nframe is %p at %d \n", (void *) frame, (int) parser.call.frame); )
 
         /* get the cached result for the frame on the top of the stack */
         intermediate_result = IR_get(
-            parser,
+            &parser,
             frame->production.rule->production,
             frame->backtrack_point->id
         );
+
+        D( printf("intermediate result is %p. \n", (void *) intermediate_result); )
 
         /* get the current symbol that we are looking at */
         symbol = G_production_rule_get_symbol(
@@ -470,7 +480,7 @@ production_rule_failed:
                 intermediate_result->intermediate_tree = IR_FAILED;
 
                 /* pop the frame off of the stack */
-                frame = parser.call.stack[--(parser.call.frame)];
+                frame = parser.call.stack[j = --parser.call.frame];
 
                 /* we cannot cascade off of the stack, therefore we encountered
                  * a parse error. */
@@ -577,6 +587,12 @@ production_rule_succeeded:
 
 match_non_terminal_symbol:
 
+                intermediate_result = IR_get(
+                    &parser,
+                    symbol->value.non_terminal,
+                    token->id
+                );
+
                 /* we have already applied this production to this particular
                  * place in the token stream. */
                 if(is_not_null(intermediate_result)) {
@@ -590,14 +606,17 @@ match_non_terminal_symbol:
                      * initialized by a production already on the stack but that
                      * has (in)directly called itself through left recursion. */
                     } else if(IR_INITIAL == intermediate_result->intermediate_tree) {
+
                         D( printf("detected left recursion. \n"); )
 
                         intermediate_result->is_left_recursive = 1;
                         intermediate_result->intermediate_tree = IR_FAILED;
 
+                        D( printf("pushing production onto stack. \n"); )
+
                         frame = F_init(
                             F_push(&parser),
-                            grammar->production_rules[symbol->value.non_terminal],
+                            grammar->production_rules + symbol->value.non_terminal,
                             token
                         );
 
@@ -631,7 +650,7 @@ match_non_terminal_symbol:
 
                     frame = F_init(
                         F_push(&parser),
-                        grammar->production_rules[symbol->value.non_terminal],
+                        grammar->production_rules + symbol->value.non_terminal,
                         token
                     );
 
@@ -709,7 +728,7 @@ match_epsilon_symbol:
                 D( printf("\t matched epsilon. \n"); )
 
                 if(G_symbol_is_non_excludable(symbol)) {
-                    temp_parse_tree = PT_alloc_epsilon();
+                    temp_parse_tree = (PParseTree *) PT_alloc_epsilon();
                     PTS_add(parser.trees, temp_parse_tree);
 
                     tree_force_add_branch(
@@ -761,7 +780,7 @@ done_parsing:
     /* go over our reduced parse tree and remove any references to trees
      * listed in our all trees hash table to that we can free all of the
      * remaining trees in there at once. */
-    temp_parse_tree = frame->parse_tree;
+    temp_parse_tree = (PParseTree *) frame->parse_tree;
     tree_generator = tree_generator_alloc(
         (PTree *) temp_parse_tree,
         TREE_TRAVERSE_POSTORDER
@@ -783,7 +802,7 @@ clean_parser:
     D( printf("freeing resources... \n"); )
     PTS_free(parser.trees);
     D( printf("garbage trees freed, freeing intermediate results... \n"); )
-    IR_free_all(&parser);
+    IR_free_all(&parser, grammar);
     D( printf("intermediate results freed, freeing parser stack... \n"); )
     F_free_all(&parser);
     D( printf("parser stack freed. \n"); )

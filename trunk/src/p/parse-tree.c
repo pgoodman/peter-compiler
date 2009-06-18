@@ -62,32 +62,36 @@ PT_Terminal *PT_alloc_terminals(PT_Set *all_trees,
                                 int num_tokens) {
 
     PT_Terminal *curr = NULL,
-                *next = NULL;
+                *next;
 
     unsigned int id;
 
     assert_not_null(all_trees);
 
-    for(id = num_tokens; id > 0; ) {
+    /* make the EOF token tree */
+    next = PT_alloc_terminal(0, NULL, 0, 0, num_tokens);
+    next->next = NULL;
+    next->prev = NULL;
+    curr = next;
 
-        --id;
+    /* make the main set of tokens */
+    if(num_tokens > 0) {
+        for(id = num_tokens; id > 0; ) {
+            --id;
 
-        curr = PT_alloc_terminal(
-            tokens[id].terminal,
-            tokens[id].lexeme,
-            tokens[id].line,
-            tokens[id].column,
-            id
-        );
+            curr = PT_alloc_terminal(
+                tokens[id].terminal,
+                tokens[id].lexeme,
+                tokens[id].line,
+                tokens[id].column,
+                id
+            );
 
-        curr->next = next;
-        curr->prev = NULL;
-
-        if(is_not_null(next)) {
+            curr->next = next;
+            curr->prev = NULL;
             next->prev = curr;
+            next = curr;
         }
-
-        next = curr;
     }
 
     return curr;
