@@ -28,6 +28,7 @@ static PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
     tree->column = column;
     tree->next = NULL;
     tree->prev = NULL;
+    tree->id = id;
 
     return tree;
 }

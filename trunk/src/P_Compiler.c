@@ -23,7 +23,6 @@ enum {
     L_EPSILON,
     L_COLON,
     L_SEMICOLON,
-    L_CODE,
     L_DASH,
     L_UP_ARROW
 };
@@ -35,7 +34,6 @@ enum {
     P_PRODUCTION_RULE,
     P_RULES,
     P_RULE,
-    P_DECORATION,
     P_RULE_FLAG,
     P_NON_EXCLUDABLE,
     P_SUBSUMABLE,
@@ -49,11 +47,9 @@ static char production_names[12][16] = {
     "ProductionRule",
     "Rules",
     "Rule",
-    "Decoration",
     "RuleFlag",
     "NonExludable",
     "Subsumable",
-
     "Temp"
 };
 
@@ -247,8 +243,8 @@ static PGrammar *make_grammar(void) {
 
     G = grammar_alloc(
         P_PRODUCTIONS, /* production to start matching with */
-        11, /* number of productions */
-        8, /* number of tokens */
+        10, /* number of productions */
+        7, /* number of tokens */
         19, /* number of production phrases */
         29 /* number of phrase symbols */
     );
@@ -262,10 +258,6 @@ static PGrammar *make_grammar(void) {
             grammar_add_epsilon_symbol(G, 0);
         grammar_add_phrase(G);
     grammar_add_production_rule(G, P_PRODUCTIONS);
-
-            grammar_add_non_terminal_symbol(G, P_PRODUCTIONS, 0, 1);
-        grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_TEMP);
 
             grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
             grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULES, 0, 1);
@@ -282,7 +274,6 @@ static PGrammar *make_grammar(void) {
 
             grammar_add_terminal_symbol(G, L_COLON, 0);
             grammar_add_non_terminal_symbol(G, P_RULES, 0, 1);
-            grammar_add_non_terminal_symbol(G, P_DECORATION, 0, 0);
         grammar_add_phrase(G);
     grammar_add_production_rule(G, P_PRODUCTION_RULE);
 
@@ -304,12 +295,6 @@ static PGrammar *make_grammar(void) {
         grammar_add_phrase(G);
     grammar_add_production_rule(G, P_RULE);
 
-            grammar_add_terminal_symbol(G, L_CODE, 1);
-        grammar_add_phrase(G);
-            grammar_add_epsilon_symbol(G, 0);
-        grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_DECORATION);
-
             grammar_add_non_terminal_symbol(G, P_NON_EXCLUDABLE, 1, 0);
         grammar_add_phrase(G);
             grammar_add_non_terminal_symbol(G, P_SUBSUMABLE, 1, 0);
@@ -326,6 +311,10 @@ static PGrammar *make_grammar(void) {
         grammar_add_phrase(G);
     grammar_add_production_rule(G, P_SUBSUMABLE);
 
+            grammar_add_non_terminal_symbol(G, P_PRODUCTIONS, 0, 1);
+        grammar_add_phrase(G);
+    grammar_add_production_rule(G, P_TEMP);
+
     P("\t grammar initialized. \n");
 
     return G;
@@ -338,6 +327,7 @@ int main(void) {
     int i = 0;
     PGrammar *grammar;
     PToken tokens[20];
+    PParseTree *tree;
 
     P("Making tokens...\n");
 
@@ -377,7 +367,7 @@ int main(void) {
     tokens[i++].column = 7;
 
     tokens[i].terminal = L_SEMICOLON;
-    tokens[i].lexeme = string_alloc_char(":", 1);
+    tokens[i].lexeme = string_alloc_char(";", 1);
     tokens[i].line = 5;
     tokens[i++].column = 5;
 
@@ -389,8 +379,10 @@ int main(void) {
     P("\t Grammar made.\n");
 
     P("Calling parse_tokens().. \n\n");
-    parse_tokens(grammar, tokens, i);
-    P("\n\t parse_tokens() returned. \n");
+    tree = parse_tokens(grammar, tokens, i);
+    printf("\n\t parse_tokens() returned parse tree %p. \n", (void *) tree);
+
+    print_tree(tree);
 
     P("Freeing grammar...\n");
     grammar_free(grammar);
