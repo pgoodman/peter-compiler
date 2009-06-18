@@ -597,6 +597,8 @@ match_non_terminal_symbol:
                  * place in the token stream. */
                 if(is_not_null(intermediate_result)) {
 
+                    D( printf("here. \n"); )
+
                     /* the cached result is a failure. time to backtrack. */
                     if(IR_FAILED == intermediate_result->intermediate_tree) {
                         D( printf("cached production failed.\n"); )
