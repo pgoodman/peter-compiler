@@ -815,7 +815,7 @@ end_of_input:
             continue;
         }
 
-        D( printf("wtf? \n"); )
+        std_error("Internal Parser Error: Strange conditions met.");
     }
 
 done_parsing:
