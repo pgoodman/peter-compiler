@@ -278,7 +278,9 @@ static PT_Terminal *LR_grow(PParser *parser,
 
         /* restart the application of this frame if progress was made and
          * update the cached tree with what progress we made. */
-        if(frame->farthest_id_reached < token->id) {
+        if(token->id > frame->farthest_id_reached) {
+
+            D( printf("made progress. \n"); )
 
             result->intermediate_tree = frame->parse_tree;
 
@@ -290,6 +292,8 @@ static PT_Terminal *LR_grow(PParser *parser,
 
         /* no progress was made, time to backtrack. */
         } else {
+
+            D( printf("didn't make progress. \n"); )
 
             /* go down the frame stack and remove consecutive uses of left
              * recursion. */
@@ -316,6 +320,9 @@ static PT_Terminal *LR_grow(PParser *parser,
             }
 
             parser->call.frame = i;
+
+            /*result->is_left_recursive = 0;*/
+
             return token;
         }
 
@@ -323,6 +330,7 @@ static PT_Terminal *LR_grow(PParser *parser,
     /* this is not the original starter of left recursion, don't grow it until
      * we get to the original one. */
     } else {
+        D( printf("not original left-recursive frame. \n"); )
         F_update_success(parser, parser->call.frame, result);
         return token;
     }
@@ -335,12 +343,18 @@ static PT_Terminal *LR_grow(PParser *parser,
 static void LR_mark_origin(PParser *parser) {
 
     int i = parser->call.frame;
-    P_Frame *frame = parser->call.stack[i],
-            *origin = parser->call.stack[--i];
 
-    for(; i >= 0; --i) {
+    P_Frame *top = parser->call.stack[i],
+            *origin;
+
+    for(; i > 0; ) {
+
+        origin = parser->call.stack[--i];
+
         if(origin->production.rule->production
-        == frame->production.rule->production) {
+        == top->production.rule->production) {
+
+            D( printf("*** found origin. *** \n"); )
 
             origin->left_recursion.is_used = 1;
             origin->left_recursion.is_direct = ((i+1) == parser->call.frame);
@@ -393,7 +407,22 @@ static void LR_mark_origin(PParser *parser) {
  *       ii) allow for left-recursion, as described in the following article:
  *           http://portal.acm.org/citation.cfm?id=1328408.1328424
  */
-PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens) {
+PParseTree *parse_tokens(PGrammar *grammar,
+                         PToken tokens[],
+                         int num_tokens) {
+
+    char production_names[12][16] = {
+        "Productions",
+        "Production",
+        "ProductionRules",
+        "ProductionRule",
+        "Rules",
+        "Rule",
+        "RuleFlag",
+        "NonExludable",
+        "Subsumable",
+        "Temp"
+    };
 
     PParser parser;
     P_Frame *frame = NULL;
@@ -405,7 +434,8 @@ PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens) {
 
     /* useful counter, be it for hinting to GCC that a block shouldn't be
      * optimized out, or for actually counting something. */
-    unsigned int j = 0;
+    unsigned int j = 0,
+                 k = 0;
 
     D( printf("initializing parser.\n"); )
 
@@ -439,9 +469,13 @@ begin_parsing:
 
     while(0 <= parser.call.frame) {
 
+        if(++k > 130) {
+            exit(1);
+        }
+
         frame = parser.call.stack[j = parser.call.frame];
 
-        D( printf("\nframe is %p at %d \n", (void *) frame, (int) parser.call.frame); )
+        D( printf("\nframe is '%s' %p at %d \n", production_names[frame->production.rule->production], (void *) frame, (int) parser.call.frame); )
 
         /* get the cached result for the frame on the top of the stack */
         intermediate_result = IR_get(
@@ -458,6 +492,8 @@ begin_parsing:
             frame->production.phrase,
             frame->production.symbol
         );
+
+        D( printf("symbol is %p. \n", (void *) symbol); )
 
         /* an error occurred in the current frame. we need to pop it off, dump
          * its parse tree, backtrack, and possibly cascade the failure upward.
@@ -518,6 +554,8 @@ production_rule_failed:
                 parser.must_backtrack = 0;
                 token = frame->backtrack_point;
                 frame->production.phrase += 1;
+
+                D( printf("new token is %p (backtrack). \n", (void *) token); )
             }
 
             continue;
@@ -547,6 +585,7 @@ production_rule_succeeded:
                 } else if(intermediate_result->is_left_recursive) {
                     D( printf("growing left recursion. \n"); )
                     token = LR_grow(&parser, intermediate_result, token);
+                    D( printf("new token is %p (LR_grow). \n", (void *) token); )
 
                 /* we have parsed all of the tokens. there is no need to do any
                  * work on the stack or the cache. */
@@ -561,7 +600,7 @@ production_rule_succeeded:
              * and yield control to the parent frame.
              */
             } else {
-                D( printf("production succeeded.\n"); )
+                D( printf("production '%s' succeeded.\n", production_names[frame->production.rule->production]); )
 
                 /* pop the production and advance to the next rule of the
                  * calling production. */
@@ -570,6 +609,8 @@ production_rule_succeeded:
                     (parser.call.frame)--,
                     intermediate_result
                 );
+
+                intermediate_result->end_token = token;
             }
 
             continue;
@@ -597,11 +638,9 @@ match_non_terminal_symbol:
                  * place in the token stream. */
                 if(is_not_null(intermediate_result)) {
 
-                    D( printf("here. \n"); )
-
                     /* the cached result is a failure. time to backtrack. */
                     if(IR_FAILED == intermediate_result->intermediate_tree) {
-                        D( printf("cached production failed.\n"); )
+                        D( printf("cached production '%s' failed.\n", production_names[symbol->value.non_terminal]); )
                         parser.must_backtrack = 1;
 
                     /* the cached result is missing, i.e. the cache value was
@@ -614,7 +653,7 @@ match_non_terminal_symbol:
                         intermediate_result->is_left_recursive = 1;
                         intermediate_result->intermediate_tree = IR_FAILED;
 
-                        D( printf("pushing production onto stack. \n"); )
+                        D( printf("pushing production '%s' onto stack. \n", production_names[symbol->value.non_terminal]); )
 
                         frame = F_init(
                             F_push(&parser),
@@ -632,7 +671,7 @@ match_non_terminal_symbol:
                      * the last token that was matched in the cached result.
                      */
                     } else {
-                        D( printf("cached production succeeded.\n"); )
+                        D( printf("cached production '%s' succeeded.\n", production_names[symbol->value.non_terminal]); )
 
                         F_record_tree(
                             frame,
@@ -642,13 +681,14 @@ match_non_terminal_symbol:
                         /* advance to a future token and to the next symbol */
                         ++(frame->production.symbol);
                         token = intermediate_result->end_token;
+                        D( printf("new token is %p (cached production). \n", (void *) token); )
                     }
 
                 /* we do not have a cached result and so we will need to push a
                  * new frame onto the stack.
                  */
                 } else {
-                    D( printf("pushing production onto stack.\n"); )
+                    D( printf("pushing production '%s' onto stack.\n", production_names[symbol->value.non_terminal]); )
 
                     frame = F_init(
                         F_push(&parser),
@@ -704,6 +744,9 @@ match_terminal_symbol:
 
                     /* advance the token and phrase symbol */
                     token = token->next;
+
+                    D( printf("new token is %p (next). \n", (void *) token); )
+
                     ++(frame->production.symbol);
 
                 /* the tokens do not match, backtrack. */
@@ -755,7 +798,7 @@ match_epsilon_symbol:
          *   ii) we need to backtrack because what we're parsing is either
          *       missing information or the current derivation is such that
          *       we expect too much information. */
-        if(token->id == parser.num_tokens) {
+        if(token->id >= parser.num_tokens) {
 
 end_of_input:
 

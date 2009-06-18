@@ -24,6 +24,8 @@
 
 #include "p-parse-tree.h"
 
-PParseTree *parse_tokens(PGrammar *grammar, PToken tokens[], int num_tokens);
+PParseTree *parse_tokens(PGrammar *grammar,
+                         PToken tokens[],
+                         int num_tokens);
 
 #endif /* PPARSER_H_ */
