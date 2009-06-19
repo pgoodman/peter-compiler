@@ -4,7 +4,9 @@ Productions
     : <>
     ;
 
-Temp : ^Productions ;
+Temp
+    : ^Productions
+    ;
 
 Production
     : -<non_terminal> ^ProductionRules <semicolon>

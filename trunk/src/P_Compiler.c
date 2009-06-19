@@ -201,37 +201,50 @@ clear_spaces:
 
 /* -------------------------------------------------------------------------- */
 
-static void print_tree(PParseTree *T) {
-
-    PTreeGenerator *tree_gen = tree_generator_alloc(T, TREE_TRAVERSE_POSTORDER);
-    while(generator_next(tree_gen)) {
-        T = generator_current(tree_gen);
-
-        if(T->_._parent != NULL) {
-
-            /* terminal */
-            if(T->type == 1) {
-                printf("\"%p\" -> \"%p\" \n", (void *)T->_._parent, (void *)T);
-                if(((PT_Terminal *)T)->lexeme != NULL) {
-                    printf("\"%p\" [label=\"%s\" color=blue] \n", (void *)T, (char *)((PT_Terminal *)T)->lexeme->str);
-                }
-            } else {
-                printf("\"%p\" -> \"%p\"\n", (void *)T->_._parent, (void *)T);
-            }
-        }
-
-        /* production */
-        if(T->type == 0) {
-            printf("\"%p\" [label=\"%s\"]\n", (void *)T, production_names[((PT_NonTerminal *) T)->production]);
-            if(tree_get_num_branches((PTree *) T) == 0) {
-                printf("\"%p\" [color=gray]\n", (void *)T);
-            }
-        /* epsilon */
-        } else if (T->type == 2) {
-
-        }
+static char *indent(unsigned int level, char *str) {
+    str[level] = 0;
+    for(; level > 0; ) {
+        str[--level] = '\t';
     }
-    generator_free(tree_gen);
+
+    return str;
+}
+
+static void print_tree_rec(PParseTree *tree, unsigned int level) {
+    unsigned int i;
+    char level_buffer[100];
+
+    if(is_null(tree))
+        return;
+
+    switch(tree->type) {
+
+        /* non-terminal */
+        case 0:
+            printf("%s[%s] \n",
+                indent(level, level_buffer),
+                production_names[((PT_NonTerminal *) tree)->production]
+            );
+
+            break;
+
+        /* terminal */
+        case 1:
+            printf("%s{%s} \n",
+                indent(level, level_buffer),
+                (char *) ((PT_Terminal *) tree)->lexeme->str
+            );
+            break;
+
+        /* epsilon */
+        case 2:
+            printf("%s{} \n", indent(level, level_buffer));
+            break;
+    }
+
+    for(i = 0; i < tree->_._fill; ++i) {
+        print_tree_rec((PParseTree *) tree->_._branches[i], level+1);
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -252,8 +265,9 @@ static PGrammar *make_grammar(void) {
     P("\t grammar allocated. \n");
     P("\t initializing grammar. \n");
 
-            grammar_add_non_terminal_symbol(G, P_TEMP, 0, 1);
+
             grammar_add_non_terminal_symbol(G, P_PRODUCTION, 0, 0);
+            grammar_add_non_terminal_symbol(G, P_PRODUCTIONS, 0, 1);
         grammar_add_phrase(G);
             grammar_add_epsilon_symbol(G, 0);
         grammar_add_phrase(G);
@@ -332,7 +346,7 @@ int main(void) {
     P("Making tokens...\n");
 
     tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("Productions", 11);
+    tokens[i].lexeme = string_alloc_char("Productions*", 12);
     tokens[i].line = 2;
     tokens[i++].column = 1;
 
@@ -371,6 +385,33 @@ int main(void) {
     tokens[i].line = 5;
     tokens[i++].column = 5;
 
+    /* -- */
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("Temp*", 5);
+    tokens[i].line = 7;
+    tokens[i++].column = 1;
+
+    tokens[i].terminal = L_COLON;
+    tokens[i].lexeme = string_alloc_char(":", 1);
+    tokens[i].line = 8;
+    tokens[i++].column = 5;
+
+    tokens[i].terminal = L_UP_ARROW;
+    tokens[i].lexeme = string_alloc_char("^", 1);
+    tokens[i].line = 8;
+    tokens[i++].column = 7;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("Productions", 11);
+    tokens[i].line = 8;
+    tokens[i++].column = 8;
+
+    tokens[i].terminal = L_SEMICOLON;
+    tokens[i].lexeme = string_alloc_char(";", 1);
+    tokens[i].line = 9;
+    tokens[i++].column = 5;
+
     P("\t Tokens made.\n");
     P("Making grammar...\n");
 
@@ -380,19 +421,16 @@ int main(void) {
 
     P("Calling parse_tokens().. \n\n");
     tree = parse_tokens(grammar, tokens, i);
-    printf("\n\t parse_tokens() returned parse tree %p. \n", (void *) tree);
 
-    print_tree(tree);
+    print_tree_rec(tree, 0);
+
+    P("Freeing parse tree.. \n");
+    parser_free_parse_tree(tree);
+    P("\t Parse tree freed. \n");
 
     P("Freeing grammar...\n");
     grammar_free(grammar);
     P("\t Grammar freed.\n");
-
-    P("Freeing token lexemes...\n");
-    for(; --i >= 0; ) {
-        string_free(tokens[i].lexeme);
-    }
-    P("\t Token lexemes freed.\n");
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());

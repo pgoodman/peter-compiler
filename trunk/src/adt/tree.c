@@ -163,7 +163,7 @@ void delegate_tree_free(PTree *T) {
 /**
  * Return the number of branches allocated for this tree.
  */
-size_t tree_get_num_slots(PTree *T) {
+unsigned short tree_get_num_slots(PTree *T) {
     assert_not_null(T);
     return T->_degree;
 }
@@ -171,7 +171,7 @@ size_t tree_get_num_slots(PTree *T) {
 /**
  * Return the number of allocated branches that have been filled.
  */
-size_t tree_get_num_branches(PTree *T) {
+unsigned short tree_get_num_branches(PTree *T) {
     assert_not_null(T);
     return T->_fill;
 }
