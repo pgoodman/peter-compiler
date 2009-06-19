@@ -27,7 +27,6 @@ static PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
     tree->line = line;
     tree->column = column;
     tree->next = NULL;
-    tree->prev = NULL;
     tree->id = id;
 
     return tree;
@@ -72,7 +71,6 @@ PT_Terminal *PT_alloc_terminals(PT_Set *all_trees,
     /* make the EOF token tree */
     next = PT_alloc_terminal(0, NULL, 0, 0, num_tokens);
     next->next = NULL;
-    next->prev = NULL;
     curr = next;
 
     /* make the main set of tokens */
@@ -89,8 +87,6 @@ PT_Terminal *PT_alloc_terminals(PT_Set *all_trees,
             );
 
             curr->next = next;
-            curr->prev = NULL;
-            next->prev = curr;
             next = curr;
         }
     }
@@ -143,6 +139,25 @@ void PT_add_branch(PParseTree *parse_tree,
     return;
 }
 
+/**
+ * Free a parse tree (excluding its branches).
+ */
+static void PT_free(PParseTree *parse_tree) {
+    PT_Terminal *pt_as_terminal;
+
+    if(parse_tree->type == P_PARSE_TREE_TERMINAL) {
+        pt_as_terminal = (PT_Terminal *) parse_tree;
+        if(is_not_null(pt_as_terminal->lexeme)) {
+            string_free(pt_as_terminal->lexeme);
+        }
+    } else {
+        tree_clear((PTree *) parse_tree, 0);
+    }
+
+    tree_free((PTree *) parse_tree, &delegate_do_nothing);
+}
+
+/* -------------------------------------------------------------------------- */
 
 /**
  * Free a parse tree, in its entirety.
@@ -153,47 +168,8 @@ void parser_free_parse_tree(PParseTree *parse_tree) {
 
     tree_free(
         (PTree *) parse_tree,
-        (PDelegate) &delegate_do_nothing
+        (PDelegate) &PT_free
     );
-}
-
-/**
- * Free an intermediate parse tree.
- */
-void PT_free_intermediate(PParseTree *parse_tree) {
-
-    PT_Terminal *pt_as_terminal;
-    PTree *pt_as_tree;
-
-    assert_not_null(parse_tree);
-
-    pt_as_tree = (PTree *) parse_tree;
-
-    /* free up the related token */
-    if(parse_tree->type == P_PARSE_TREE_TERMINAL) {
-        pt_as_terminal = (PT_Terminal *) parse_tree;
-
-        /* re-link the token chain */
-        if(is_not_null(pt_as_terminal->prev)) {
-            (pt_as_terminal->prev)->next = pt_as_terminal->next;
-        }
-        if(is_not_null(pt_as_terminal->next)) {
-            (pt_as_terminal->next)->prev = pt_as_terminal->prev;
-        }
-
-        if(is_not_null(pt_as_terminal->lexeme)) {
-            string_free(pt_as_terminal->lexeme);
-        }
-
-        /* unlink this token from the token chain */
-        pt_as_terminal->next = NULL;
-        pt_as_terminal->prev = NULL;
-
-    } else {
-        tree_clear(pt_as_tree, 0);
-    }
-
-    tree_free(pt_as_tree, &delegate_do_nothing);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -217,7 +193,7 @@ void PTS_free(PT_Set *set) {
     dict_free(
         set,
         &delegate_do_nothing,
-        (PDelegate) &PT_free_intermediate
+        (PDelegate) &PT_free
     );
 }
 

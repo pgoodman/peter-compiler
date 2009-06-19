@@ -196,8 +196,10 @@ typedef struct PParser {
         char frame;
     } call;
 
-    /* the set of all trees, ends up being the garbage set */
-    PT_Set *trees;
+    /* the set of all trees. once the parse tree is constructed then we
+     * remove the set of trees in the parse tree from this set so that we
+     * can free all memory held by all trees remaining in the set. */
+    PT_Set *tree_set;
 
     /* the farthest id into the token stream that we've reached. */
     uint32_t farthest_id_reached;

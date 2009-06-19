@@ -86,8 +86,7 @@ typedef struct PT_Terminal {
 
     uint32_t id;
 
-    struct PT_Terminal *prev,
-                       *next;
+    struct PT_Terminal *next;
 } PT_Terminal;
 
 /* a set of parse trees */

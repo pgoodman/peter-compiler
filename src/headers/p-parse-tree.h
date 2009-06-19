@@ -25,9 +25,9 @@ void PT_add_branch(PParseTree *parse_tree,
                    PParseTree *branch_tree,
                    G_Symbol *symbol);
 
-void parser_free_parse_tree(PParseTree *parse_tree);
+/* -------------------------------------------------------------------------- */
 
-void PT_free_intermediate(PParseTree *parse_tree);
+void parser_free_parse_tree(PParseTree *parse_tree);
 
 /* -------------------------------------------------------------------------- */
 

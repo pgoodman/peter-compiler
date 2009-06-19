@@ -53,8 +53,8 @@ void tree_trim(PTree *, PDictionary *);
 void tree_add_branch(PTree *, PTree *);
 void tree_force_add_branch(PTree *, PTree *);
 void tree_force_add_branch_children(PTree *, PTree *);
-size_t tree_get_num_slots(PTree * );
-size_t tree_get_num_branches(PTree * );
+unsigned short tree_get_num_slots(PTree * );
+unsigned short tree_get_num_branches(PTree * );
 void *tree_parent(PTree *);
 void tree_replace_branch(PTree *old_child, PTree *new_child);
 /*void *tree_get_branch(void *, unsigned short);*/

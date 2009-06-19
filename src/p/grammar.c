@@ -9,6 +9,8 @@
 #include <p-grammar.h>
 #include <p-grammar-internal.h>
 
+#define D(x)
+
 #define C_PRODUCTION_RULES 0
 #define C_PRODUCTION_RULE_PHRASES 1
 #define C_PHRASES 2
@@ -127,8 +129,6 @@ void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production) {
     assert(production < grammar->num_productions);
 
     which_rule = grammar->counter[C_PRODUCTION_RULES];
-
-    printf("adding rule %d as %d \n", production, which_rule);
 
     assert(which_rule < grammar->num_productions);
 
