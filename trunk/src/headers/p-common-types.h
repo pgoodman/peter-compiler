@@ -47,9 +47,9 @@ typedef struct G_ProductionRule {
 
 /* The type of a parse tree. */
 typedef enum {
-    P_PARSE_TREE_PRODUCTION,
-    P_PARSE_TREE_TERMINAL,
-    P_PARSE_TREE_EPSILON
+    PT_NON_TERMINAL,
+    PT_TERMINAL,
+    PT_EPSILON
 } PT_Type;
 
 /* A parse tree. */

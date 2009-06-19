@@ -221,8 +221,10 @@ void dict_free(H_type *H,
     for(i = 0; i < H->num_slots; ++i) {
         for(entry = H->slots[i]; is_not_null(entry); entry = next) {
             next = entry->next;
+
             free_key_fnc(entry->key);
             free_val_fnc(entry->entry);
+
             dict_mem_free(entry);
         }
     }

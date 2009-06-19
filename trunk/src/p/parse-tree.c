@@ -20,7 +20,7 @@ static PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
     PT_Terminal *tree = NULL;
 
     tree = tree_alloc(sizeof(PT_Terminal), 0);
-    tree->_.type = P_PARSE_TREE_TERMINAL;
+    ((PParseTree *) tree)->type = PT_TERMINAL;
 
     tree->terminal = terminal;
     tree->lexeme = lexeme;
@@ -39,7 +39,7 @@ PT_NonTerminal *PT_alloc_non_terminal(G_NonTerminal production,
                                       unsigned short num_branches) {
     PT_NonTerminal *tree;
     tree = tree_alloc(sizeof(PT_NonTerminal), num_branches);
-    tree->_.type = P_PARSE_TREE_PRODUCTION;
+    ((PParseTree *) tree)->type = PT_NON_TERMINAL;
     tree->rule = 1;
     tree->production = production;
     return tree;
@@ -49,9 +49,9 @@ PT_NonTerminal *PT_alloc_non_terminal(G_NonTerminal production,
  * Allocate an epsilon tree on the heap.
  */
 PT_Epsilon *PT_alloc_epsilon(void) {
-    PT_Epsilon *epsilon_tree = tree_alloc(sizeof(PParseTree), 0);
-    ((PParseTree *) epsilon_tree)->type = P_PARSE_TREE_EPSILON;
-    return epsilon_tree;
+    PT_Epsilon *tree = tree_alloc(sizeof(PT_Epsilon), 0);
+    ((PParseTree *) tree)->type = PT_EPSILON;
+    return tree;
 }
 
 /**
@@ -73,6 +73,8 @@ PT_Terminal *PT_alloc_terminals(PT_Set *all_trees,
     next->next = NULL;
     curr = next;
 
+    PTS_add(all_trees, (PParseTree *) curr);
+
     /* make the main set of tokens */
     if(num_tokens > 0) {
         for(id = num_tokens; id > 0; ) {
@@ -85,6 +87,8 @@ PT_Terminal *PT_alloc_terminals(PT_Set *all_trees,
                 tokens[id].column,
                 id
             );
+
+            PTS_add(all_trees, (PParseTree *) curr);
 
             curr->next = next;
             next = curr;
@@ -105,7 +109,7 @@ void PT_add_branch(PParseTree *parse_tree,
 
     if(!G_symbol_is_non_excludable(symbol)
     && num_branches <= 1
-    && branch_tree->type == P_PARSE_TREE_PRODUCTION) {
+    && branch_tree->type == PT_NON_TERMINAL) {
 
         /* this is a production with only one child filled,
          * promote that single child node to the place of this
@@ -139,21 +143,25 @@ void PT_add_branch(PParseTree *parse_tree,
     return;
 }
 
+static void PT_clear(PParseTree *parse_tree) {
+    PT_Terminal *pt_as_terminal;
+    if(parse_tree->type == PT_TERMINAL) {
+        pt_as_terminal = (PT_Terminal *) parse_tree;
+        if(is_not_null(pt_as_terminal->lexeme)) {
+            string_free(pt_as_terminal->lexeme);
+            pt_as_terminal->lexeme = NULL;
+        }
+
+    } else if(parse_tree->type == PT_NON_TERMINAL) {
+        tree_clear((PTree *) parse_tree, 0);
+    }
+}
+
 /**
  * Free a parse tree (excluding its branches).
  */
 static void PT_free(PParseTree *parse_tree) {
-    PT_Terminal *pt_as_terminal;
-
-    if(parse_tree->type == P_PARSE_TREE_TERMINAL) {
-        pt_as_terminal = (PT_Terminal *) parse_tree;
-        if(is_not_null(pt_as_terminal->lexeme)) {
-            string_free(pt_as_terminal->lexeme);
-        }
-    } else {
-        tree_clear((PTree *) parse_tree, 0);
-    }
-
+    PT_clear(parse_tree);
     tree_free((PTree *) parse_tree, &delegate_do_nothing);
 }
 
@@ -168,7 +176,7 @@ void parser_free_parse_tree(PParseTree *parse_tree) {
 
     tree_free(
         (PTree *) parse_tree,
-        (PDelegate) &PT_free
+        (PDelegate) &PT_clear
     );
 }
 
@@ -192,8 +200,8 @@ void PTS_free(PT_Set *set) {
     assert_not_null(set);
     dict_free(
         set,
-        &delegate_do_nothing,
-        (PDelegate) &PT_free
+        &delegate_do_nothing, /* free key */
+        (PDelegate) &PT_free /* free val */
     );
 }
 
@@ -207,12 +215,12 @@ void PTS_add(PT_Set *set, PParseTree *tree) {
 }
 
 /**
- * Rmove a tree from the tree set.
+ * Remove a tree from the tree set.
  */
 void PTS_remove(PT_Set *set, PParseTree *tree) {
     assert_not_null(set);
     assert_not_null(tree);
-
+    printf("\t tree is: %p\n", (void *) tree);
     dict_unset(
         set,
         tree,
