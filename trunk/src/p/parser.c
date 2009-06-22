@@ -8,7 +8,7 @@
 
 #include <p-parser.h>
 
-#define PARSER_DEBUG(x)
+#define PARSER_DEBUG(x) x
 #define D(x) PARSER_DEBUG(x)
 
 #define IR_FAILED ((void *) 10)
@@ -182,6 +182,16 @@ static void IR_free_all(PParser *parser, PGrammar *grammar) {
 
     parser->intermediate_results = NULL;
     parser->num_tokens = 0;
+}
+
+/**
+ * Clear the branches off of an intermediate parse tree.
+ */
+static void IR_clear_tree(P_IntermediateResult *result) {
+    PTree *tree = (PTree *) result->intermediate_tree;
+    if(is_not_null(tree) && IR_FAILED != tree && IR_INITIAL != tree) {
+        tree_clear(tree, 0);
+    }
 }
 
 /**
@@ -411,7 +421,8 @@ PParseTree *parse_tokens(PGrammar *grammar,
 
     /* useful counter, be it for hinting to GCC that a block shouldn't be
      * optimized out, or for actually counting something. */
-    unsigned int j = 0;
+    unsigned int j = 0,
+                 delt_with_end_of_input = 0;
 
     D( printf("initializing parser.\n"); )
 
@@ -448,7 +459,7 @@ begin_parsing:
 
         frame = parser.call.stack[j = parser.call.frame];
 
-        D( printf("\nframe is '%s' %p at %d \n", production_names[frame->production.rule->production], (void *) frame, (int) parser.call.frame); )
+        D( printf("\nframe is '%s' (%p), phrase is %d, symbol is %d, at %d \n", production_names[frame->production.rule->production], (void *) frame, frame->production.phrase, frame->production.symbol, (int) parser.call.frame); )
 
         /* get the cached result for the frame on the top of the stack */
         intermediate_result = IR_get(
@@ -525,7 +536,13 @@ production_rule_failed:
 
                 parser.must_backtrack = 0;
                 token = frame->backtrack_point;
-                frame->production.phrase += 1;
+
+                ++(frame->production.phrase);
+                frame->production.symbol = 0;
+
+                /* drop the branches of the parse tree */
+                IR_clear_tree(intermediate_result);
+                tree_clear((PTree *) frame->parse_tree, 0);
 
                 D( printf("new token is %p=%d (backtrack). \n", (void *) token, token->id); )
             }
@@ -822,6 +839,13 @@ end_of_input:
         std_error("Internal Parser Error: Strange conditions met.");
     }
 
+parse_error:
+
+    temp_parse_tree = NULL;
+    D( printf("A parse error occurred. \n"); )
+
+    exit(1);
+
 done_parsing:
 
     D( printf("\n\nSuccessfully parsed. \n"); )
@@ -832,23 +856,13 @@ done_parsing:
     temp_parse_tree = (PParseTree *) frame->parse_tree;
     tree_generator = tree_generator_alloc(
         (PTree *) temp_parse_tree,
-        TREE_TRAVERSE_POSTORDER
+        TREE_TRAVERSE_PREORDER
     );
-    j = 0;
-    printf("num in set: %d \n", parser.tree_set->num_used_slots);
+
     while(generator_next(tree_generator)) {
-        ++j;
         PTS_remove(parser.tree_set, generator_current(tree_generator));
     }
-    printf("num in set: %d, num in tree %d \n", parser.tree_set->num_used_slots, j);
     generator_free(tree_generator);
-
-    goto clean_parser;
-
-parse_error:
-
-    temp_parse_tree = NULL;
-    D( printf("A parse error occurred. \n"); )
 
 clean_parser:
 

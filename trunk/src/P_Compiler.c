@@ -334,9 +334,102 @@ static PGrammar *make_grammar(void) {
     return G;
 }
 
+static PGrammar *peg_equivalence_grammar(void) {
+    PGrammar *G;
+
+    P("\t allocating grammar. \n");
+
+    G = grammar_alloc(
+        P_PRODUCTIONS, /* production to start matching with */
+        1, /* number of productions */
+        1, /* number of tokens */
+        2, /* number of production phrases */
+        4 /* number of phrase symbols */
+    );
+
+    P("\t grammar allocated. \n");
+    P("\t initializing grammar. \n");
+
+            grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
+            grammar_add_non_terminal_symbol(G, P_PRODUCTIONS, 1, 0);
+            grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
+        grammar_add_phrase(G);
+            grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
+        grammar_add_phrase(G);
+    grammar_add_production_rule(G, P_PRODUCTIONS);
+
+    P("\t grammar initialized. \n");
+
+    return G;
+}
+
+static void test_peg_equivalence(void) {
+
+    int i = 0;
+    PGrammar *grammar;
+    PToken tokens[20];
+    PParseTree *tree;
+
+    P("Making tokens...\n");
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("a", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 1;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("b", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 2;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("c", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 3;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("d", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 4;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("e", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 5;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("f", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 6;
+
+    tokens[i].terminal = L_NON_TERMINAL;
+    tokens[i].lexeme = string_alloc_char("g", 1);
+    tokens[i].line = 1;
+    tokens[i++].column = 7;
+
+    grammar = peg_equivalence_grammar();
+
+    P("Calling parse_tokens().. \n\n");
+    tree = parse_tokens(grammar, tokens, i);
+
+    print_tree_rec(tree, 0);
+
+    P("Freeing parse tree.. \n");
+    parser_free_parse_tree(tree);
+    P("\t Parse tree freed. \n");
+
+    P("Freeing grammar...\n");
+    grammar_free(grammar);
+    P("\t Grammar freed.\n");
+
+#if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
+    printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
+#endif
+}
+
 /* -------------------------------------------------------------------------- */
 
-int main(void) {
+static void test_parser(void) {
 
     int i = 0;
     PGrammar *grammar;
@@ -435,6 +528,12 @@ int main(void) {
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
 #endif
+}
 
-    return 0;
+int main(void) {
+
+    /*test_peg_equivalence();*/
+    test_parser();
+
+    return 1;
 }
