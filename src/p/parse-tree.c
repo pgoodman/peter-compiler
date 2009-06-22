@@ -220,7 +220,6 @@ void PTS_add(PT_Set *set, PParseTree *tree) {
 void PTS_remove(PT_Set *set, PParseTree *tree) {
     assert_not_null(set);
     assert_not_null(tree);
-    printf("\t tree is: %p\n", (void *) tree);
     dict_unset(
         set,
         tree,
