@@ -16,12 +16,6 @@
 #define C_PHRASES 2
 #define C_SYMBOLS 3
 
-#define P_SYMBOL_IS_NON_TERMINAL 1
-#define P_SYMBOL_IS_TERMINAL 2
-#define P_SYMBOL_IS_EPSILON 4
-#define P_SYMBOL_IS_NON_EXCLUDABLE 8
-#define P_SYMBOL_RAISE_CHILDREN 16
-
 /* -------------------------------------------------------------------------- */
 
 static G_Symbol *G_get_next_symbol(PGrammar *grammar) {
@@ -47,9 +41,8 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
                         short num_symbols) {
 
     PGrammar *grammar;
-    char *data;
 
-    data = mem_alloc(
+    char *data = mem_calloc(1,
         sizeof(PParser) + \
         (num_productions * sizeof(G_ProductionRule)) + \
         (num_phrases * sizeof(G_Phrase)) + \
@@ -202,11 +195,10 @@ void grammar_add_non_terminal_symbol(PGrammar *grammar,
                                      unsigned char is_non_excludable,
                                      unsigned char must_be_raised) {
     G_Symbol *symbol = G_get_next_symbol(grammar);
-    symbol->flag = (
-        P_SYMBOL_IS_NON_TERMINAL \
-        | (is_non_excludable ? P_SYMBOL_IS_NON_EXCLUDABLE : 0)
-        | (must_be_raised ? P_SYMBOL_RAISE_CHILDREN : 0)
-    );
+
+    symbol->is_non_terminal = 1;
+    symbol->is_non_excludable = (is_non_excludable & 1);
+    symbol->children_must_be_raised = (must_be_raised & 1);
     symbol->value.non_terminal = production;
 }
 
@@ -217,11 +209,23 @@ void grammar_add_terminal_symbol(PGrammar *grammar,
                                  G_Terminal token,
                                  unsigned char is_non_excludable) {
     G_Symbol *symbol = G_get_next_symbol(grammar);
-    symbol->flag = (
-        P_SYMBOL_IS_TERMINAL \
-        | (is_non_excludable ? P_SYMBOL_IS_NON_EXCLUDABLE : 0)
-    );
+    symbol->is_terminal = 1;
+    symbol->is_non_excludable = (is_non_excludable & 1);
     symbol->value.terminal = token;
+}
+
+/**
+ * The meta-production rule for committing to the current phrase.
+ */
+void grammar_add_cut_symbol(PGrammar *grammar) {
+    G_get_next_symbol(grammar)->is_cut = 1;
+}
+
+/**
+ * The meta-production rule for failing the current phrase.
+ */
+void grammar_add_fail_symbol(PGrammar *grammar) {
+    G_get_next_symbol(grammar)->is_fail = 1;
 }
 
 /**
@@ -229,10 +233,9 @@ void grammar_add_terminal_symbol(PGrammar *grammar,
  */
 void grammar_add_epsilon_symbol(PGrammar *grammar,
                                 unsigned char is_non_excludable) {
-    G_get_next_symbol(grammar)->flag = (
-        P_SYMBOL_IS_EPSILON \
-        | (is_non_excludable ? P_SYMBOL_IS_NON_EXCLUDABLE : 0)
-    );
+    G_Symbol *symbol = G_get_next_symbol(grammar);
+    symbol->is_epsilon_transition = 1;
+    symbol->is_non_excludable = (is_non_excludable & 1);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -277,43 +280,3 @@ G_Symbol *G_production_rule_get_symbol(G_ProductionRule *rule,
     return phrase->symbols + which_symbol;
 }
 
-/**
- * Return whether or not the current symbol cannot be exluded from the parse tree.
- */
-int G_symbol_is_non_excludable(G_Symbol *symbol) {
-    assert_not_null(symbol);
-    return symbol->flag & P_SYMBOL_IS_NON_EXCLUDABLE;
-}
-
-/**
- * Return whether or not the children nodes in the parse tree should be
- * promoted.
- */
-int G_symbol_use_children_instead(G_Symbol *symbol) {
-    assert_not_null(symbol);
-    return symbol->flag & P_SYMBOL_RAISE_CHILDREN;
-}
-
-/**
- * Return whether or not a rule is a production rule.
- */
-int G_symbol_is_non_terminal(G_Symbol *symbol) {
-    assert_not_null(symbol);
-    return symbol->flag & P_SYMBOL_IS_NON_TERMINAL;
-}
-
-/**
- * Return whether or not a rule is a token rule.
- */
-int G_symbol_is_terminal(G_Symbol *symbol) {
-    assert_not_null(symbol);
-    return symbol->flag & P_SYMBOL_IS_TERMINAL;
-}
-
-/**
- * Return whether or not a rule is an epsilon rule.
- */
-int G_symbol_is_epsilon(G_Symbol *symbol) {
-    assert_not_null(symbol);
-    return symbol->flag & P_SYMBOL_IS_EPSILON;
-}

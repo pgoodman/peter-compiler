@@ -8,7 +8,7 @@
 
 #include <p-parser.h>
 
-#define PARSER_DEBUG(x) x
+#define PARSER_DEBUG(x)
 #define D(x) PARSER_DEBUG(x)
 
 #define IR_FAILED ((void *) 10)
@@ -109,7 +109,8 @@ static void F_update_success(PParser *parser,
  */
 static P_Frame *F_push(PParser *parser,
                        G_ProductionRule *rule,
-                       PT_Terminal *backtrack_point) {
+                       PT_Terminal *backtrack_point,
+                       PT_NonTerminal *parse_tree) {
 
     P_Frame *frame;
     unsigned int i = ++(parser->call.frame);
@@ -141,14 +142,21 @@ static P_Frame *F_push(PParser *parser,
     frame->production.phrase = 0;
     frame->production.symbol = 0;
     frame->production.rule = rule;
+    frame->production.is_committed = 0;
 
     /* only allocate a new tree if we don't have one defined yet */
-    frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
-        rule->production,
-        2 /* TODO: start bigger? */
-    );
+    if(is_null(parse_tree)) {
+        frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
+            rule->production,
+            2 /* TODO: start bigger? */
+        );
 
-    PTS_add(parser->tree_set, frame->parse_tree);
+        PTS_add(parser->tree_set, frame->parse_tree);
+
+    /* one is passed in means that this is an explicit tail-call */
+    } else {
+        frame->parse_tree = parse_tree;
+    }
 
     return frame;
 }
@@ -414,7 +422,8 @@ PParseTree *parse_tokens(PGrammar *grammar,
     PParser parser;
     P_Frame *frame = NULL;
     P_IntermediateResult *intermediate_result = NULL;
-    G_Symbol *symbol = NULL;
+    G_Symbol *symbol = NULL,
+             *next_symbol = NULL;
     PParseTree *temp_parse_tree = NULL;
     PTreeGenerator *tree_generator = NULL;
     PT_Terminal *token = NULL;
@@ -445,7 +454,8 @@ PParseTree *parse_tokens(PGrammar *grammar,
     frame = F_push(
         &parser,
         grammar->production_rules + grammar->start_production_rule,
-        token
+        token,
+        NULL
     );
 
     PTS_add(parser.tree_set, frame->parse_tree);
@@ -485,6 +495,11 @@ begin_parsing:
         if(parser.must_backtrack) {
 
 production_rule_failed:
+
+            /* make (mostly) sure that a phrase isn't found */
+            if(frame->is_committed) {
+                frame->production.phrase = (unsigned char) -1;
+            }
 
             /* there are no rules to backtrack to, we need to cascade the
              * failure upward, dump the tree, and cache the failure.
@@ -610,205 +625,6 @@ production_rule_succeeded:
             continue;
         }
 
-        /* We need to match the current token against a terminal symbol, accept
-         * an epsilon symbol, or push a frame on for a non-terminal symbol. */
-        if(token->id < parser.num_tokens) {
-
-            /* the next non/terminal in the current rule list is a non-terminal,
-             * i.e. it is a production. we need to push the production onto the
-             * stack.
-             */
-            if(G_symbol_is_non_terminal(symbol)) {
-
-match_non_terminal_symbol:
-
-                intermediate_result = IR_get(
-                    &parser,
-                    symbol->value.non_terminal,
-                    token->id
-                );
-
-                /* we have already applied this production to this particular
-                 * place in the token stream. */
-                if(is_not_null(intermediate_result)) {
-
-                    /* the cached result is a failure. time to backtrack. */
-                    if(IR_FAILED == intermediate_result->intermediate_tree) {
-                        D( printf("cached production '%s' failed.\n", production_names[symbol->value.non_terminal]); )
-                        parser.must_backtrack = 1;
-
-                    /* the cached result is missing, i.e. the cache value was
-                     * initialized by a production already on the stack but that
-                     * has (in)directly called itself through left recursion. */
-                    } else if(IR_INITIAL == intermediate_result->intermediate_tree) {
-
-                        D( printf("detected left recursion. \n"); )
-
-                        intermediate_result->is_left_recursive = 1;
-                        intermediate_result->intermediate_tree = IR_FAILED;
-
-                        D( printf("pushing production '%s' onto stack. \n", production_names[symbol->value.non_terminal]); )
-
-                        frame = F_push(
-                            &parser,
-                            grammar->production_rules + symbol->value.non_terminal,
-                            token
-                        );
-
-                        LR_mark_origin(&parser);
-
-                    /* the cached result was a success, we need to merge the
-                     * cached tree with our current parse tree, advance to the
-                     * next rewrite rule in our current rule list, and advance
-                     * our current position in the token list to the token after
-                     * the last token that was matched in the cached result.
-                     */
-                    } else {
-
-                        /* in the event that we are dealing with *indirect* left
-                         * recursion, it will be the case that the production(s)
-                         * that initiated the left recursion indirectly do NOT
-                         * have their cached results representing the new and
-                         * full seed but instead have either the initial or
-                         * previous seed.
-                         *
-                         * A way to remedy this problem is to push them back on
-                         * the stack, which eventually through the left recursion
-                         * that they initiate will update their cached results
-                         * with the full amount that we've parsed and then we
-                         * can continue on.
-                         */
-                        if(frame->left_recursion.is_used
-                        && !frame->left_recursion.is_direct) {
-
-                            D( printf("re-growing '%s' from seed. \n", production_names[symbol->value.non_terminal]); )
-
-                            frame = F_push(
-                                &parser,
-                                grammar->production_rules + symbol->value.non_terminal,
-                                token
-                            );
-                        } else {
-
-                            D( printf("cached production '%s' succeeded.\n", production_names[symbol->value.non_terminal]); )
-
-                            PT_add_branch(
-                                frame->parse_tree,
-                                intermediate_result->intermediate_tree,
-                                symbol
-                            );
-
-                            /* advance to a future token and to the next symbol */
-                            ++(frame->production.symbol);
-
-                            token = intermediate_result->end_token;
-                            D( printf("new token is %p=%d (cached production). \n", (void *) token, token->id); )
-                        }
-                    }
-
-                /* we do not have a cached result and so we will need to push a
-                 * new frame onto the stack.
-                 */
-                } else {
-                    D( printf("pushing production '%s' onto stack.\n", production_names[symbol->value.non_terminal]); )
-
-                    frame = F_push(
-                        &parser,
-                        grammar->production_rules + symbol->value.non_terminal,
-                        token
-                    );
-
-                    IR_create(
-                        &parser,
-                        frame->production.rule->production,
-                        token->id
-                    );
-                }
-
-            /* the next non/terminal in the current rule list is a terminal,
-             * i.e. it is a token. we need to try to match the current token
-             * against the symbol's token. if they match then we need to advance
-             * to the next rule and to the next token. if they do not match
-             * then we need to signal the frame to backtrack.
-             */
-            } else if(G_symbol_is_terminal(symbol)) {
-
-match_terminal_symbol:
-
-                /* record the farthest point we've gotten to. */
-                if(token->id > parser.farthest_id_reached) {
-                    parser.farthest_id_reached = token->id;
-                }
-
-                /* we have matched a token, advance to the next token in the
-                 * list and the next rewrite rule in the current rule list.
-                 * also, store the matched token into the frame's partial parse
-                 * tree. */
-                if(token->terminal == symbol->value.terminal) {
-
-                    D(
-                        if(is_not_null(token->lexeme)) {
-                            printf("\t matched: '%s' on line %d, column %d. \n", token->lexeme->str, token->line, token->column);
-                        } else {
-                            printf("\t matched. \n");
-                        }
-                    )
-
-                    /* store the match as a parse tree */
-                    if(G_symbol_is_non_excludable(symbol)) {
-                        tree_force_add_branch(
-                            (PTree *) frame->parse_tree,
-                            (PTree *) token
-                        );
-                    }
-
-                    /* advance the token and phrase symbol */
-                    token = token->next;
-
-                    D( printf("new token is %p=%d (next). \n", (void *) token, token->id); )
-
-                    ++(frame->production.symbol);
-
-                /* the tokens do not match, backtrack. */
-                } else {
-                    D(
-                        printf(
-                            "\t didn't match, expected:%d got:%d\n",
-                            (unsigned int) symbol->value.terminal,
-                            (unsigned int) token->terminal
-                        );
-                    )
-
-                    parser.must_backtrack = 1;
-                }
-
-            /* the next non/terminal in the current rule list is an empty
-             * terminal, i.e. it is the empty string. we accept it, move to the
-             * next rule in the current rule list, but *don't* move to the next
-             * token. */
-            } else {
-
-match_epsilon_symbol:
-
-                D( printf("\t matched epsilon. \n"); )
-
-                if(G_symbol_is_non_excludable(symbol)) {
-                    temp_parse_tree = (PParseTree *) PT_alloc_epsilon();
-
-                    PTS_add(parser.tree_set, temp_parse_tree);
-
-                    tree_force_add_branch(
-                        (PTree *) frame->parse_tree,
-                        (PTree *) temp_parse_tree
-                    );
-                }
-
-                ++(frame->production.symbol);
-            }
-
-            continue;
-        }
-
         /* the parser stack has something on it but we've reached the end of
          * input, there are two cases to deal with:
          *   i) we need to match a series of epsilon transitions, which might
@@ -820,20 +636,243 @@ match_epsilon_symbol:
          *       missing information or the current derivation is such that
          *       we expect too much information. */
         if(token->id >= parser.num_tokens) {
-
 end_of_input:
 
             D( printf("end of input. \n"); )
 
-            if(is_null(symbol) || G_symbol_is_terminal(symbol)) {
+            if(is_null(symbol) || symbol->is_terminal) {
                 parser.must_backtrack = 1;
-            } else if(G_symbol_is_epsilon(symbol)) {
-                goto match_epsilon_symbol;
+                continue;
+            }
+        }
+
+        /* We need to match the current token against a terminal symbol, accept
+         * an epsilon symbol, or push a frame on for a non-terminal symbol. */
+        if(symbol->is_cut) {
+
+match_cut_symbol:
+            frame->is_committed = 1;
+        }
+
+        if(symbol->is_fail) {
+
+match_fail_symbol:
+            parser->must_backtrack = 1;
+
+        /* the next non/terminal in the current rule list is a non-terminal,
+         * i.e. it is a production. we need to push the production onto the
+         * stack.
+         */
+        } else if(symbol->is_non_terminal) {
+
+match_non_terminal_symbol:
+
+            intermediate_result = IR_get(
+                &parser,
+                symbol->value.non_terminal,
+                token->id
+            );
+
+            /* we have already applied this production to this particular
+             * place in the token stream. */
+            if(is_not_null(intermediate_result)) {
+
+                /* the cached result is a failure. time to backtrack. */
+                if(IR_FAILED == intermediate_result->intermediate_tree) {
+                    D( printf("cached production '%s' failed.\n", production_names[symbol->value.non_terminal]); )
+                    parser.must_backtrack = 1;
+
+                /* the cached result is missing, i.e. the cache value was
+                 * initialized by a production already on the stack but that
+                 * has (in)directly called itself through left recursion. */
+                } else if(IR_INITIAL == intermediate_result->intermediate_tree) {
+
+                    D( printf("detected left recursion. \n"); )
+
+                    intermediate_result->is_left_recursive = 1;
+                    intermediate_result->intermediate_tree = IR_FAILED;
+
+                    D( printf("pushing production '%s' onto stack. \n", production_names[symbol->value.non_terminal]); )
+
+                    frame = F_push(
+                        &parser,
+                        grammar->production_rules + symbol->value.non_terminal,
+                        token,
+                        NULL
+                    );
+
+                    LR_mark_origin(&parser);
+
+                /* the cached result was a success, we need to merge the
+                 * cached tree with our current parse tree, advance to the
+                 * next rewrite rule in our current rule list, and advance
+                 * our current position in the token list to the token after
+                 * the last token that was matched in the cached result.
+                 */
+                } else {
+
+                    /* in the event that we are dealing with *indirect* left
+                     * recursion, it will be the case that the production(s)
+                     * that initiated the left recursion indirectly do NOT
+                     * have their cached results representing the new and
+                     * full seed but instead have either the initial or
+                     * previous seed.
+                     *
+                     * A way to remedy this problem is to push them back on
+                     * the stack, which eventually through the left recursion
+                     * that they initiate will update their cached results
+                     * with the full amount that we've parsed and then we
+                     * can continue on.
+                     */
+                    if(frame->left_recursion.is_used
+                    && !frame->left_recursion.is_direct) {
+
+                        D( printf("re-growing '%s' from seed. \n", production_names[symbol->value.non_terminal]); )
+
+                        frame = F_push(
+                            &parser,
+                            grammar->production_rules + symbol->value.non_terminal,
+                            token,
+                            NULL
+                        );
+                    } else {
+
+                        D( printf("cached production '%s' succeeded.\n", production_names[symbol->value.non_terminal]); )
+
+                        PT_add_branch(
+                            frame->parse_tree,
+                            intermediate_result->intermediate_tree,
+                            symbol
+                        );
+
+                        /* advance to a future token and to the next symbol */
+                        ++(frame->production.symbol);
+
+                        token = intermediate_result->end_token;
+                        D( printf("new token is %p=%d (cached production). \n", (void *) token, token->id); )
+                    }
+                }
+
+            /* we do not have a cached result and so we will need to push a
+             * new frame onto the stack.
+             */
             } else {
-                goto match_non_terminal_symbol;
+                D( printf("pushing production '%s' onto stack.\n", production_names[symbol->value.non_terminal]); )
+
+                next_symbol = G_production_rule_get_symbol(
+                    frame->production.rule,
+                    frame->production.phrase,
+                    frame->production.symbol + 1
+                );
+
+                /* either not a tail-call or cannot be eliminated */
+                if(is_null(next_symbol) || !symbol->children_must_be_raised) {
+                    temp_parse_tree = NULL;
+
+                /* tail call that can take advantage of an optimized raise
+                 * tree operation. This is similar to tail-call elimination;
+                 * however, because of backtracking semantics we need to
+                 * push on frame. */
+                } else {
+
+                    D( printf("production is a tail-call. \n"); )
+
+                    temp_parse_tree = frame->parse_tree;
+                }
+
+                frame = F_push(
+                    &parser,
+                    grammar->production_rules + symbol->value.non_terminal,
+                    token,
+                    temp_parse_tree
+                );
+
+                IR_create(
+                    &parser,
+                    frame->production.rule->production,
+                    token->id
+                );
             }
 
-            continue;
+        /* the next non/terminal in the current rule list is a terminal,
+         * i.e. it is a token. we need to try to match the current token
+         * against the symbol's token. if they match then we need to advance
+         * to the next rule and to the next token. if they do not match
+         * then we need to signal the frame to backtrack.
+         */
+        } else if(symbol->is_terminal) {
+
+match_terminal_symbol:
+
+            /* record the farthest point we've gotten to. */
+            if(token->id > parser.farthest_id_reached) {
+                parser.farthest_id_reached = token->id;
+            }
+
+            /* we have matched a token, advance to the next token in the
+             * list and the next rewrite rule in the current rule list.
+             * also, store the matched token into the frame's partial parse
+             * tree. */
+            if(token->terminal == symbol->value.terminal) {
+
+                D(
+                    if(is_not_null(token->lexeme)) {
+                        printf("\t matched: '%s' on line %d, column %d. \n", token->lexeme->str, token->line, token->column);
+                    } else {
+                        printf("\t matched. \n");
+                    }
+                )
+
+                /* store the match as a parse tree */
+                if(symbol->is_non_excludable) {
+                    tree_force_add_branch(
+                        (PTree *) frame->parse_tree,
+                        (PTree *) token
+                    );
+                }
+
+                /* advance the token and phrase symbol */
+                token = token->next;
+
+                D( printf("new token is %p=%d (next). \n", (void *) token, token->id); )
+
+                ++(frame->production.symbol);
+
+            /* the tokens do not match, backtrack. */
+            } else {
+                D(
+                    printf(
+                        "\t didn't match, expected:%d got:%d\n",
+                        (unsigned int) symbol->value.terminal,
+                        (unsigned int) token->terminal
+                    );
+                )
+
+                parser.must_backtrack = 1;
+            }
+
+        /* the next non/terminal in the current rule list is an empty
+         * terminal, i.e. it is the empty string. we accept it, move to the
+         * next rule in the current rule list, but *don't* move to the next
+         * token. */
+        } else {
+
+match_epsilon_symbol:
+
+            D( printf("\t matched epsilon. \n"); )
+
+            if(symbol->is_non_excludable) {
+                temp_parse_tree = (PParseTree *) PT_alloc_epsilon();
+
+                PTS_add(parser.tree_set, temp_parse_tree);
+
+                tree_force_add_branch(
+                    (PTree *) frame->parse_tree,
+                    (PTree *) temp_parse_tree
+                );
+            }
+
+            ++(frame->production.symbol);
         }
 
         std_error("Internal Parser Error: Strange conditions met.");

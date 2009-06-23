@@ -25,7 +25,14 @@ typedef struct G_Symbol {
         G_NonTerminal non_terminal;
         G_Terminal terminal;
     } value;
-    unsigned char flag;
+
+    unsigned int is_non_terminal:1,
+                 is_terminal:1,
+                 is_epsilon_transition:1,
+                 is_non_excludable:1,
+                 children_must_be_raised:1,
+                 is_fail:1,
+                 is_cut:1;
 } G_Symbol;
 
 typedef struct G_Phrase {

@@ -107,7 +107,7 @@ void PT_add_branch(PParseTree *parse_tree,
 
     unsigned short num_branches = tree_get_num_branches((PTree *) branch_tree);
 
-    if(!G_symbol_is_non_excludable(symbol)
+    if(!(symbol->is_non_excludable)
     && num_branches <= 1
     && branch_tree->type == PT_NON_TERMINAL) {
 
@@ -127,7 +127,7 @@ void PT_add_branch(PParseTree *parse_tree,
     /* this node must be added to the tree, has more than one child, or must
      * have its children included in the parse tree. */
     } else {
-        if(G_symbol_use_children_instead(symbol)) {
+        if(symbol->children_must_be_raised) {
             tree_force_add_branch_children(
                 (PTree *) parse_tree,
                 (PTree *) branch_tree

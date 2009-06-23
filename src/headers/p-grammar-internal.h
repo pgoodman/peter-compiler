@@ -20,14 +20,4 @@ G_Symbol *G_production_rule_get_symbol(G_ProductionRule *,
                                        unsigned int phrase,
                                        unsigned int symbol);
 
-int G_symbol_is_non_excludable(G_Symbol *symbol);
-
-int G_symbol_use_children_instead(G_Symbol *symbol);
-
-int G_symbol_is_non_terminal(G_Symbol *symbol);
-
-int G_symbol_is_terminal(G_Symbol *symbol);
-
-int G_symbol_is_epsilon(G_Symbol *symbol);
-
 #endif /* PGRAMMAR_INTERNAL_H */
