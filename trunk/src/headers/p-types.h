@@ -13,9 +13,10 @@
 
 typedef struct PToken {
     G_Terminal terminal;
-    PString *lexeme;
+    char *lexeme;
     uint32_t line,
-             column;
+             column,
+             lexeme_length;
 } PToken;
 
 /* -------------------------------------------------------------------------- */
@@ -61,13 +62,15 @@ typedef struct PScanner {
 
 } PScanner;
 
+typedef int (PScannerFunction)(PScanner *scanner, PToken *token);
+
 /* -------------------------------------------------------------------------- */
 
 /* base parse types, holds our rewrite rules. */
 typedef struct PGrammar {
 
     /* on for when we no longer allow rules to be added. */
-    unsigned char is_locked;
+    unsigned int is_locked:1;
 
     /* keep track of all of the productions for the parsing grammar. */
     G_ProductionRule *production_rules,
@@ -156,16 +159,21 @@ typedef struct P_Frame {
     /* the current production rule being used by this call frame */
     struct {
         G_ProductionRule *rule;
+
         unsigned char phrase,
                       symbol;
+
+        /* whether or not the frame has committed itself to matching the current
+         * phrase or not. */
+        unsigned int is_committed:1;
     } production;
 
     /* the left recursive rule, if any */
     struct {
         G_Symbol *symbol;
 
-        char is_direct,
-             is_used;
+        unsigned int is_direct:1,
+                     is_used:1;
     } left_recursion;
 
     /* deal with backtracking */

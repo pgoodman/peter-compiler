@@ -12,6 +12,17 @@
 #include <std-include.h>
 #include <std-string.h>
 
+#include <p-regexp.h>
+
+int main(void) {
+
+
+
+    return 0;
+}
+
+#if 0
+
 #include <p-grammar.h>
 #include <p-parser.h>
 
@@ -537,3 +548,5 @@ int main(void) {
 
     return 1;
 }
+
+#endif
