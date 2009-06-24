@@ -90,7 +90,7 @@ PVector *vector_alloc(const uint32_t num_slots) {
 /**
  * Free a vector and all of its elements.
  */
-void vector_free(PVector *V, PDelegate free_elm_fnc) {
+void vector_free(PVector *V, PDelegate *free_elm_fnc) {
     uint32_t i;
 
     assert_not_null(V);
@@ -132,7 +132,7 @@ uint32_t vector_num_used_slots(PVector *V) {
  * can also be passed in so that we can choose to free what the slot pointed
  * too if we are overwriting it.
  */
-void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc) {
+void vector_set(PVector *V, uint32_t i, void *elm, PDelegate *free_elm_fnc) {
     char slot_increment = 1;
 
 	assert_not_null(V);
@@ -161,7 +161,7 @@ void vector_set(PVector *V, uint32_t i, void *elm, PDelegate free_elm_fnc) {
 /**
  * Unset the value at a position in a vector.
  */
-void vector_unset(PVector *V, uint32_t i, PDelegate free_elm_fnc) {
+void vector_unset(PVector *V, uint32_t i, PDelegate *free_elm_fnc) {
 	assert_not_null(V);
 	assert(i < V->_num_slots);
 

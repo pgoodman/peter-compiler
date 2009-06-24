@@ -26,10 +26,10 @@ unsigned long int tree_num_allocated_pointers(void) {
 /**
  * Figure out a valid memory freeing callback for freeing things.
  */
-static PDelegate T_valid_free_callback(PDelegate ft,
-                                       PDelegate disallowed,
-                                       PDelegate allowed) {
-    PDelegate free_tree = NULL;
+static PDelegate *T_valid_free_callback(PDelegate *ft,
+                                       PDelegate *disallowed,
+                                       PDelegate *allowed) {
+    PDelegate *free_tree = NULL;
 
     /* make sure we don't over free */
     assert_not_null(ft);
@@ -46,7 +46,7 @@ static PDelegate T_valid_free_callback(PDelegate ft,
 }
 
 /* Free a single tree node. */
-static void T_free(PTree *tree, PDelegate free_tree_fnc) {
+static void T_free(PTree *tree, PDelegate *free_tree_fnc) {
     tree->_degree = 0;
     tree->_fill = 0;
     if(is_not_null(tree->_branches)) {
@@ -122,7 +122,7 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree) {
  *     which are not part of the PTree structure. The PTree structure should be
  *     seen as a black box and not touched.
  */
-void tree_free(PTree *T, PDelegate free_tree_fnc) {
+void tree_free(PTree *T, PDelegate *free_tree_fnc) {
     PTreeGenerator *G = NULL;
 
     assert_not_null(T);
@@ -205,6 +205,15 @@ void tree_clear(PTree *tree, int do_clear) {
     tree->_fill = 0;
 
     return;
+}
+
+/**
+ * Clear a certain number of branches from a tree.
+ */
+void tree_clear_num(PTree *tree, unsigned short num_branches) {
+    assert_not_null(tree);
+    assert(tree->_fill >= num_branches);
+    tree->_fill -= num_branches;
 }
 
 /**
@@ -464,8 +473,8 @@ PTreeGenerator *tree_generator_alloc(void *tree,
         gen->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
         generator_init(
             gen,
-            (PFunction) &T_generator_next_po,
-            (PDelegate) &T_generator_free_s
+            (PFunction *) &T_generator_next_po,
+            (PDelegate *) &T_generator_free_s
         );
         stack_push(gen->_adt, T);
         break;
@@ -476,8 +485,8 @@ PTreeGenerator *tree_generator_alloc(void *tree,
         gen->_reclaim_adt = (PTreeGeneratorReclaimFunction) &stack_empty;
         generator_init(
             gen,
-            (PFunction) &T_generator_next_df,
-            (PDelegate) &T_generator_free_s
+            (PFunction *) &T_generator_next_df,
+            (PDelegate *) &T_generator_free_s
         );
         stack_push(gen->_adt, T);
         break;
@@ -488,8 +497,8 @@ PTreeGenerator *tree_generator_alloc(void *tree,
         gen->_reclaim_adt = (PTreeGeneratorReclaimFunction) &queue_empty;
         generator_init(
             gen,
-            (PFunction) &T_generator_next_bf,
-            (PDelegate) &T_generator_free_q
+            (PFunction *) &T_generator_next_bf,
+            (PDelegate *) &T_generator_free_q
         );
         queue_push(gen->_adt, T);
         break;

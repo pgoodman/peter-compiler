@@ -33,7 +33,7 @@ void *queue_alloc(const size_t struct_size ) {
 /**
  * Empty a queue of its elements.
  */
-void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) {
+void queue_empty(PQueue *Q, PDelegate *free_elm_fnc ) {
     PGenericList *L = NULL,
                  *next = NULL;
 
@@ -65,7 +65,7 @@ void queue_empty(PQueue *Q, PDelegate free_elm_fnc ) {
 /**
  * Free an allocated queue.
  */
-void queue_free(PQueue *Q, PDelegate free_elm ) {
+void queue_free(PQueue *Q, PDelegate *free_elm ) {
 	assert_not_null(Q);
 	assert_not_null(free_elm);
 

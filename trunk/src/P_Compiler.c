@@ -16,7 +16,12 @@
 
 int main(void) {
 
+    PParseTree *parse_tree = parse_regexp("src/grammars/regexp.g");
+    printf("parse tree: %p \n", (void *) parse_tree);
 
+#if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
+    printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
+#endif
 
     return 0;
 }

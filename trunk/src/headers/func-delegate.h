@@ -11,8 +11,8 @@
 
 #include "std-include.h"
 
-typedef void (*PDelegate)(void * );
-typedef void (*PDelegate2)(void *, void * );
+typedef void (PDelegate)(void * );
+typedef void (PDelegate2)(void *, void * );
 
 void delegate_do_nothing(void *);
 void delegate_free_pointer(void *pointer);

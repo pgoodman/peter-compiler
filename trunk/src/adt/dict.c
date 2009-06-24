@@ -345,6 +345,14 @@ char dict_is_set(H_type *H, H_key_type key) {
     return is_not_null(H_entry_get(H, key));
 }
 
+/**
+ * Return the number of used slots.
+ */
+uint32_t dict_size(H_type *H) {
+    assert_not_null(H);
+    return H->num_used_slots;
+}
+
 /* -------------------------------------------------------------------------- */
 
 /**

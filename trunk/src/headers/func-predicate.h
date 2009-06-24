@@ -9,7 +9,7 @@
 #ifndef FUNCPREDICATE_H_
 #define FUNCPREDICATE_H_
 
-typedef int (*PPredicate)(void *);
+typedef int (PPredicate)(void *);
 
 int predicate_true(void *X);
 int predicate_false(void *X);

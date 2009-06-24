@@ -8,32 +8,31 @@
 
 #include <p-regexp.h>
 
-static unsigned char buffer[2],
-                     curr_char;
+static char buffer[2],
+            curr_char;
 
 static unsigned int line = 0,
                     column = 0,
                     in_char_class = 0,
                     first_char_in_class = 1;
 
+static FILE *fp = NULL;
+
 enum {
     L_START_GROUP,
     L_END_GROUP,
-
     L_START_CLASS,
     L_END_CLASS,
     L_NEGATE_CLASS,
-
     L_POSITIVE_CLOSURE,
     L_KLEENE_CLOSURE,
     L_OPTIONAL,
     L_CARROT,
-    L_ANCHOR_LINE_START,
-    L_ANCHOR_LINE_END,
+    L_ANCHOR_START,
+    L_ANCHOR_END,
     L_OR,
     L_CHARACTER_RANGE,
     L_CHARACTER,
-
     L_SPACE,
     L_NEW_LINE,
     L_CARRIAGE_RETURN,
@@ -81,13 +80,18 @@ static int R_get_token(PScanner *scanner, PToken *token) {
         return 0;
     }
 
-    token->lexeme = NULL;
+    token->lexeme_length = 1;
     token->line = line;
     token->column = column;
+    token->lexeme = buffer;
+
+    buffer[1] = 0;
 
     if(in_char_class) {
         goto any_char;
     }
+
+    buffer[0] = curr_char;
 
     switch(curr_char) {
         case '(': token->terminal = L_START_CLASS; break;
@@ -99,8 +103,8 @@ static int R_get_token(PScanner *scanner, PToken *token) {
             break;
         case '+': token->terminal = L_KLEENE_CLOSURE; break;
         case '*': token->terminal = L_POSITIVE_CLOSURE; break;
-        case '^': token->terminal = L_ANCHOR_LINE_START; break;
-        case '$': token->terminal = L_ANCHOR_LINE_END; break;
+        case '^': token->terminal = L_ANCHOR_START; break;
+        case '$': token->terminal = L_ANCHOR_END; break;
         case '?': token->terminal = L_OPTIONAL; break;
         case '|': token->terminal = L_OR; break;
         case '-': token->terminal = L_CHARACTER_RANGE; break;
@@ -118,12 +122,23 @@ any_char:
                     if(feof(fp)) {
                         return 0;
                     }
+
+                    buffer[0] = curr_char;
+
                     switch(curr_char) {
                         case 'n': token->terminal = L_NEW_LINE; break;
                         case 's': token->terminal = L_SPACE; break;
                         case 't': token->terminal = L_TAB; break;
                         case 'r': token->terminal = L_CARRIAGE_RETURN; break;
                         default:
+                            if(isspace(curr_char)) {
+                                printf(
+                                    "Scanner Error: a space cannot follow a "
+                                    "backslash.\n"
+                                );
+                                exit(1);
+                            }
+
                             goto all_chars;
                     }
                     break;
@@ -134,10 +149,6 @@ all_chars:
                         token->terminal = L_NEGATE_CLASS;
                     } else {
                         token->terminal = L_CHARACTER;
-                        token->lexeme = buffer;
-                        token->lexeme_length = 1;
-                        buffer[0] = curr_char;
-                        buffer[1] = 0;
                     }
             }
 
@@ -158,62 +169,30 @@ static PGrammar *regex_grammar(void) {
 
     /*
      * Machine
-     *     : ^Rule ^Machine
+     *     : <anchor_line_start> ^Expr <anchor_line_end>
+     *     : <anchor_line_start> ^Expr
+     *     : ^Expr <anchor_line_end>
+     *     : ^Expr
      *     : <>
      *     ;
      */
 
-    grammar_add_non_terminal_symbol(G, P_RULE, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
-    grammar_add_non_terminal_symbol(G, P_MACHINE, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
+    grammar_add_terminal_symbol(G, L_ANCHOR_START, G_EXCLUDABLE);
+    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
+    grammar_add_terminal_symbol(G, L_ANCHOR_END, G_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_epsilon_symbol(G, G_EXCLUDABLE);
+    grammar_add_terminal_symbol(G, L_ANCHOR_START, G_EXCLUDABLE);
+    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
+    grammar_add_phrase(G);
+    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
+    grammar_add_terminal_symbol(G, L_ANCHOR_END, G_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_MACHINE);
 
     /*
-     * StartAnchor : <anchor_line_start> ^Expr ;
-     */
-
-    grammar_add_terminal_symbol(G, L_ANCHOR_LINE_START, G_EXCLUDABLE);
-    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_START_ANCHOR);
-
-    /*
-     * EndAnchor : ^Expr <anchor_line_end> ;
-     */
-
-    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_ANCHOR_LINE_END, G_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_END_ANCHOR);
-
-    /*
-     * NoAnchor : ^Expr ;
-     */
-
-    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_NO_ANCHOR);
-
-    /*
-     * Rule
-     *     : -StartAnchor
-     *     : -EndAnchor
-     *     : -NoAnchor
-     *     ;
-     */
-
-    grammar_add_non_terminal_symbol(G, P_START_ANCHOR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_END_ANCHOR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_NO_ANCHOR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_RULE);
-
-    /*
-     * OrExpr : Expr <or> CatExpr ;
+     * OrExpr : -Expr <or> -CatExpr ;
      */
 
     grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
@@ -224,14 +203,16 @@ static PGrammar *regex_grammar(void) {
 
     /*
      * Expr
-     *     : -OrExpr
-     *     : ^CatExpr
+     *     : -Expr <or> -CatExpr
+     *     : -CatExpr
      *     ;
      */
 
     grammar_add_non_terminal_symbol(G, P_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_terminal_symbol(G, L_OR, G_EXCLUDABLE);
+    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_NON_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_EXPR);
 
@@ -376,7 +357,78 @@ static PGrammar *regex_grammar(void) {
     return G;
 }
 
-int main(void) {
+PParseTree *parse_regexp(const char *file) {
 
-    return 0;
+    PParseTree *parse_tree = NULL;
+    PScanner *scanner = (PScanner *) 0x1; /* fake scanner */
+    PGrammar *grammar = regex_grammar();
+
+    char terminal_names[20][40] = {
+        "start_group",
+        "end_group",
+        "start_class",
+        "end_class",
+        "negate_class",
+        "positive_closure",
+        "kleene_closure",
+        "optional",
+        "carrot",
+        "anchor_start",
+        "anchor_end",
+        "or",
+        "character_range",
+        "character",
+        "space",
+        "new_line",
+        "carriage_return",
+        "tab"
+    };
+
+    char production_names[20][40] = {
+        "Machine",
+        "Rule",
+        "Expr",
+        "CatExpr",
+        "Factor",
+        "Term",
+        "OrExpr",
+        "String",
+        "Char",
+        "CharClass",
+        "NegatedCharClass",
+        "StartAnchor",
+        "EndAnchor",
+        "NoAnchor",
+        "KleeneClosure",
+        "PositiveClosure",
+        "OptionalTerm"
+    };
+
+    if(is_not_null(fp = fopen(file, "r"))) {
+
+        parse_tree = parse_tokens(
+            grammar,
+            scanner,
+            (PScannerFunction *) &R_get_token
+        );
+
+        printf("Printing tree: \n\n");
+
+        parse_tree_print_dot(
+            parse_tree,
+            production_names,
+            terminal_names
+        );
+
+        printf("\nFreeing memory.. \n");
+
+        parse_tree_free(parse_tree);
+        grammar_free(grammar);
+
+        fclose(fp);
+    } else {
+        printf("Error: Could not open file '%s'.", file);
+    }
+
+    return parse_tree;
 }

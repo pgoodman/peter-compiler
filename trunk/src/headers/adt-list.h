@@ -22,17 +22,17 @@ typedef struct PGenericList {
 } PGenericList;
 
 void *list_alloc(const size_t );
-void list_free(PList *, PDelegate );
+void list_free(PList *, PDelegate *);
 
 PList *list_get_next(PList * );
 void list_set_next(PList *, PList *);
 char list_has_next(PList *);
 
 PGenericList *gen_list_alloc(void);
-void gen_list_free(PGenericList *, PDelegate );
+void gen_list_free(PGenericList *, PDelegate *);
 PGenericList *gen_list_alloc_chain(const unsigned int chain_length);
-void gen_list_free_chain(PGenericList *L, PDelegate free_elm_fnc);
-void gen_list_free_elm(PGenericList *, PDelegate );
+void gen_list_free_chain(PGenericList *L, PDelegate *free_elm_fnc);
+void gen_list_free_elm(PGenericList *, PDelegate *);
 void *gen_list_get_elm(PGenericList * );
 void gen_list_set_elm(PGenericList *, void * ) ;
 

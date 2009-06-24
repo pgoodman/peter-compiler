@@ -27,11 +27,11 @@ typedef struct PVectorGenerator {
 
 void *gen_vector_alloc(const size_t, const uint32_t );
 PVector *vector_alloc(const uint32_t );
-void vector_free(PVector *, PDelegate );
+void vector_free(PVector *, PDelegate *);
 uint32_t vector_num_slots(PVector * );
 uint32_t vector_num_used_slots(PVector * );
-void vector_set(PVector *, uint32_t, void *, PDelegate );
-void vector_unset(PVector *, uint32_t, PDelegate );
+void vector_set(PVector *, uint32_t, void *, PDelegate *);
+void vector_unset(PVector *, uint32_t, PDelegate *);
 void *vector_get(PVector *, uint32_t );
 
 PVectorGenerator *vector_generator_alloc(PVector * );

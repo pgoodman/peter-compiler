@@ -41,7 +41,7 @@ void *list_alloc(const size_t struct_size ) {
 /**
  * Free a list.
  */
-void list_free(PList *L, PDelegate free_list_fnc ) {
+void list_free(PList *L, PDelegate *free_list_fnc ) {
     PList *next = NULL;
 
 	assert_not_null(free_list_fnc);
@@ -94,7 +94,7 @@ PGenericList *gen_list_alloc(void) {
 /**
  * Free the allocated space of a generic list.
  */
-void gen_list_free(PGenericList *L, PDelegate free_elm_fnc ) {
+void gen_list_free(PGenericList *L, PDelegate *free_elm_fnc ) {
     PGenericList *next = NULL;
 
     assert_not_null(free_elm_fnc);
@@ -144,7 +144,7 @@ PGenericList *gen_list_alloc_chain(const unsigned int chain_length) {
 /**
  * Free a list that was allocated as a chain.
  */
-void gen_list_free_chain(PGenericList *L, PDelegate free_elm_fnc) {
+void gen_list_free_chain(PGenericList *L, PDelegate *free_elm_fnc) {
     PGenericList *curr;
     for(curr = L; is_not_null(curr); ) {
         free_elm_fnc(curr->_elm);
@@ -156,7 +156,7 @@ void gen_list_free_chain(PGenericList *L, PDelegate free_elm_fnc) {
 /**
  * Free only the element of a single list.
  */
-void gen_list_free_elm(PGenericList *L, PDelegate free_elm_fnc ) {
+void gen_list_free_elm(PGenericList *L, PDelegate *free_elm_fnc ) {
 	assert_not_null(L);
     free_elm_fnc(L->_elm );
     return;
