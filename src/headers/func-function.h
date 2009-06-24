@@ -11,8 +11,8 @@
 
 #include "std-include.h"
 
-typedef void *(*PFunction)(void * );
-typedef void *(*PFunction2)(void *, void * );
+typedef void *(PFunction)(void * );
+typedef void *(PFunction2)(void *, void * );
 
 void *function_identity(void * );
 

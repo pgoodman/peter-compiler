@@ -44,7 +44,7 @@ void generator_free(void *Cg ) {
 /**
  * Initialize the generator.
  */
-void generator_init(void *gen, PFunction gen_next, PDelegate gen_free_fnc ) {
+void generator_init(void *gen, PFunction *gen_next, PDelegate *gen_free_fnc ) {
     PGenerator *G = NULL;
 
     assert_not_null(gen);

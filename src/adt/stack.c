@@ -32,7 +32,7 @@ void *stack_alloc(const size_t struct_size ) {
 /**
  * Empty a stack.
  */
-void stack_empty(PStack *S, PDelegate free_elm_fnc ) {
+void stack_empty(PStack *S, PDelegate *free_elm_fnc ) {
     PGenericList *L = NULL,
                  *next = NULL;
 
@@ -62,7 +62,7 @@ void stack_empty(PStack *S, PDelegate free_elm_fnc ) {
 /**
  * Free a stack.
  */
-void stack_free(PStack *S, PDelegate free_elm_fnc ) {
+void stack_free(PStack *S, PDelegate *free_elm_fnc ) {
 	assert_not_null(S);
 	assert_not_null(free_elm_fnc);
 

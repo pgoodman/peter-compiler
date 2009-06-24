@@ -49,6 +49,7 @@ void *tree_alloc(const size_t, const unsigned short );
 void tree_free(PTree *, PDelegate);
 void delegate_tree_free(PTree * );
 void tree_clear(PTree *tree, int do_clear);
+void tree_clear_num(PTree *tree, unsigned short num_branches);
 void tree_trim(PTree *, PDictionary *);
 void tree_add_branch(PTree *, PTree *);
 void tree_force_add_branch(PTree *, PTree *);

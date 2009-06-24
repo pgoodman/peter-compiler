@@ -73,8 +73,7 @@ typedef struct PGrammar {
     unsigned int is_locked:1;
 
     /* keep track of all of the productions for the parsing grammar. */
-    G_ProductionRule *production_rules,
-                     *non_terminal_production_rules;
+    G_ProductionRule *production_rules;
 
     G_Phrase *phrases;
 
@@ -175,6 +174,9 @@ typedef struct P_Frame {
         unsigned int is_direct:1,
                      is_used:1;
     } left_recursion;
+
+    /* the number of branches that this frame has added to the parse tree. */
+    unsigned short num_branches;
 
     /* deal with backtracking */
     PT_Terminal *backtrack_point;

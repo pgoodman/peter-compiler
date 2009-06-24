@@ -68,6 +68,8 @@ H_val_type dict_get(H_type *H, H_key_type key);
 
 char dict_is_set(H_type *H, H_key_type key);
 
+uint32_t dict_size(H_type *H);
+
 /* this is the type to be used by outside programs */
 typedef H_type PDictionary;
 typedef H_hash_fnc_type PDictionaryHashFunc;

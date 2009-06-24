@@ -9,8 +9,6 @@
 #include <p-grammar.h>
 #include <p-grammar-internal.h>
 
-#define D(x)
-
 #define C_PRODUCTION_RULES 0
 #define C_PRODUCTION_RULE_PHRASES 1
 #define C_PHRASES 2
@@ -74,7 +72,7 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
     grammar->phrases = (G_Phrase *) (
         data + (
             (sizeof(PGrammar) +
-            (2 * num_productions * sizeof(G_ProductionRule)))
+            (num_productions * sizeof(G_ProductionRule)))
             / sizeof(char)
         )
     );
@@ -82,7 +80,7 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
     grammar->symbols = (G_Symbol *) (
         data + (
             (sizeof(PGrammar) +
-            (2 * num_productions * sizeof(G_ProductionRule)) +
+            (num_productions * sizeof(G_ProductionRule)) +
             (num_phrases * sizeof(G_Phrase)))
             / sizeof(char)
         )
@@ -263,11 +261,13 @@ int G_production_rule_has_phrase(G_ProductionRule *rule, unsigned int phrase) {
 G_Symbol *G_production_rule_get_symbol(G_ProductionRule *rule,
                                        unsigned int which_phrase,
                                        unsigned int which_symbol) {
-
     G_Phrase *phrase;
 
     assert_not_null(rule);
-    assert(which_phrase < rule->num_phrases);
+
+    if(which_phrase >= rule->num_phrases) {
+        return NULL;
+    }
 
     phrase = rule->phrases + which_phrase;
 

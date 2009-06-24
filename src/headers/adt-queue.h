@@ -21,8 +21,8 @@ typedef struct PQueue {
 } PQueue;
 
 void *queue_alloc(const size_t );
-void queue_free(PQueue *, PDelegate );
-void queue_empty(PQueue *, PDelegate );
+void queue_free(PQueue *, PDelegate *);
+void queue_empty(PQueue *, PDelegate *);
 char queue_is_empty(const PQueue * const );
 void *queue_pop(PQueue * const );
 void *queue_peek(const PQueue * const );
