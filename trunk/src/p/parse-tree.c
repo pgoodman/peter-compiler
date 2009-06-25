@@ -166,7 +166,7 @@ void parse_tree_print_dot(PParseTree *parse_tree,
         return;
     }
 
-    gen = tree_generator_alloc(parse_tree, TREE_TRAVERSE_PREORDER);
+    gen = tree_generator_alloc(parse_tree, TREE_TRAVERSE_LEVELORDER);
     while(generator_next(gen)) {
 
         curr = (PParseTree *) generator_current(gen);

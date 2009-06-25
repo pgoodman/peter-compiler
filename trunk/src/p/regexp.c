@@ -199,6 +199,10 @@ static PGrammar *regex_grammar(void) {
 
     grammar_add_non_terminal_symbol(G, P_OR_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
     grammar_add_phrase(G);
+    grammar_add_production_rule(G, P_START_ANCHOR);
+
+    grammar_add_non_terminal_symbol(G, P_START_ANCHOR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_phrase(G);
     grammar_add_production_rule(G, P_EXPRS);
 
 
@@ -395,7 +399,7 @@ PParseTree *parse_regexp(const char *file) {
 
     char production_names[20][40] = {
         "Machine",
-        "Exprs",
+        "DummyExpr",
         "Expr",
         "CatExpr",
         "Factor",
@@ -405,7 +409,7 @@ PParseTree *parse_regexp(const char *file) {
         "Char",
         "CharClass",
         "NegatedCharClass",
-        "StartAnchor",
+        "DummyExpr2",
         "EndAnchor",
         "NoAnchor",
         "KleeneClosure",
