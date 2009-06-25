@@ -436,7 +436,7 @@ parser_begin_loop:
          */
         if(parser.must_backtrack) {
 
-production_rule_failed:
+backtrack_raised:
 
             /* make (mostly) sure that a phrase isn't found */
             if(frame->production.is_committed) {
@@ -471,24 +471,37 @@ production_rule_failed:
                 if(caller->left_recursion.is_used
                 && temp_result->intermediate_tree != IR_FAILED) {
 
+stop_left_recursion:
+
                     parser.must_backtrack = 0;
                     token = temp_result->end_token;
 
+
+
                     if(caller->left_recursion.is_direct) {
-                        caller->parse_tree = temp_result->intermediate_tree;
+
+                        /*caller->parse_tree = intermediate_result->intermediate_tree;*/
                         --(parser.call.frame);
+                        caller->left_recursion.is_used = 0;
+                        caller->parse_tree = temp_result->intermediate_tree;
+                        ++(caller->production.symbol);
+                        /*frame->parse_tree = (
+                            intermediate_result->intermediate_tree
+                        );*/
 
                     } else {
-                        frame->parse_tree = intermediate_result->intermediate_tree;
-                        /*frame->left_recursion.is_used = 0;
-                        caller->left_recursion.is_used = 0;*/
+                        frame->parse_tree = (
+                            intermediate_result->intermediate_tree
+                        );
+
+                        goto production_rule_succeeded;
                     }
 
-                    /**/
 
-                    goto production_rule_succeeded;
 
                 } else {
+
+cascading_backtrack:
 
                     D( printf("cascading.\n"); )
 
@@ -501,9 +514,13 @@ production_rule_failed:
 
             /* there is at least one rule to backtrack to. */
             } else {
+
+local_backtrack:
+
                 D( printf("backtracking.\n"); )
 
                 parser.must_backtrack = 0;
+
                 token = frame->backtrack_point;
 
                 ++(frame->production.phrase);
@@ -512,7 +529,7 @@ production_rule_failed:
                 /* drop the branches of the parse tree */
                 tree_clear((PTree *) frame->parse_tree);
 
-                D( printf("new token is %p=%d (backtrack). \n", (void *) token, token->id); )
+                D( printf("new token is %p=%d %d (backtrack). \n", (void *) token, token->id, frame->backtrack_point->id); )
             }
 
         /* a production successfully matched all of the non/terminals in its
@@ -557,6 +574,8 @@ production_rule_succeeded:
                  * recursion and its most recent application was successful. */
                 if(frame->left_recursion.is_used
                 && token->id > intermediate_result->end_token->id) {
+
+grow_left_recursion:
 
                     D( printf("\t growing left-recursion.\n"); )
 
@@ -682,9 +701,11 @@ match_non_terminal_symbol:
                     } else if(intermediate_result->uses_indirect_left_recursion
                     && !intermediate_result->is_being_retested
                     && parser.call.frame > 0) {
-                        printf("HERE. \n");
+
                         caller = parser.call.stack[parser.call.frame - 1];
 
+                        /* make sure that we are dealing with left recursion or
+                         * something equivalent to it. */
                         if(caller->backtrack_point == token) {
 
                             D( printf("\t pushing on out-of-date cached result \n"); )
