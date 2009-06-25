@@ -8,10 +8,10 @@
 
 #include <p-parser.h>
 
-#define PARSER_DEBUG(x) x
+#define PARSER_DEBUG(x)
 #define D(x) PARSER_DEBUG(x)
 
-#define PT_ENABLE_TREE_REDUCTIONS 0
+#define PT_ENABLE_TREE_REDUCTIONS 1
 
 #define IR_FAILED ((void *) 10)
 #define IR_INITIAL ((void *) 11)
@@ -469,6 +469,7 @@ backtrack_raised:
 
                 /* the next frame is left recursive */
                 if(caller->left_recursion.is_used
+                && intermediate_result->intermediate_tree != IR_FAILED
                 && temp_result->intermediate_tree != IR_FAILED) {
 
 stop_left_recursion:
@@ -494,7 +495,7 @@ stop_left_recursion:
                             intermediate_result->intermediate_tree
                         );
 
-                        goto production_rule_succeeded;
+                        goto phrase_completed;
                     }
 
 
@@ -510,6 +511,7 @@ cascading_backtrack:
 
                     /* parser.must_backtrack remains set to 1 and so the cascade is
                      * automatic. */
+
                 }
 
             /* there is at least one rule to backtrack to. */
@@ -541,7 +543,7 @@ local_backtrack:
          */
         } else if(is_null(symbol)) {
 
-production_rule_succeeded:
+phrase_completed:
 
             /* there are tokens to parse but we have a single frame on
              * on stack. this is a parse error, so we will backtrack. */
@@ -559,6 +561,7 @@ production_rule_succeeded:
 
             /* we've fully matched a production rule  */
             } else {
+
                 D( printf("production '%s' succeeded.\n", production_names[frame->production.rule->production]); )
 
                 D( printf(
@@ -602,6 +605,8 @@ grow_left_recursion:
                  * calling production. */
                 } else {
 
+pop_production_rule:
+
                     D( printf("\t popping frame off of stack. \n"); )
 
                     intermediate_result->end_token = token;
@@ -610,6 +615,7 @@ grow_left_recursion:
 
                     frame = parser.call.stack[j = --(parser.call.frame)];
                     F_record_tree(frame, intermediate_result->intermediate_tree);
+
                     ++(frame->production.symbol);
                 }
             }
