@@ -126,7 +126,7 @@ static void PT_clear(PParseTree *parse_tree) {
         }
 
     } else if(parse_tree->type == PT_NON_TERMINAL) {
-        tree_clear((PTree *) parse_tree, 0);
+        tree_clear((PTree *) parse_tree);
     }
 }
 
@@ -160,6 +160,7 @@ void parse_tree_print_dot(PParseTree *parse_tree,
     PParseTree *curr;
     PTree *tree;
     PT_Terminal *term;
+    unsigned int i;
 
     if(is_null(parse_tree)) {
         return;
@@ -171,14 +172,6 @@ void parse_tree_print_dot(PParseTree *parse_tree,
         curr = (PParseTree *) generator_current(gen);
         tree = (PTree *) curr;
 
-        if(is_not_null(tree->_parent)) {
-            printf(
-                "Ox%d -> Ox%d \n",
-                (unsigned int) (tree->_parent),
-                (unsigned int) tree
-            );
-        }
-
         switch(curr->type) {
             case PT_NON_TERMINAL:
                 printf(
@@ -187,15 +180,24 @@ void parse_tree_print_dot(PParseTree *parse_tree,
                    production_names[((PT_NonTerminal *) curr)->production]
                 );
 
+                for(i = 0; i < tree->_fill; ++i) {
+                    printf(
+                        "Ox%d -> Ox%d \n",
+                        (unsigned int) tree,
+                        (unsigned int) tree->_branches[i]
+                    );
+                }
+
                 break;
 
             case PT_TERMINAL:
                 term = (PT_Terminal *) curr;
                 printf(
-                    "Ox%d [label=\"%s<%s>\" color=gray] \n",
+                    "Ox%d [label=\"%s<%s> @ %d\" color=gray shape=square] \n",
                     (unsigned int) tree,
                     terminal_names[term->terminal],
-                    is_not_null(term->lexeme) ? term->lexeme->str : ""
+                    is_not_null(term->lexeme) ? term->lexeme->str : "",
+                    term->id
                 );
 
                 break;

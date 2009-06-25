@@ -11,6 +11,8 @@
 #define PARSER_DEBUG(x) x
 #define D(x) PARSER_DEBUG(x)
 
+#define PT_ENABLE_TREE_REDUCTIONS 0
+
 #define IR_FAILED ((void *) 10)
 #define IR_INITIAL ((void *) 11)
 
@@ -39,7 +41,7 @@ static void F_free_all(PParser *parser) {
 static void F_add_branch(P_Frame *frame,
                          PParseTree *branch_tree,
                          G_Symbol *symbol) {
-
+#if PT_ENABLE_TREE_REDUCTIONS
     unsigned short num_branches = tree_get_num_branches((PTree *) branch_tree);
 
     if(!(symbol->is_non_excludable)
@@ -49,14 +51,10 @@ static void F_add_branch(P_Frame *frame,
         /* this is a production with only one child filled,
          * promote that single child node to the place of this
          * production in the tree and ignore that production. */
-        if(num_branches > 0) {
-            ++(frame->num_branches);
+        if(num_branches == 1) {
             tree_force_add_branch(
                 (PTree *) frame->parse_tree,
-                tree_get_branch(
-                    (PTree *) branch_tree,
-                    0
-                )
+                tree_get_branch((PTree *) branch_tree, 0)
             );
         }
 
@@ -64,20 +62,23 @@ static void F_add_branch(P_Frame *frame,
      * have its children included in the parse tree. */
     } else {
         if(symbol->children_must_be_raised) {
-            frame->num_branches += tree_get_num_branches((PTree *) branch_tree);
             tree_force_add_branch_children(
                 (PTree *) frame->parse_tree,
                 (PTree *) branch_tree
             );
         } else {
-            ++(frame->num_branches);
             tree_force_add_branch(
                 (PTree *) frame->parse_tree,
                 (PTree *) branch_tree
             );
         }
     }
-
+#else
+    tree_force_add_branch(
+        (PTree *) frame->parse_tree,
+        (PTree *) branch_tree
+    );
+#endif
     return;
 }
 
@@ -97,23 +98,33 @@ static void F_record_tree(P_Frame *frame, PParseTree *parse_tree) {
 }
 
 /**
- * Update one of the stack frames as a successful application of a non-terminal
- * to the token stream. This adds the which_frame's parse frame as a branch of
- * of its caller on the stack.
+ * Create the initial intermediate result.
  */
-static void F_update_success(PParser *parser,
-                             unsigned int which_frame,
-                             P_IntermediateResult *result) {
+static P_IntermediateResult *IR_create(PParser *parser, G_NonTerminal production, uint32_t id) {
 
-    P_Frame *frame = parser->call.stack[which_frame],
-            *caller;
+    P_IntermediateResult *result;
+    uint32_t i = ((uint32_t) production * (parser->num_tokens + 1)) + (uint32_t) id;
 
-    /* record a successful application of this frame. */
-    if(which_frame > 0) {
-        caller = parser->call.stack[which_frame - 1];
-        result->intermediate_tree = frame->parse_tree;
-        F_record_tree(caller, frame->parse_tree);
-        ++(caller->production.symbol);
+    assert(id <= parser->num_tokens);
+
+    if(is_null(parser->intermediate_results[i])) {
+
+        result = mem_alloc(sizeof(P_IntermediateResult));
+        if(is_null(result)) {
+            mem_error("Unable to allocate new intermediate result.");
+        }
+
+        result->end_token = NULL;
+        result->intermediate_tree = IR_INITIAL;
+        result->uses_indirect_left_recursion = 0;
+        result->is_being_retested = 0;
+
+        parser->intermediate_results[i] = result;
+
+        return result;
+
+    } else {
+        return parser->intermediate_results[i];
     }
 }
 
@@ -123,15 +134,14 @@ static void F_update_success(PParser *parser,
  */
 static P_Frame *F_push(PParser *parser,
                        G_ProductionRule *rule,
-                       PT_Terminal *backtrack_point,
-                       PParseTree *parse_tree) {
+                       PT_Terminal *backtrack_point) {
 
     P_Frame *frame;
     unsigned int i = ++(parser->call.frame);
 
     /* TODO better error here */
     if(i >= P_MAX_RECURSION_DEPTH) {
-        std_error("Parse Error: maximum recursion depth exceeded.\n");
+        std_error("Internal Parse Error: maximum recursion depth exceeded.\n");
     }
 
     /* only allocate a new frame if we need to, otherwise re-use an existing
@@ -147,7 +157,6 @@ static P_Frame *F_push(PParser *parser,
     frame = parser->call.stack[i];
 
     frame->backtrack_point = backtrack_point;
-    frame->farthest_id_reached = backtrack_point->id;
 
     frame->left_recursion.is_direct = 0;
     frame->left_recursion.is_used = 0;
@@ -158,22 +167,18 @@ static P_Frame *F_push(PParser *parser,
     frame->production.rule = rule;
     frame->production.is_committed = 0;
 
-    frame->num_branches = 0;
+    frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
+        rule->production,
+        2 /* TODO: start bigger? */
+    );
 
-    /* only allocate a new tree if we don't have one defined yet */
-    if(is_null(parse_tree)) {
+    PTS_add(parser->tree_set, frame->parse_tree);
 
-        frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
-            rule->production,
-            2 /* TODO: start bigger? */
-        );
-
-        PTS_add(parser->tree_set, frame->parse_tree);
-
-    /* one is passed in means that this is an explicit tail-call */
-    } else {
-        frame->parse_tree = parse_tree;
-    }
+    IR_create(
+        parser,
+        rule->production,
+        backtrack_point->id
+    )->end_token = backtrack_point;
 
     return frame;
 }
@@ -214,8 +219,9 @@ static void IR_free_all(PParser *parser, PGrammar *grammar) {
  */
 static void IR_clear_tree(P_IntermediateResult *result) {
     PTree *tree = (PTree *) result->intermediate_tree;
+
     if(is_not_null(tree) && IR_FAILED != tree && IR_INITIAL != tree) {
-        tree_clear(tree, 0);
+        tree_clear(tree);
     }
 }
 
@@ -234,127 +240,13 @@ static P_IntermediateResult *IR_get(PParser *parser,
     );
 }
 
-/**
- * Create the initial intermediate result.
- */
-static void IR_create(PParser *parser, G_NonTerminal production, uint32_t id) {
-
-    P_IntermediateResult *result;
-    uint32_t i = ((uint32_t) production * (parser->num_tokens + 1)) + (uint32_t) id;
-
-    assert(id <= parser->num_tokens);
-    assert_null(parser->intermediate_results[i]);
-
-    result = mem_alloc(sizeof(P_IntermediateResult));
-    if(is_null(result)) {
-        mem_error("Unable to allocate new intermediate result.");
-    }
-
-    result->end_token = NULL;
-    result->intermediate_tree = IR_INITIAL;
-    result->is_left_recursive = 0;
-
-    parser->intermediate_results[i] = result;
-}
-
 /* -------------------------------------------------------------------------- */
-
-/**
- * Check whether an intermediate result is left-recursive and has a left-
- * recursive seed.
- */
-static int LR_intermediate_result_has_seed(P_IntermediateResult *result) {
-    assert_not_null(result);
-
-    return result->intermediate_tree != IR_INITIAL
-        && result->intermediate_tree != IR_FAILED;
-}
-
-/**
- * Grow a left-recursive seed.
- */
-static PT_Terminal *LR_grow(PParser *parser,
-                            P_IntermediateResult *result,
-                            PT_Terminal *token) {
-
-    P_Frame *frame = parser->call.stack[(unsigned int) parser->call.frame],
-            *caller;
-    int i;
-
-    /* this is the original starter of the left recursion, grow it from here. */
-    if(frame->left_recursion.is_used) {
-
-        /* restart the application of this frame if progress was made and
-         * update the cached tree with what progress we made. */
-        if(token->id > frame->farthest_id_reached) {
-
-            /* extend the frame tree */
-            if(LR_intermediate_result_has_seed(result)) {
-                F_add_branch(
-                    frame,
-                    result->intermediate_tree,
-                    frame->left_recursion.symbol
-                );
-            }
-
-            D( printf("made progress. \n"); )
-
-            frame->farthest_id_reached = token->id;
-            frame->production.symbol = 0;
-            frame->production.phrase = 0;
-
-            return frame->backtrack_point;
-
-        /* no progress was made, time to backtrack. */
-        } else {
-
-            D( printf("didn't make progress. \n"); )
-
-            /* go down the frame stack and remove consecutive uses of left
-             * recursion. */
-            for(i = parser->call.frame; i >= 0; --i) {
-                frame = parser->call.stack[i];
-
-                if(!frame->left_recursion.is_used) {
-                    break;
-                }
-
-                /* record a successful application of this frame. */
-                if(i > 0) {
-                    caller = parser->call.stack[i - 1];
-
-                    F_update_success(parser, i, result);
-
-                    /* get the next cached result */
-                    result = IR_get(
-                        parser,
-                        caller->production.rule->production,
-                        caller->backtrack_point->id
-                    );
-                }
-            }
-
-            parser->call.frame = i;
-
-            return token;
-        }
-
-
-    /* this is not the original starter of left recursion, don't grow it until
-     * we get to the original one. */
-    } else {
-        D( printf("not original left-recursive frame. \n"); )
-        F_update_success(parser, parser->call.frame, result);
-        --(parser->call.frame);
-        return token;
-    }
-}
 
 /**
  * Search the parser stack for the production that originated the left
  * recursive rule on the top of the parser stack.
  */
-static void LR_mark_origin(PParser *parser) {
+static void LR_mark_origin(PParser *parser, P_IntermediateResult *result) {
 
     int i = parser->call.frame;
 
@@ -380,6 +272,8 @@ static void LR_mark_origin(PParser *parser) {
             break;
         }
     }
+
+    result->uses_indirect_left_recursion = !origin->left_recursion.is_direct;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -425,7 +319,7 @@ PParseTree *parse_tokens(PGrammar *grammar,
 
     char production_names[17][26] = {
         "Machine",
-        "Rule",
+        "Exprs",
         "Expr",
         "CatExpr",
         "Factor",
@@ -444,8 +338,10 @@ PParseTree *parse_tokens(PGrammar *grammar,
     };
 
     PParser parser;
-    P_Frame *frame = NULL;
-    P_IntermediateResult *intermediate_result = NULL;
+    P_Frame *frame = NULL,
+            *caller = NULL;
+    P_IntermediateResult *intermediate_result = NULL,
+                         *temp_result = NULL;
     G_Symbol *symbol = NULL,
              *next_symbol = NULL;
     PParseTree *temp_parse_tree = NULL;
@@ -501,12 +397,11 @@ PParseTree *parse_tokens(PGrammar *grammar,
     frame = F_push(
         &parser,
         grammar->production_rules + grammar->start_production_rule,
-        token,
-        NULL
+        token
     );
 
-    PTS_add(parser.tree_set, frame->parse_tree);
-    IR_create(&parser, frame->production.rule->production, 0);
+    /*PTS_add(parser.tree_set, frame->parse_tree);*/
+    /*IR_create(&parser, frame->production.rule->production, 0);*/
 
     D( printf("beginning main parse...\n"); )
 
@@ -557,51 +452,52 @@ production_rule_failed:
                 frame->production.phrase + 1
             );
 
-            /* clear off only as many branches as this frame has in it. this is
-             * done here so that tail-call optimization for tree growth works as
-             * expected.
-             */
-            tree_clear_num((PTree *) frame->parse_tree, frame->num_branches);
-            frame->num_branches = 0;
-
             if(!j) {
-                D( printf("cascading.\n"); )
 
-                intermediate_result->intermediate_tree = IR_FAILED;
-
-                if(parser.call.frame > 0) {
-
-                    /* pop the frame off of the stack */
-                    frame = parser.call.stack[j = --parser.call.frame];
-
-                    /* get the cached result for the calling frame */
-                    intermediate_result = IR_get(
-                        &parser,
-                        frame->production.rule->production,
-                        frame->backtrack_point->id
-                    );
-
-                    /* if the top frame on the stack is being cascaded to and it
-                     * has a left recursive seed then it hasn't also failed but
-                     * its left recursive rule has succeeded. Given that, we
-                     * must then move to the next symbol in the frame's current
-                     * production rule phrase. */
-                    if(LR_intermediate_result_has_seed(intermediate_result)) {
-                        parser.must_backtrack = 0;
-                        frame->left_recursion.is_used = 0;
-                        frame->production.symbol++;
-                        intermediate_result->is_left_recursive = 0;
-                    }
-
-                /* we cannot cascade off of the stack, therefore we
-                 * encountered a parse error. */
-                } else {
+                /* trying to cascade off of the stack */
+                if(parser.call.frame == 0) {
                     D( printf("parse error.\n"); )
                     goto parse_error;
                 }
 
-                /* parser.must_backtrack remains set to 1 and so the cascade is
-                 * automatic. */
+                caller = parser.call.stack[j = parser.call.frame - 1];
+                temp_result = IR_get(
+                    &parser,
+                    caller->production.rule->production,
+                    caller->backtrack_point->id
+                );
+
+                /* the next frame is left recursive */
+                if(caller->left_recursion.is_used
+                && temp_result->intermediate_tree != IR_FAILED) {
+
+                    parser.must_backtrack = 0;
+                    token = temp_result->end_token;
+
+                    if(caller->left_recursion.is_direct) {
+                        caller->parse_tree = temp_result->intermediate_tree;
+                        --(parser.call.frame);
+
+                    } else {
+                        frame->parse_tree = intermediate_result->intermediate_tree;
+                        /*frame->left_recursion.is_used = 0;
+                        caller->left_recursion.is_used = 0;*/
+                    }
+
+                    /**/
+
+                    goto production_rule_succeeded;
+
+                } else {
+
+                    D( printf("cascading.\n"); )
+
+                    --(parser.call.frame);
+                    intermediate_result->intermediate_tree = IR_FAILED;
+
+                    /* parser.must_backtrack remains set to 1 and so the cascade is
+                     * automatic. */
+                }
 
             /* there is at least one rule to backtrack to. */
             } else {
@@ -614,7 +510,7 @@ production_rule_failed:
                 frame->production.symbol = 0;
 
                 /* drop the branches of the parse tree */
-                IR_clear_tree(intermediate_result);
+                tree_clear((PTree *) frame->parse_tree);
 
                 D( printf("new token is %p=%d (backtrack). \n", (void *) token, token->id); )
             }
@@ -630,56 +526,79 @@ production_rule_failed:
 
 production_rule_succeeded:
 
-            if(parser.call.frame == 0) {
+            /* there are tokens to parse but we have a single frame on
+             * on stack. this is a parse error, so we will backtrack. */
+            if(parser.call.frame == 0 && token->id < parser.num_tokens) {
 
-                /* there are tokens to parse but we have a single frame on
-                 * on stack. this is a parse error, so we will backtrack. */
-                if(token->id < parser.num_tokens && !frame->left_recursion.is_used) {
-                    D( printf("no rules left. \n"); )
-                    parser.must_backtrack = 1;
+                D( printf("no rules left to parse remaining tokens. \n"); )
+                parser.must_backtrack = 1;
 
-                /* we had a left recursive application, let's restart it to
-                 * grow the left recursive seed further. */
-                } else if(intermediate_result->is_left_recursive) {
-                    D( printf("growing left recursion. \n"); )
+            /* we have parsed all of the tokens. there is no need to do any
+             * work on the stack or the cache. */
+            } else if(parser.call.frame == 0) {
 
-                    intermediate_result->end_token = token;
-                    token = LR_grow(&parser, intermediate_result, token);
+                D( printf("done parsing.\n"); )
+                goto done_parsing;
 
-                    D( printf("new token is %p=%d (LR_grow). \n", (void *) token, token->id); )
-
-                /* we have parsed all of the tokens. there is no need to do any
-                 * work on the stack or the cache. */
-                } else {
-                    D( printf("done parsing.\n"); )
-                    goto done_parsing;
-                }
-
-            /* we can't prove that this is a successful parse of all of the
-             * tokens and so we assume that there exists more to parse. save
-             * the result of the application of this production to the cache
-             * and yield control to the parent frame.
-             */
+            /* we've fully matched a production rule  */
             } else {
                 D( printf("production '%s' succeeded.\n", production_names[frame->production.rule->production]); )
 
+                D( printf(
+                    "token id %d, IR->fpr %d ***\n",
+                    token->id,
+                    intermediate_result->end_token->id
+                ); )
+
+                caller = parser.call.stack[parser.call.frame - 1];
+                intermediate_result->is_being_retested = 0;
+
+                /* the production rule that we matched is the origin of left
+                 * recursion and its most recent application was successful. */
+                if(frame->left_recursion.is_used
+                && token->id > intermediate_result->end_token->id) {
+
+                    D( printf("\t growing left-recursion.\n"); )
+
+                    intermediate_result->intermediate_tree = frame->parse_tree;
+                    intermediate_result->end_token = token;
+
+                    frame->parse_tree = (PParseTree *) PT_alloc_non_terminal(
+                        frame->production.rule->production,
+                        2 /* TODO: start bigger? */
+                    );
+
+                    PTS_add(parser.tree_set, frame->parse_tree);
+
+                    /* re-start this frame */
+                    token = frame->backtrack_point;
+                    frame->production.phrase = 0;
+                    frame->production.symbol = 0;
+
+                    if(!frame->left_recursion.is_direct) {
+                        intermediate_result->is_being_retested = 1;
+                    }
+
                 /* pop the production and advance to the next rule of the
                  * calling production. */
-                F_update_success(
-                    &parser,
-                    parser.call.frame,
-                    intermediate_result
-                );
+                } else {
 
-                --(parser.call.frame);
+                    D( printf("\t popping frame off of stack. \n"); )
 
-                intermediate_result->end_token = token;
+                    intermediate_result->end_token = token;
+                    intermediate_result->intermediate_tree = frame->parse_tree;
+                    intermediate_result->is_being_retested = 0;
+
+                    frame = parser.call.stack[j = --(parser.call.frame)];
+                    F_record_tree(frame, intermediate_result->intermediate_tree);
+                    ++(frame->production.symbol);
+                }
             }
 
         } else if(token->id >= parser.num_tokens && symbol->is_terminal) {
 end_of_input:
 
-            D( printf("end of input. \n"); )
+            D( printf("end of input with more tokens to parse, backtracking. \n"); )
             parser.must_backtrack = 1;
 
         } else {
@@ -731,6 +650,7 @@ match_non_terminal_symbol:
 
                     /* the cached result is a failure. time to backtrack. */
                     if(IR_FAILED == intermediate_result->intermediate_tree) {
+
                         D( printf("cached production '%s' failed.\n", production_names[symbol->value.non_terminal]); )
                         parser.must_backtrack = 1;
 
@@ -741,7 +661,6 @@ match_non_terminal_symbol:
 
                         D( printf("detected left recursion. \n"); )
 
-                        intermediate_result->is_left_recursive = 1;
                         intermediate_result->intermediate_tree = IR_FAILED;
 
                         D( printf("pushing production '%s' onto stack. \n", production_names[symbol->value.non_terminal]); )
@@ -749,11 +668,38 @@ match_non_terminal_symbol:
                         frame = F_push(
                             &parser,
                             grammar->production_rules + symbol->value.non_terminal,
-                            token,
-                            NULL
+                            token
                         );
 
-                        LR_mark_origin(&parser);
+                        LR_mark_origin(&parser, intermediate_result);
+
+                    /* indirect left recursion is special in that the production
+                     * rule used to get at the left-recursive call will have a
+                     * cached version that is not up-to-date with actual indirect
+                     * left-recursive call. To force the cache to update itself
+                     * we need to push the first
+                     */
+                    } else if(intermediate_result->uses_indirect_left_recursion
+                    && !intermediate_result->is_being_retested
+                    && parser.call.frame > 0) {
+                        printf("HERE. \n");
+                        caller = parser.call.stack[parser.call.frame - 1];
+
+                        if(caller->backtrack_point == token) {
+
+                            D( printf("\t pushing on out-of-date cached result \n"); )
+
+                            intermediate_result->is_being_retested = 1;
+
+                            frame = F_push(
+                                &parser,
+                                grammar->production_rules + symbol->value.non_terminal,
+                                token
+                            );
+
+                        } else {
+                            goto cached_production_succeeded;
+                        }
 
                     /* the cached result was a success, we need to merge the
                      * cached tree with our current parse tree, advance to the
@@ -763,51 +709,26 @@ match_non_terminal_symbol:
                      */
                     } else {
 
-                        /* in the event that we are dealing with *indirect* left
-                         * recursion, it will be the case that the production(s)
-                         * that initiated the left recursion indirectly do NOT
-                         * have their cached results representing the new and
-                         * full seed but instead have either the initial or
-                         * previous seed.
-                         *
-                         * A way to remedy this problem is to push them back on
-                         * the stack, which eventually through the left recursion
-                         * that they initiate will update their cached results
-                         * with the full amount that we've parsed and then we
-                         * can continue on.
-                         */
-                        if(frame->left_recursion.is_used
-                        && !frame->left_recursion.is_direct) {
+cached_production_succeeded:
 
-                            D( printf("re-growing '%s' from seed. \n", production_names[symbol->value.non_terminal]); )
+                        D( printf("cached production '%s' succeeded.\n", production_names[symbol->value.non_terminal]); )
 
-                            frame = F_push(
-                                &parser,
-                                grammar->production_rules + symbol->value.non_terminal,
-                                token,
-                                NULL
-                            );
-                        } else {
+                        F_add_branch(
+                            frame,
+                            intermediate_result->intermediate_tree,
+                            symbol
+                        );
 
-                            D( printf("cached production '%s' succeeded.\n", production_names[symbol->value.non_terminal]); )
+                        /* advance to a future token and to the next symbol */
+                        ++(frame->production.symbol);
 
-                            F_add_branch(
-                                frame,
-                                intermediate_result->intermediate_tree,
-                                symbol
-                            );
+                        token = intermediate_result->end_token;
 
-                            /* advance to a future token and to the next symbol */
-                            ++(frame->production.symbol);
-
-                            token = intermediate_result->end_token;
-                            D( printf("new token is %p=%d (cached production). \n", (void *) token, token->id); )
-                        }
+                        D( printf("new token is %p=%d (cached production). \n", (void *) token, token->id); )
                     }
 
                 /* we do not have a cached result and so we will need to push a
-                 * new frame onto the stack.
-                 */
+                 * new frame onto the stack. */
                 } else {
                     D( printf("pushing production '%s' onto stack.\n", production_names[symbol->value.non_terminal]); )
 
@@ -817,33 +738,10 @@ match_non_terminal_symbol:
                         frame->production.symbol + 1
                     );
 
-                    /* tail call that can take advantage of an optimized raise
-                     * tree operation. This is similar to tail-call elimination;
-                     * however, because of backtracking semantics we need to
-                     * push on frame. */
-                    if(is_null(next_symbol)
-                    && symbol->children_must_be_raised
-                    && frame->production.symbol > 0) {
-                        D( printf("production is a tail-call. \n"); )
-                        temp_parse_tree = (PParseTree *) frame->parse_tree;
-
-                    /* either not a tail-call or cannot have it's tree
-                     * eliminated. */
-                    } else {
-                        temp_parse_tree = NULL;
-                    }
-
                     frame = F_push(
                         &parser,
                         grammar->production_rules + symbol->value.non_terminal,
-                        token,
-                        NULL
-                    );
-
-                    IR_create(
-                        &parser,
-                        frame->production.rule->production,
-                        token->id
+                        token
                     );
                 }
 
@@ -872,7 +770,6 @@ match_terminal_symbol:
 
                     D(
                         if(is_not_null(token->lexeme)) {
-
                             printf("\t matched: '%s' on line %d, column %d. \n", token->lexeme->str, token->line, token->column);
                         } else {
                             printf("\t matched. \n");
@@ -880,7 +777,7 @@ match_terminal_symbol:
                     )
 
                     /* store the match as a parse tree */
-                    if(symbol->is_non_excludable) {
+                    if(symbol->is_non_excludable || !PT_ENABLE_TREE_REDUCTIONS) {
                         F_add_branch(frame, (PParseTree *) token, symbol);
                     }
 
@@ -920,7 +817,7 @@ match_epsilon_symbol:
                 D( printf("\t epsilon symbol found. \n"); )
 
                 do {
-                    if(symbol->is_non_excludable) {
+                    if(symbol->is_non_excludable || !PT_ENABLE_TREE_REDUCTIONS) {
                         temp_parse_tree = (PParseTree *) PT_alloc_epsilon();
                         PTS_add(parser.tree_set, temp_parse_tree);
                         F_add_branch(frame, temp_parse_tree, symbol);
