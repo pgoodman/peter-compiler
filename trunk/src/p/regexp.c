@@ -41,7 +41,7 @@ enum {
 
 enum {
     P_MACHINE,
-    P_RULE,
+    P_EXPRS,
     P_EXPR,
     P_CAT_EXPR,
     P_FACTOR,
@@ -101,8 +101,8 @@ static int R_get_token(PScanner *scanner, PToken *token) {
             in_char_class = 1;
             first_char_in_class = 1;
             break;
-        case '+': token->terminal = L_KLEENE_CLOSURE; break;
-        case '*': token->terminal = L_POSITIVE_CLOSURE; break;
+        case '+': token->terminal = L_POSITIVE_CLOSURE; break;
+        case '*': token->terminal = L_KLEENE_CLOSURE; break;
         case '^': token->terminal = L_ANCHOR_START; break;
         case '$': token->terminal = L_ANCHOR_END; break;
         case '?': token->terminal = L_OPTIONAL; break;
@@ -164,7 +164,7 @@ static PGrammar *regex_grammar(void) {
         17, /* number of non-terminals */
         18, /* number of terminals */
         33, /* number of production phrases */
-        50 /* number of phrase symbols */
+        60 /* number of phrase symbols */
     );
 
     /*
@@ -192,38 +192,47 @@ static PGrammar *regex_grammar(void) {
     grammar_add_production_rule(G, P_MACHINE);
 
     /*
-     * OrExpr : -Expr <or> -CatExpr ;
+     * Exprs
+     *     : OrExpr
+     *     ;
      */
 
-    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_OR_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_phrase(G);
+    grammar_add_production_rule(G, P_EXPRS);
+
+
+    /*
+     * OrExpr : ^Expr <or> ^CatExpr ;
+     */
+
+    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_OR, G_EXCLUDABLE);
-    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_OR_EXPR);
 
     /*
      * Expr
-     *     : -Expr <or> -CatExpr
-     *     : -CatExpr
+     *     : -OrExpr
+     *     : ^CatExpr
      *     ;
      */
 
-    grammar_add_non_terminal_symbol(G, P_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_OR, G_EXCLUDABLE);
-    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_OR_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_NON_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_EXPR);
 
     /*
      * CatExpr
-     *     : CatExpr Factor
+     *     : ^CatExpr Factor
      *     : Factor
      *     ;
      */
 
-    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_non_terminal_symbol(G, P_FACTOR, G_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_FACTOR, G_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
@@ -262,7 +271,7 @@ static PGrammar *regex_grammar(void) {
      *     : -KleeneClosure
      *     : -PositiveClosure
      *     : -OptionalTerm
-     *     : -Term
+     *     : ^Term
      *     ;
      */
 
@@ -272,7 +281,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_OPTIONAL_TERM, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_TERM, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_TERM, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_FACTOR);
 
@@ -281,7 +290,7 @@ static PGrammar *regex_grammar(void) {
      *     : -NegatedCharacterClass
      *     : -CharacterClass
      *     : -String
-     *     : <start_group> -Expr <end_group>
+     *     : <start_group> ^Expr <end_group>
      *     ;
      */
 
@@ -292,7 +301,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_STRING, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_START_GROUP, G_EXCLUDABLE);
-    grammar_add_non_terminal_symbol(G, P_EXPR, G_NON_EXCLUDABLE, G_AUTO_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_EXPR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_GROUP, G_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_TERM);
@@ -343,14 +352,14 @@ static PGrammar *regex_grammar(void) {
     /*
      * String
      *     : ^Char ^String
-     *     : <>
+     *     : ^Char
      *     ;
      */
 
     grammar_add_non_terminal_symbol(G, P_CHAR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_non_terminal_symbol(G, P_STRING, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_epsilon_symbol(G, G_EXCLUDABLE);
+    grammar_add_non_terminal_symbol(G, P_CHAR, G_EXCLUDABLE, G_MANUAL_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_STRING);
 
@@ -386,7 +395,7 @@ PParseTree *parse_regexp(const char *file) {
 
     char production_names[20][40] = {
         "Machine",
-        "Rule",
+        "Exprs",
         "Expr",
         "CatExpr",
         "Factor",

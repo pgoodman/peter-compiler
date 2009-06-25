@@ -82,8 +82,6 @@ static void T_add_branch(PTree *parent, PTree *branch, int force) {
     }
 
     parent->_branches[parent->_fill] = child;
-    child->_parent = parent;
-    child->_parent_branch = parent->_fill;
 
     ++(parent->_fill);
 }
@@ -104,8 +102,6 @@ void *tree_alloc(const size_t struct_size, const unsigned short degree) {
     T->_branches = NULL;
     T->_degree = degree;
     T->_fill = 0;
-    T->_parent_branch = 0;
-    T->_parent = NULL;
 
     if (degree > 0) {
         T->_branches = tree_mem_alloc(sizeof(PTree *) * degree);
@@ -177,31 +173,12 @@ unsigned short tree_get_num_branches(PTree *T) {
 }
 
 /**
- * Return a tree's parent.
- */
-void *tree_parent(PTree *T) {
-    assert_not_null(T);
-    return T->_parent;
-}
-
-/**
  * Clear off all of the branches, without doing any proper cleaning up on them.
  */
-void tree_clear(PTree *tree, int do_clear) {
+void tree_clear(PTree *tree) {
     int i = 0;
 
     assert_not_null(tree);
-
-    if (do_clear) {
-        for (; i < tree->_fill; ++i) {
-            if (is_not_null(tree->_branches[i])) {
-                tree->_branches[i]->_parent = NULL;
-                tree->_branches[i]->_parent_branch = 0;
-                tree->_branches[i] = NULL;
-            }
-        }
-    }
-
     tree->_fill = 0;
 
     return;
@@ -238,8 +215,6 @@ void tree_trim(PTree *T, PDictionary *garbage_set) {
         dict_set(garbage_set, branch, branch, &delegate_do_nothing);
 
         /* update the branches parent information */
-        branch->_parent_branch = 0;
-        branch->_parent = NULL;
         T->_branches[i] = NULL;
     }
 
@@ -272,25 +247,6 @@ void tree_force_add_branch_children(PTree *parent, PTree *branch) {
     for(; i < fill; ++i) {
         T_add_branch(parent, branch->_branches[i], 1);
     }
-}
-
-/**
- * Given old_child tree node, get old_child's parent node and in the parent,
- * replace old_child with new_child.
- */
-void tree_replace_branch(PTree *old_child, PTree *new_child) {
-
-    assert_not_null(old_child);
-    assert_not_null(new_child);
-    assert_not_null(old_child->_parent);
-
-    old_child->_parent->_branches[old_child->_parent_branch] = new_child;
-
-    new_child->_parent = old_child->_parent;
-    new_child->_parent_branch = old_child->_parent_branch;
-
-    old_child->_parent_branch = 0;
-    old_child->_parent = NULL;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -22,11 +22,9 @@
  */
 typedef struct PTree {
 	unsigned short _degree, /* number of allocated branches */
-                   _fill, /* number of branches with children */
-                   _parent_branch; /* which branch of the parent this tree is using */
+                   _fill; /* number of branches with children */
 
-	struct PTree **_branches, /* array of branches */
-                 *_parent; /* parent tree */
+	struct PTree **_branches; /* array of branches */
 } PTree;
 
 typedef void (*PTreeGeneratorReclaimFunction)(void *, PDelegate);
@@ -48,7 +46,7 @@ typedef enum {
 void *tree_alloc(const size_t, const unsigned short );
 void tree_free(PTree *, PDelegate);
 void delegate_tree_free(PTree * );
-void tree_clear(PTree *tree, int do_clear);
+void tree_clear(PTree *tree);
 void tree_clear_num(PTree *tree, unsigned short num_branches);
 void tree_trim(PTree *, PDictionary *);
 void tree_add_branch(PTree *, PTree *);
@@ -57,8 +55,6 @@ void tree_force_add_branch_children(PTree *, PTree *);
 unsigned short tree_get_num_slots(PTree * );
 unsigned short tree_get_num_branches(PTree * );
 void *tree_parent(PTree *);
-void tree_replace_branch(PTree *old_child, PTree *new_child);
-/*void *tree_get_branch(void *, unsigned short);*/
 
 /* tree generator */
 PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversal );

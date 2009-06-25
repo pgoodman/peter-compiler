@@ -107,7 +107,8 @@ typedef struct P_IntermediateResult {
 
     PParseTree *intermediate_tree;
 
-    char is_left_recursive;
+    unsigned int uses_indirect_left_recursion:1,
+                 is_being_retested:1;
 
 } P_IntermediateResult;
 
@@ -175,14 +176,8 @@ typedef struct P_Frame {
                      is_used:1;
     } left_recursion;
 
-    /* the number of branches that this frame has added to the parse tree. */
-    unsigned short num_branches;
-
     /* deal with backtracking */
     PT_Terminal *backtrack_point;
-
-    /* the farthest id into the token stream that we've reached. */
-    uint32_t farthest_id_reached;
 
     PParseTree *parse_tree;
 
