@@ -190,13 +190,12 @@ void grammar_add_phrase(PGrammar *grammar) {
  */
 void grammar_add_non_terminal_symbol(PGrammar *grammar,
                                      G_NonTerminal production,
-                                     unsigned char is_non_excludable,
-                                     unsigned char must_be_raised) {
+                                     G_TreeOp tree_op) {
     G_Symbol *symbol = G_get_next_symbol(grammar);
 
     symbol->is_non_terminal = 1;
-    symbol->is_non_excludable = (is_non_excludable & 1);
-    symbol->children_must_be_raised = (must_be_raised & 1);
+    symbol->is_non_excludable = (tree_op == G_NON_EXCLUDABLE);
+    symbol->children_must_be_raised = (tree_op == G_RAISE_CHILDREN);
     symbol->value.non_terminal = production;
 }
 
@@ -205,10 +204,10 @@ void grammar_add_non_terminal_symbol(PGrammar *grammar,
  */
 void grammar_add_terminal_symbol(PGrammar *grammar,
                                  G_Terminal token,
-                                 unsigned char is_non_excludable) {
+                                 G_TreeOp tree_op) {
     G_Symbol *symbol = G_get_next_symbol(grammar);
     symbol->is_terminal = 1;
-    symbol->is_non_excludable = (is_non_excludable & 1);
+    symbol->is_non_excludable = (tree_op != G_AUTO);
     symbol->value.terminal = token;
 }
 
@@ -229,11 +228,10 @@ void grammar_add_fail_symbol(PGrammar *grammar) {
 /**
  * Rewrite rule for no token required.
  */
-void grammar_add_epsilon_symbol(PGrammar *grammar,
-                                unsigned char is_non_excludable) {
+void grammar_add_epsilon_symbol(PGrammar *grammar, G_TreeOp tree_op) {
     G_Symbol *symbol = G_get_next_symbol(grammar);
     symbol->is_epsilon_transition = 1;
-    symbol->is_non_excludable = (is_non_excludable & 1);
+    symbol->is_non_excludable = (tree_op != G_AUTO);
 }
 
 /* -------------------------------------------------------------------------- */

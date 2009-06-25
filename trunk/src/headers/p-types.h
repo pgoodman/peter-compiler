@@ -66,6 +66,12 @@ typedef int (PScannerFunction)(PScanner *scanner, PToken *token);
 
 /* -------------------------------------------------------------------------- */
 
+typedef enum {
+    G_AUTO,
+    G_NON_EXCLUDABLE,
+    G_RAISE_CHILDREN
+} G_TreeOp;
+
 /* base parse types, holds our rewrite rules. */
 typedef struct PGrammar {
 
@@ -185,7 +191,7 @@ typedef struct P_Frame {
 
 /* -------------------------------------------------------------------------- */
 
-#define P_MAX_RECURSION_DEPTH 50
+#define P_MAX_RECURSION_DEPTH 500
 
 /* The current state of the parser. */
 typedef struct PParser {
