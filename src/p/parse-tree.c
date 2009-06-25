@@ -204,7 +204,7 @@ void parse_tree_print_dot(PParseTree *parse_tree,
 
             case PT_EPSILON:
                 printf(
-                    "Ox%d [label=&epsilon;] \n",
+                    "Ox%d [label=\"epsilon<>\" color=gray shape=diamond] \n",
                     (unsigned int) tree
                 );
                 break;

@@ -12,12 +12,6 @@
 #include "p-types.h"
 #include "p-parser.h"
 
-#define G_EXCLUDABLE 0
-#define G_NON_EXCLUDABLE 1
-
-#define G_AUTO_RAISE_CHILDREN 0
-#define G_MANUAL_RAISE_CHILDREN 1
-
 PGrammar *grammar_alloc(G_NonTerminal start_production,
                         short num_productions,
                         short num_tokens,
@@ -32,19 +26,17 @@ void grammar_add_phrase(PGrammar *grammar);
 
 void grammar_add_non_terminal_symbol(PGrammar *grammar,
                                      G_NonTerminal production,
-                                     unsigned char is_non_excludable,
-                                     unsigned char must_be_raised);
+                                     G_TreeOp tree_op);
 
 void grammar_add_terminal_symbol(PGrammar *grammar,
                                  G_Terminal token,
-                                 unsigned char is_non_excludable);
+                                 G_TreeOp tree_op);
 
 void grammar_add_cut_symbol(PGrammar *grammar);
 
 void grammar_add_fail_symbol(PGrammar *grammar);
 
-void grammar_add_epsilon_symbol(PGrammar *grammar,
-                                unsigned char is_non_excludable);
+void grammar_add_epsilon_symbol(PGrammar *grammar, G_TreeOp tree_op);
 
 short grammar_get_num_production_rules(PGrammar *grammar);
 
