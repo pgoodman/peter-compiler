@@ -16,6 +16,6 @@
 #include <p-parser.h>
 #include <p-scanner.h>
 
-PParseTree *parse_regexp(const char *file);
+void parse_regexp(const char *file);
 
 #endif /* PREGEXP_H_ */

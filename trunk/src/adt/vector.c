@@ -8,6 +8,8 @@
 
 #include <adt-vector.h>
 
+static const uint32_t STOP_GROW_SIZE = (((uint32_t) -1) / 2);
+
 /**
  * Allocate the slots used by a vector.
  */
@@ -25,7 +27,7 @@ static void **V_alloc_slots(uint32_t num_slots) {
  */
 static void V_resize(PVector *V, uint32_t i) {
     uint32_t new_size,
-             max_size = 0x7FFFFFFF;
+             max_size = (uint32_t) -1;
 
     assert_not_null(V);
 
@@ -35,10 +37,13 @@ static void V_resize(PVector *V, uint32_t i) {
     }
 
     /* grow the capacity without allowing integer to overflow */
-    for(new_size = V->_num_slots;
-        new_size < i && new_size <= max_size;
-        new_size = new_size * 2)
-        ;
+    new_size = V->_num_slots;
+    while(new_size < i) {
+        if(new_size > STOP_GROW_SIZE) {
+            new_size = i;
+        }
+        new_size *= 2;
+    }
 
     if(new_size < i)
         new_size = 0xFFFFFFFF;

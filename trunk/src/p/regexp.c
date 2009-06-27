@@ -37,7 +37,8 @@ enum {
     L_SPACE,
     L_NEW_LINE,
     L_CARRIAGE_RETURN,
-    L_TAB
+    L_TAB,
+    L_ANY_CHAR
 };
 
 enum {
@@ -120,6 +121,7 @@ static int R_get_token(PScanner *scanner, PToken *token) {
         case '$': token->terminal = L_ANCHOR_END; break;
         case '?': token->terminal = L_OPTIONAL; break;
         case '|': token->terminal = L_OR; break;
+        case '.': token->terminal = L_ANY_CHAR; break;
         default:
 any_char:
             switch(curr_char) {
@@ -175,7 +177,7 @@ static PGrammar *regex_grammar(void) {
     PGrammar *G = grammar_alloc(
         P_MACHINE, /* production to start matching with */
         16, /* number of non-terminals */
-        18, /* number of terminals */
+        19, /* number of terminals */
         50, /* number of production phrases */
         80 /* number of phrase symbols */
     );
@@ -375,6 +377,7 @@ static PGrammar *regex_grammar(void) {
     /*
      * Char
      *     : -<characher>
+     *     : -<any_char>
      *     : -<space>
      *     : -<tab>
      *     : -<new_line>
@@ -383,6 +386,8 @@ static PGrammar *regex_grammar(void) {
      */
 
     grammar_add_terminal_symbol(G, L_CHARACTER, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_ANY_CHAR, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_SPACE, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
@@ -411,13 +416,13 @@ static PGrammar *regex_grammar(void) {
     return G;
 }
 
-PParseTree *parse_regexp(const char *file) {
+void parse_regexp(const char *file) {
 
     PParseTree *parse_tree = NULL;
     PScanner *scanner = (PScanner *) 0x1; /* fake scanner */
     PGrammar *grammar = regex_grammar();
 
-    char terminal_names[18][40] = {
+    char terminal_names[19][40] = {
         "start_group",
         "end_group",
         "start_class",
@@ -435,7 +440,8 @@ PParseTree *parse_regexp(const char *file) {
         "space",
         "new_line",
         "carriage_return",
-        "tab"
+        "tab",
+        "any_char"
     };
 
     char production_names[16][40] = {
@@ -482,6 +488,4 @@ PParseTree *parse_regexp(const char *file) {
     } else {
         printf("Error: Could not open file '%s'.", file);
     }
-
-    return parse_tree;
 }
