@@ -60,6 +60,297 @@ enum {
     P_OPTIONAL_TERM
 };
 
+typedef struct PThompsonsConstruction {
+    PNFA *nfa;
+    unsigned int state_stack[256];
+    int top_state;
+} PThompsonsConstruction;
+
+static void Machine(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+
+    unsigned int start, end;
+    PT_Terminal *term;
+    PParseTree *tree;
+
+    switch(num_branches) {
+        /* ... */
+        case 1:
+            if(branches[0]->type != PT_NON_TERMINAL) {
+                return;
+            }
+            start = thompson->state_stack[thompson->top_state--];
+            end = thompson->state_stack[thompson->top_state--];
+            break;
+
+        case 2:
+            /* ^ ... */
+            if(branches[0]->type == PT_TERMINAL) {
+                start = nfa_add_state(thompson->nfa);
+
+                /* ^ ... */
+                if(branches[1]->type != PT_TERMINAL) {
+                    nfa_add_value_transition(
+                         thompson->nfa,
+                         start,
+                         thompson->state_stack[thompson->top_state--],
+                         '\n'
+                    );
+                    end = thompson->state_stack[thompson->top_state--];
+
+                /* ^$ */
+                } else {
+                    end = nfa_add_state(thompson->nfa);
+                    nfa_add_value_transition(thompson->nfa, start, end, '\n');
+                }
+            /* ... $ */
+            } else {
+                start = thompson->state_stack[thompson->top_state--];
+                end = nfa_add_state(thompson->nfa);
+                nfa_add_value_transition(
+                     thompson->nfa,
+                     thompson->state_stack[thompson->top_state--],
+                     end,
+                     '\n'
+                );
+            }
+            break;
+
+        /* ^ ... $ */
+        case 3:
+            start = nfa_add_state(thompson->nfa);
+            end = nfa_add_state(thompson->nfa);
+            nfa_add_value_transition(
+                 thompson->nfa,
+                 start,
+                 thompson->state_stack[thompson->top_state--],
+                 '\n'
+            );
+            nfa_add_value_transition(
+                 thompson->nfa,
+                 thompson->state_stack[thompson->top_state--],
+                 end,
+                 '\n'
+            );
+            break;
+        default:
+            start = nfa_add_state(thompson->nfa);
+            end = start;
+            break;
+    }
+
+    nfa_change_start_state(thompson->nfa, start);
+    nfa_add_accepting_state(thompson->nfa, end);
+}
+
+static void CatExpr(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+
+    unsigned int start, prev, end, inter_start, inter_end;
+    PT_Terminal *character;
+
+    end = thompson->state_stack[thompson->top_state - 1];
+
+    if(num_branches > 1) {
+        for(; --num_branches; ) {
+            inter_start = thompson->state_stack[thompson->top_state];
+            inter_end = thompson->state_stack[thompson->top_state - 3];
+
+            nfa_add_epsilon_transition(
+                thompson->nfa,
+                inter_end,
+                inter_start
+            );
+
+            thompson->top_state -= 2;
+        }
+    }
+
+    printf("bottom of stack: %d \n", thompson->top_state - 1);
+
+    thompson->state_stack[thompson->top_state - 1] = end;
+}
+
+static void OrExpr(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+
+    unsigned int a1_start, a1_end, a2_start, a2_end, start, end;
+
+    a1_start = thompson->state_stack[thompson->top_state--];
+    a1_end = thompson->state_stack[thompson->top_state--];
+    a2_start = thompson->state_stack[thompson->top_state--];
+    a2_end = thompson->state_stack[thompson->top_state--];
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    nfa_add_epsilon_transition(thompson->nfa, start, a1_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, a2_start);
+
+    nfa_add_epsilon_transition(thompson->nfa, a1_end, end);
+    nfa_add_epsilon_transition(thompson->nfa, a2_end, end);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
+}
+
+static void String(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+
+    unsigned int start, prev, end, i;
+    PT_Terminal *character;
+
+    start = nfa_add_state(thompson->nfa);
+    prev = start;
+
+    for(i = 0; i < num_branches; ++i) {
+        character = (PT_Terminal *) branches[i];
+        end = nfa_add_state(thompson->nfa);
+        nfa_add_value_transition(
+             thompson->nfa,
+             prev,
+             end,
+             character->lexeme->str[0]
+        );
+        prev = end;
+    }
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
+}
+
+typedef void (R_set_elm_fnc_t)(PSet *, unsigned int);
+
+static void R_char_class(PThompsonsConstruction *thompson,
+                         unsigned char phrase,
+                         unsigned int num_branches,
+                         PParseTree *branches[],
+                         PSet *set,
+                         R_set_elm_fnc_t *fnc) {
+
+    unsigned int start, end, i;
+    unsigned char range_start, range_end;
+    PT_NonTerminal *range;
+
+    for(i = 0; i < num_branches; ++i) {
+        if(branches[i]->type == PT_NON_TERMINAL) {
+            range = (PT_NonTerminal *) branches[i];
+            range_start = ((PT_Terminal *) tree_get_branch(range, 0))->lexeme->str[0];
+            range_end = ((PT_Terminal *) tree_get_branch(range, 1))->lexeme->str[0];
+
+            for(; range_start <= range_end; ++range_start) {
+                fnc(set, range_start);
+            }
+        } else {
+            fnc(set,((PT_Terminal *) branches[i])->lexeme->str[0]);
+        }
+    }
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+    nfa_add_set_transition(thompson->nfa, start, end, set);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
+}
+
+static void CharClass(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+    R_char_class(
+        thompson,
+        phrase,
+        num_branches,
+        branches,
+        set_alloc(),
+        &set_add_elm
+    );
+}
+
+static void NegatedCharClass(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+    R_char_class(
+        thompson,
+        phrase,
+        num_branches,
+        branches,
+        set_alloc_inverted(),
+        &set_remove_elm
+    );
+}
+
+static void KleeneClosure(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+    unsigned int c_start, c_end, start, end, loop_start, loop_end;
+
+    loop_start = thompson->state_stack[thompson->top_state--];
+    loop_end = thompson->state_stack[thompson->top_state--];
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, end);
+    nfa_add_epsilon_transition(thompson->nfa, loop_end, end);
+    nfa_add_epsilon_transition(thompson->nfa, loop_end, loop_start);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
+}
+
+static void PositiveClosure(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+    unsigned int c_start, c_end, start, end, loop_start, loop_end;
+
+    loop_start = thompson->state_stack[thompson->top_state--];
+    loop_end = thompson->state_stack[thompson->top_state--];
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
+    nfa_add_epsilon_transition(thompson->nfa, loop_end, end);
+    nfa_add_epsilon_transition(thompson->nfa, loop_end, loop_start);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
+}
+
+static void OptionalTerm(PThompsonsConstruction *thompson,
+                 unsigned char phrase,
+                 unsigned int num_branches,
+                 PParseTree *branches[]) {
+unsigned int c_start, c_end, start, end, loop_start, loop_end;
+
+    loop_start = thompson->state_stack[thompson->top_state--];
+    loop_end = thompson->state_stack[thompson->top_state--];
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, end);
+    nfa_add_epsilon_transition(thompson->nfa, loop_end, end);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
+}
+
 static int R_get_token(PScanner *scanner, PToken *token) {
 
     do {
@@ -184,14 +475,19 @@ static PGrammar *regex_grammar(void) {
 
     /*
      * Machine
+     *     : -<anchor_line_start> -<anchor_line_end>
      *     : -<anchor_line_start> ^Expr -<anchor_line_end>
      *     : -<anchor_line_start> ^Expr
      *     : ^Expr -<anchor_line_end>
      *     : ^Expr
+     *     : <>
      *     ;
      */
 
     grammar_add_terminal_symbol(G, L_ANCHOR_START, G_NON_EXCLUDABLE);
+    grammar_add_terminal_symbol(G, L_ANCHOR_END, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_ANCHOR_START, G_NON_EXCLUDABLE);
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_ANCHOR_END, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
@@ -203,19 +499,22 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_MACHINE);
+    grammar_add_epsilon_symbol(G, G_AUTO);
+    grammar_add_phrase(G);
+    grammar_add_production_rule(G, P_MACHINE, (G_ProductionRuleFunc *) &Machine);
 
 
     /*
      * OrExpr
      *     : ^Expr <or> CatExpr
+     *     ;
      */
 
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_OR, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_OR_EXPR);
+    grammar_add_production_rule(G, P_OR_EXPR, (G_ProductionRuleFunc *) &OrExpr);
 
     /*
      * Expr
@@ -228,7 +527,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_EXPR);
+    grammar_add_production_rule(G, P_EXPR, &grammar_null_action);
 
     /*
      * CatExpr
@@ -242,7 +541,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_FACTOR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CAT_EXPR);
+    grammar_add_production_rule(G, P_CAT_EXPR, (G_ProductionRuleFunc *) &CatExpr);
 
     /*
      * KleeneClosure : ^Term <kleene_closure> ;
@@ -251,7 +550,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_KLEENE_CLOSURE, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_KLEENE_CLOSURE);
+    grammar_add_production_rule(G, P_KLEENE_CLOSURE, (G_ProductionRuleFunc *) &KleeneClosure);
 
     /*
      * PositiveClosure : ^Term <positive_closure> ;
@@ -260,7 +559,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_POSITIVE_CLOSURE, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_POSITIVE_CLOSURE);
+    grammar_add_production_rule(G, P_POSITIVE_CLOSURE, (G_ProductionRuleFunc *) &PositiveClosure);
 
     /*
      * OptionalTerm : ^Term <optional> ;
@@ -269,7 +568,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_OPTIONAL, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_OPTIONAL_TERM);
+    grammar_add_production_rule(G, P_OPTIONAL_TERM, (G_ProductionRuleFunc *) &OptionalTerm);
 
     /*
      * Factor
@@ -288,7 +587,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_FACTOR);
+    grammar_add_production_rule(G, P_FACTOR, &grammar_null_action);
 
     /*
      * Term
@@ -309,7 +608,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_GROUP, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_TERM);
+    grammar_add_production_rule(G, P_TERM, &grammar_null_action);
 
     /*
      * NegatedCharacterClass : <start_neg_class> ^CharClassString <end_class> ;
@@ -319,7 +618,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_CHAR_CLASS_STRING, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_CLASS, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_NEGATED_CHARACTER_CLASS);
+    grammar_add_production_rule(G, P_NEGATED_CHARACTER_CLASS, (G_ProductionRuleFunc *) &NegatedCharClass);
 
     /*
      * CharRange
@@ -331,7 +630,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_terminal_symbol(G, L_CHARACTER_RANGE, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR_RANGE);
+    grammar_add_production_rule(G, P_CHAR_RANGE, &grammar_null_action);
 
     /*
      * OptCharClassString
@@ -344,7 +643,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_epsilon_symbol(G, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_OPT_CHAR_CLASS_STRING);
+    grammar_add_production_rule(G, P_OPT_CHAR_CLASS_STRING, &grammar_null_action);
 
     /*
      * CharClassString
@@ -362,7 +661,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR_CLASS_STRING);
+    grammar_add_production_rule(G, P_CHAR_CLASS_STRING, &grammar_null_action);
 
     /*
      * CharacterClass : <start_class> ^CharClassString <end_class> ;
@@ -372,7 +671,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_CHAR_CLASS_STRING, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_CLASS, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHARACTER_CLASS);
+    grammar_add_production_rule(G, P_CHARACTER_CLASS, (G_ProductionRuleFunc *) &CharClass);
 
     /*
      * Char
@@ -397,7 +696,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_CARRIAGE_RETURN, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR);
+    grammar_add_production_rule(G, P_CHAR, &grammar_null_action);
 
     /*
      * String
@@ -411,81 +710,84 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_STRING);
+    grammar_add_production_rule(G, P_STRING, (G_ProductionRuleFunc *) &String);
 
     return G;
 }
 
 void parse_regexp(const char *file) {
 
-    PParseTree *parse_tree = NULL;
     PScanner *scanner = (PScanner *) 0x1; /* fake scanner */
     PGrammar *grammar = regex_grammar();
-
-    char terminal_names[19][40] = {
-        "start_group",
-        "end_group",
-        "start_class",
-        "start_neg_class",
-        "end_class",
-        "positive_closure",
-        "kleene_closure",
-        "optional",
-        "carrot",
-        "anchor_start",
-        "anchor_end",
-        "or",
-        "character_range",
-        "character",
-        "space",
-        "new_line",
-        "carriage_return",
-        "tab",
-        "any_char"
-    };
-
-    char production_names[16][40] = {
-        "Machine",
-        "Expr",
-        "Concatenate",
-        "Factor",
-        "Term",
-        "OrExpr",
-        "String",
-        "Char",
-        "CharClassString",
-        "OptCharClassString",
-        "CharRange",
-        "CharClass",
-        "NegatedCharClass",
-        "KleeneClosure",
-        "PositiveClosure",
-        "OptionalTerm"
-    };
+    PThompsonsConstruction thom, *thompson = &thom;
 
     if(is_not_null(fp = fopen(file, "r"))) {
 
-        parse_tree = parse_tokens(
+        thompson->nfa = nfa_alloc();
+        thompson->top_state = -1;
+
+        parse_tokens(
             grammar,
             scanner,
-            (PScannerFunction *) &R_get_token
-        );
-
-        printf("Printing tree: \n\n");
-
-        parse_tree_print_dot(
-            parse_tree,
-            production_names,
-            terminal_names
+            (PScannerFunction *) &R_get_token,
+            (void *) thompson,
+            TREE_TRAVERSE_POSTORDER
         );
 
         printf("\nFreeing memory.. \n");
 
-        parse_tree_free(parse_tree);
         grammar_free(grammar);
+
+        nfa_print_dot(thompson->nfa);
+
+        nfa_free(thompson->nfa);
 
         fclose(fp);
     } else {
         printf("Error: Could not open file '%s'.", file);
     }
 }
+
+/*
+char terminal_names[19][40] = {
+    "start_group",
+    "end_group",
+    "start_class",
+    "start_neg_class",
+    "end_class",
+    "positive_closure",
+    "kleene_closure",
+    "optional",
+    "carrot",
+    "anchor_start",
+    "anchor_end",
+    "or",
+    "character_range",
+    "character",
+    "space",
+    "new_line",
+    "carriage_return",
+    "tab",
+    "any_char"
+};
+
+char production_names[16][40] = {
+    "Machine",
+    "Expr",
+    "Concatenate",
+    "Factor",
+    "Term",
+    "OrExpr",
+    "String",
+    "Char",
+    "CharClassString",
+    "OptCharClassString",
+    "CharRange",
+    "CharClass",
+    "NegatedCharClass",
+    "KleeneClosure",
+    "PositiveClosure",
+    "OptionalTerm"
+};
+*/
+

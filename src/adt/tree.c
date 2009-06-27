@@ -27,8 +27,8 @@ unsigned long int tree_num_allocated_pointers(void) {
  * Figure out a valid memory freeing callback for freeing things.
  */
 static PDelegate *T_valid_free_callback(PDelegate *ft,
-                                       PDelegate *disallowed,
-                                       PDelegate *allowed) {
+                                        PDelegate *disallowed,
+                                        PDelegate *allowed) {
     PDelegate *free_tree = NULL;
 
     /* make sure we don't over free */
@@ -409,7 +409,7 @@ static void *T_generator_next_po(PTreeGenerator *G) {
  * Allocate a tree generator on the heap and initialize that generator.
  */
 PTreeGenerator *tree_generator_alloc(void *tree,
-                                     const PTreeTraversal traverse_type) {
+                                     const PTreeTraversalType traverse_type) {
     PTree *T;
     PTreeGenerator *gen;
 

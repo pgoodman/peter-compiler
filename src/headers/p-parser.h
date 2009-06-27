@@ -24,8 +24,10 @@
 
 #include "p-parse-tree.h"
 
-PParseTree *parse_tokens(PGrammar *grammar,
-                         PScanner *scanner,
-                         PScannerFunction *scanner_fnc);
+void parse_tokens(PGrammar *grammar,
+                  PScanner *scanner,
+                  PScannerFunction *scanner_fnc,
+                  void *state,
+                  PTreeTraversalType tree_taversal_type);
 
 #endif /* PPARSER_H_ */

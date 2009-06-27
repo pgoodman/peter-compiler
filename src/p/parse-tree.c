@@ -40,7 +40,7 @@ PT_NonTerminal *PT_alloc_non_terminal(G_NonTerminal production,
     PT_NonTerminal *tree;
     tree = tree_alloc(sizeof(PT_NonTerminal), num_branches);
     ((PParseTree *) tree)->type = PT_NON_TERMINAL;
-    tree->rule = 1;
+    tree->phrase = 0;
     tree->production = production;
     return tree;
 }
@@ -106,8 +106,13 @@ PT_Terminal *PT_alloc_terminals(PScanner *scanner,
     curr = PT_alloc_terminal(0, string_alloc_char("EOF", 3), 0, 0, id);
     curr->next = NULL;
     PTS_add(tree_set, (PParseTree *) curr);
+
     if(is_not_null(prev)) {
         prev->next = curr;
+    }
+
+    if(is_null(first)) {
+        return curr;
     }
 
     return first;
