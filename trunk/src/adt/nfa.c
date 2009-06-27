@@ -135,11 +135,18 @@ PNFA *nfa_alloc(void) {
 void nfa_free(PNFA *nfa) {
     unsigned int i;
     NFA_State *state;
+    NFA_Transition *transition;
 
     assert_not_null(nfa);
 
     for(state = nfa->states, i = nfa->num_states; i--; ++state) {
         mem_free(state->transitions);
+    }
+
+    for(transition = nfa->transitions, i = nfa->num_transitions; i--; ++transition) {
+        if(transition->type == T_SET) {
+            set_free(transition->condition.set);
+        }
     }
 
     mem_free(nfa->transitions);
@@ -159,7 +166,7 @@ void nfa_change_start_state(PNFA *nfa, unsigned int start_state) {
 /**
  * Add a state to the NFA.
  */
-unsigned int nfa_add_state(PNFA *nfa, int is_accepting) {
+unsigned int nfa_add_state(PNFA *nfa) {
     NFA_State *state;
     assert_not_null(nfa);
 
@@ -172,7 +179,6 @@ unsigned int nfa_add_state(PNFA *nfa, int is_accepting) {
 
     state = ((NFA_State *) nfa->states) + (nfa->num_states - 1);
     state->id = nfa->num_states - 1;
-    state->is_accepting = is_accepting;
     state->num_transition_slots = NFA_NUM_DEFAULT_STATE_TRANSITIONS;
     state->num_transitions = 0;
     state->transitions = mem_alloc(
@@ -180,6 +186,17 @@ unsigned int nfa_add_state(PNFA *nfa, int is_accepting) {
     );
 
     return state->id;
+}
+
+/**
+ * Make a state into an accepting state.
+ */
+void nfa_add_accepting_state(PNFA *nfa, unsigned int which_state) {
+    NFA_State *state;
+    assert_not_null(nfa);
+    assert(which_state < nfa->num_states);
+    state = ((NFA_State *) nfa->states) + which_state;
+    state->is_accepting = 1;
 }
 
 /**

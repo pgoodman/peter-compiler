@@ -108,8 +108,9 @@ void grammar_free(PGrammar *grammar) {
  * The production rule for the production "A" has two phrases in it. The
  * production rule for the production "D" has only one phrase.
  */
-void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production) {
-
+void grammar_add_production_rule(PGrammar *grammar,
+                                 G_NonTerminal production,
+                                 G_ProductionRuleFunc *action_fnc) {
     G_ProductionRule *rule,
                      *prev_rule;
 
@@ -141,6 +142,8 @@ void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production) {
     ++(grammar->counter[C_PRODUCTION_RULES]);
 
     rule->production = production;
+    rule->action_fnc = action_fnc;
+
     return;
 }
 
@@ -234,6 +237,13 @@ void grammar_add_epsilon_symbol(PGrammar *grammar, G_TreeOp tree_op) {
     symbol->is_non_excludable = (tree_op != G_AUTO);
 }
 
+/**
+ * A null production rule action function, i.e. it does nothing.
+ */
+void grammar_null_action(void *s, unsigned char r, unsigned int n, PParseTree *c[]) {
+    return;
+}
+
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -242,6 +252,14 @@ void grammar_add_epsilon_symbol(PGrammar *grammar, G_TreeOp tree_op) {
 void G_lock(PGrammar *grammar) {
     assert_not_null(grammar);
     grammar->is_locked = 1;
+}
+
+/**
+ * Unlock a grammar.
+ */
+void G_unlock(PGrammar *grammar) {
+    assert_not_null(grammar);
+    grammar->is_locked = 0;
 }
 
 /**

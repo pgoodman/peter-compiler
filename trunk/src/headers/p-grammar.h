@@ -20,7 +20,9 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
 
 void grammar_free(PGrammar *grammar);
 
-void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production);
+void grammar_add_production_rule(PGrammar *grammar,
+                                 G_NonTerminal production,
+                                 G_ProductionRuleFunc *action_fnc);
 
 void grammar_add_phrase(PGrammar *grammar);
 
@@ -39,5 +41,7 @@ void grammar_add_fail_symbol(PGrammar *grammar);
 void grammar_add_epsilon_symbol(PGrammar *grammar, G_TreeOp tree_op);
 
 short grammar_get_num_production_rules(PGrammar *grammar);
+
+void grammar_null_action(void *s, unsigned char r, unsigned int n, PParseTree *c[]);
 
 #endif /* P_GRAMMAR_H_ */

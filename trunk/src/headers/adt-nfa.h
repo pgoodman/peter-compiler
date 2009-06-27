@@ -7,7 +7,7 @@
  */
 
 #ifndef ADTNFA_H_
-#define ADNFA_H_
+#define ADTNFA_H_
 
 #include "adt-set.h"
 
@@ -28,7 +28,9 @@ void nfa_free(PNFA *nfa);
 
 void nfa_change_start_state(PNFA *nfa, unsigned int start_state);
 
-unsigned int nfa_add_state(PNFA *nfa, int is_accepting);
+unsigned int nfa_add_state(PNFA *nfa);
+
+void nfa_add_accepting_state(PNFA *nfa, unsigned int which_state);
 
 void nfa_add_epsilon_transition(PNFA *nfa,
                                 unsigned int start_state,

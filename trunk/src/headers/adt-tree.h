@@ -40,7 +40,7 @@ typedef enum {
     TREE_TRAVERSE_PREORDER,
     TREE_TRAVERSE_POSTORDER,
     TREE_TRAVERSE_LEVELORDER
-} PTreeTraversal;
+} PTreeTraversalType;
 
 /* tree operations */
 void *tree_alloc(const size_t, const unsigned short );
@@ -57,8 +57,8 @@ unsigned short tree_get_num_branches(PTree * );
 void *tree_parent(PTree *);
 
 /* tree generator */
-PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversal );
-PTreeGenerator *tree_generator_init(PTreeGenerator *, void *, const PTreeTraversal );
+PTreeGenerator *tree_generator_alloc(void *, const PTreeTraversalType );
+PTreeGenerator *tree_generator_init(PTreeGenerator *, void *, const PTreeTraversalType );
 void tree_generator_reuse(PTreeGenerator *, void *);
 
 #define tree_get_branch(T,branch) (((PTree *) T)->_branches[branch])

@@ -18,8 +18,8 @@
 
 int main(void) {
 
-    /*parse_regexp("src/grammars/regexp.g");*/
-
+    parse_regexp("src/grammars/regexp.g");
+    /*
     PNFA *nfa = nfa_alloc();
 
     unsigned int i, j, k, l;
@@ -42,7 +42,7 @@ int main(void) {
 
     nfa_free(nfa);
 
-
+    */
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
 #endif

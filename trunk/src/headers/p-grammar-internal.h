@@ -14,6 +14,8 @@
 
 void G_lock(PGrammar *grammar);
 
+void G_unlock(PGrammar *grammar);
+
 int G_production_rule_has_phrase(G_ProductionRule *, unsigned int phrase);
 
 G_Symbol *G_production_rule_get_symbol(G_ProductionRule *,
