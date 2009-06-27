@@ -26,16 +26,6 @@ static const unsigned int H_primes[] = {
 };
 
 static const int H_num_primes = sizeof(H_primes)/sizeof(H_primes[0]);
-static unsigned long int num_allocations = 0;
-
-#define dict_mem_alloc(x) mem_alloc(x); ++num_allocations
-#define dict_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
-#define dict_mem_free(x) mem_free(x); --num_allocations
-#define dict_mem_error(x) mem_error(x)
-
-unsigned long int dict_num_allocated_pointers(void) {
-    return num_allocations;
-}
 
 /* -------------------------------------------------------------------------- */
 
@@ -43,9 +33,9 @@ unsigned long int dict_num_allocated_pointers(void) {
  * Allocate a new dictionary entry.
  */
 static H_Entry *H_entry_alloc(H_key_type key, H_val_type val) {
-    H_Entry *entry = dict_mem_alloc(sizeof(H_Entry));
+    H_Entry *entry = mem_alloc(sizeof(H_Entry));
     if(is_null(entry)) {
-        dict_mem_error("Unable to allocate dictionary entry on the heap.");
+        mem_error("Unable to allocate dictionary entry on the heap.");
     }
 
     entry->key = key;
@@ -93,9 +83,9 @@ static H_Entry *H_entry_get(H_type *H, H_key_type key) {
  * Allocate the slots used by a vector.
  */
 static H_Entry **H_slots_alloc(uint32_t num_slots ) {
-    H_Entry **slots = dict_mem_calloc(num_slots, sizeof(H_Entry *));
+    H_Entry **slots = mem_calloc(num_slots, sizeof(H_Entry *));
     if(is_null(slots)) {
-        dict_mem_error("Unable to allocate hash table slots.");
+        mem_error("Unable to allocate hash table slots.");
     }
     return slots;
 }
@@ -130,7 +120,7 @@ static void H_slots_grow(H_type *H ) {
         }
     }
 
-    dict_mem_free(old_elms);
+    mem_free(old_elms);
 
     H->grow_table = 0;
 
@@ -156,9 +146,9 @@ void *gen_dict_alloc(const size_t dict_struct_size,
     assert_not_null(key_hash_fnc);
     assert_not_null(key_collision_fnc);
 
-    table = dict_mem_alloc(dict_struct_size);
+    table = mem_alloc(dict_struct_size);
     if(is_null(table)) {
-        dict_mem_error("Unable to allocate vector on the heap.");
+        mem_error("Unable to allocate vector on the heap.");
     }
 
     /* figure out the minimum size we will use from our prime table. */
@@ -225,12 +215,12 @@ void dict_free(H_type *H,
             free_key_fnc(entry->key);
             free_val_fnc(entry->entry);
 
-            dict_mem_free(entry);
+            mem_free(entry);
         }
     }
 
-    dict_mem_free(H->slots);
-    dict_mem_free(H);
+    mem_free(H->slots);
+    mem_free(H);
     return;
 }
 
@@ -279,7 +269,7 @@ void dict_set(H_type *H,
 
     ++(H->num_used_slots);
 
-    if(D_LOAD_FACTOR <= ((float)H->num_used_slots / (float)H->num_slots)) {
+    if(D_LOAD_FACTOR <= ((float) H->num_used_slots / (float) H->num_slots)) {
         H->grow_table = 1;
     }
 }
@@ -317,7 +307,7 @@ void dict_unset(H_type *H,
 
             free_key_fnc(entry->key);
             free_val_fnc(entry->entry);
-            dict_mem_free(entry);
+            mem_free(entry);
 
             --(H->num_used_slots);
 

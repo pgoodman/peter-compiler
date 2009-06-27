@@ -8,16 +8,6 @@
 
 #include <adt-list.h>
 
-#define list_mem_alloc(x) mem_alloc(x); ++num_allocations
-#define list_mem_calloc(x,y) mem_calloc(x,y); ++num_allocations
-#define list_mem_free(x) mem_free(x); --num_allocations
-#define list_mem_error(x) mem_error(x)
-
-static unsigned long int num_allocations = 0;
-unsigned long int list_num_allocated_pointers(void) {
-    return num_allocations;
-}
-
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -28,7 +18,7 @@ void *list_alloc(const size_t struct_size ) {
 
     assert(sizeof(PList) <= struct_size);
 
-    L = list_mem_alloc(struct_size);
+    L = mem_alloc(struct_size);
     if(is_null(L)) {
         mem_error("Unable to allocate a linked list on the heap.");
     }
@@ -105,7 +95,7 @@ void gen_list_free(PGenericList *L, PDelegate *free_elm_fnc ) {
         next = (PGenericList *) list_get_next((PList *) L);
         free_elm_fnc(L->_elm);
         L->_elm = NULL;
-        list_mem_free(L);
+        mem_free(L);
     }
 
     return;
@@ -121,7 +111,7 @@ PGenericList *gen_list_alloc_chain(const unsigned int chain_length) {
 
     assert(chain_length >= 1);
 
-    L = list_mem_alloc(sizeof(PGenericList) * chain_length);
+    L = mem_alloc(sizeof(PGenericList) * chain_length);
     if(is_null(L)) {
         mem_error("Unable to allocate chain of generic lists on the heap.");
     }
@@ -150,7 +140,7 @@ void gen_list_free_chain(PGenericList *L, PDelegate *free_elm_fnc) {
         free_elm_fnc(curr->_elm);
         curr = (PGenericList *) list_get_next((PList *) curr);
     }
-    list_mem_free(L);
+    mem_free(L);
 }
 
 /**

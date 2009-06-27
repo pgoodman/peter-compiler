@@ -14,10 +14,34 @@
 
 #include <p-regexp.h>
 
+#include <adt-nfa.h>
+
 int main(void) {
 
-    PParseTree *parse_tree = parse_regexp("src/grammars/regexp.g");
-    printf("parse tree: %p \n", (void *) parse_tree);
+    /*parse_regexp("src/grammars/regexp.g");*/
+
+    PNFA *nfa = nfa_alloc();
+
+    unsigned int i, j, k, l;
+
+    i = nfa_add_state(nfa, 0);
+    j = nfa_add_state(nfa, 0);
+    k = nfa_add_state(nfa, 0);
+    l = nfa_add_state(nfa, 1);
+
+    nfa_change_start_state(nfa, i);
+
+    nfa_add_epsilon_transition(nfa, i, j);
+    nfa_add_epsilon_transition(nfa, i, l);
+    nfa_add_epsilon_transition(nfa, k, l);
+    nfa_add_epsilon_transition(nfa, k, j);
+
+    nfa_add_value_transition(nfa, j, k, 'a');
+
+    nfa_print_dot(nfa);
+
+    nfa_free(nfa);
+
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
