@@ -8,7 +8,7 @@
 
 #include <p-parser.h>
 
-#define D(x) x
+#define D(x)
 
 #define PT_ENABLE_TREE_REDUCTIONS 1
 
@@ -378,8 +378,6 @@ void parse_tokens(PGrammar *grammar,
         scanner_fnc,
         parser.tree_set
     );
-
-    printf("first token %p \n", (void *) token);
 
     D( printf("%d tokens in memory, configuring... \n", PTS_size(parser.tree_set)); )
 

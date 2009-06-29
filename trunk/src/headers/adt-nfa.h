@@ -9,7 +9,11 @@
 #ifndef ADTNFA_H_
 #define ADTNFA_H_
 
+#include "adt-dict.h"
 #include "adt-set.h"
+#include "func-delegate.h"
+
+#define NFA_MAX_KNOWN_UNUSED_STATES 64
 
 typedef struct PNFA {
     unsigned int num_states,
@@ -17,20 +21,28 @@ typedef struct PNFA {
                  num_state_slots,
                  num_transition_slots,
                  start_state,
-                 current_state;
-    void *states,
-         *transitions;
+                 current_state,
+                 num_unused_states,
+                 unused_states[NFA_MAX_KNOWN_UNUSED_STATES];
+    void *transitions,
+         **state_transitions,
+         **destination_states;
+    PSet *accepting_states;
 } PNFA;
 
 PNFA *nfa_alloc(void);
 
 void nfa_free(PNFA *nfa);
 
+PNFA *nfa_to_dfa(PNFA *nfa);
+
 void nfa_change_start_state(PNFA *nfa, unsigned int start_state);
 
 unsigned int nfa_add_state(PNFA *nfa);
 
 void nfa_add_accepting_state(PNFA *nfa, unsigned int which_state);
+
+void nfa_merge_states(PNFA *nfa, unsigned int state_a, unsigned int state_b);
 
 void nfa_add_epsilon_transition(PNFA *nfa,
                                 unsigned int start_state,

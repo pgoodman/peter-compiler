@@ -135,8 +135,8 @@ static void H_slots_grow(H_type *H ) {
  */
 void *gen_dict_alloc(const size_t dict_struct_size,
                      uint32_t num_slots,
-                     H_hash_fnc_type key_hash_fnc,
-                     H_collision_fnc_type key_collision_fnc) {
+                     H_hash_fnc_type *key_hash_fnc,
+                     H_collision_fnc_type *key_collision_fnc) {
     H_type *H;
     H_Entry **elms;
     int i;
@@ -182,8 +182,8 @@ void *gen_dict_alloc(const size_t dict_struct_size,
  * Allocate a hash table on the heap.
  */
 H_type *dict_alloc(const uint32_t num_slots,
-                   H_hash_fnc_type key_hash_fnc,
-                   H_collision_fnc_type key_collision_fnc) {
+                   H_hash_fnc_type *key_hash_fnc,
+                   H_collision_fnc_type *key_collision_fnc) {
     return (H_type *) gen_dict_alloc(
         sizeof(H_type),
         num_slots,
@@ -196,8 +196,8 @@ H_type *dict_alloc(const uint32_t num_slots,
  * Free a hash table.
  */
 void dict_free(H_type *H,
-               H_free_key_fnc_type free_key_fnc,
-               H_free_val_fnc_type free_val_fnc) {
+               H_free_key_fnc_type *free_key_fnc,
+               H_free_val_fnc_type *free_val_fnc) {
 
     uint32_t i;
     H_Entry *entry,
@@ -231,7 +231,7 @@ void dict_free(H_type *H,
 void dict_set(H_type *H,
               H_key_type key,
               H_val_type val,
-              H_free_val_fnc_type free_val_fnc) {
+              H_free_val_fnc_type *free_val_fnc) {
 
     uint32_t i;
     H_Entry *entry;
@@ -279,8 +279,8 @@ void dict_set(H_type *H,
  */
 void dict_unset(H_type *H,
                 H_key_type key,
-                H_free_key_fnc_type free_key_fnc,
-                H_free_val_fnc_type free_val_fnc) {
+                H_free_key_fnc_type *free_key_fnc,
+                H_free_val_fnc_type *free_val_fnc) {
 
     H_Entry *entry = NULL,
             *prev = NULL,
@@ -360,6 +360,6 @@ uint32_t dict_pointer_hash_fnc(void *pointer) {
 /**
  * Check if two pointers are the same.
  */
-char dict_pointer_collision_fnc(void *a, void *b) {
+int dict_pointer_collision_fnc(void *a, void *b) {
     return (a != b);
 }
