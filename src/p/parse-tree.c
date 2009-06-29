@@ -227,8 +227,8 @@ void parse_tree_print_dot(PParseTree *parse_tree,
 PT_Set *PTS_alloc(void) {
     return dict_alloc(
         53,
-        &dict_pointer_hash_fnc,
-        &dict_pointer_collision_fnc
+        (PDictionaryHashFunc *) &dict_pointer_hash_fnc,
+        (PDictionaryCollisionFunc *) &dict_pointer_collision_fnc
     );
 }
 

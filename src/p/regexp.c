@@ -8,6 +8,8 @@
 
 #include <p-regexp.h>
 
+#define NFA_MAX 256
+
 static char buffer[3],
             curr_char;
 
@@ -19,6 +21,7 @@ static unsigned int line = 0,
 
 static FILE *fp = NULL;
 
+/* grammar terminals */
 enum {
     L_START_GROUP,
     L_END_GROUP,
@@ -41,6 +44,7 @@ enum {
     L_ANY_CHAR
 };
 
+/* grammar non-terminals */
 enum {
     P_MACHINE,
     P_EXPR,
@@ -48,7 +52,6 @@ enum {
     P_FACTOR,
     P_TERM,
     P_OR_EXPR,
-    P_STRING,
     P_CHAR,
     P_CHAR_CLASS_STRING,
     P_OPT_CHAR_CLASS_STRING,
@@ -60,12 +63,18 @@ enum {
     P_OPTIONAL_TERM
 };
 
+/* data structure holding information to perform Thompson's construction while
+ * the parse tree is being traversed. */
 typedef struct PThompsonsConstruction {
     PNFA *nfa;
-    unsigned int state_stack[256];
+    unsigned int state_stack[NFA_MAX];
     int top_state;
 } PThompsonsConstruction;
 
+/**
+ * The top-level non-terminal action. This ties all of the information together
+ * for the NFA. Machine deals with anchors, and an expression between anchors.
+ */
 static void Machine(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
@@ -145,6 +154,17 @@ static void Machine(PThompsonsConstruction *thompson,
     nfa_add_accepting_state(thompson->nfa, end);
 }
 
+/**
+ * For N >= 2 expressions A1, A2, ..., An, the A1A2..An is turned into the
+ * following structure:
+ *
+ * >--(inter_start1)--A1--(inter_end1)-->
+ * >--(inter_start2)--A2--(inter_end2)-->
+ * >--(inter_start3)--A3--(inter_end3)-->
+ *
+ * >--(inter_start3)--A3--(inter_start2)--A2--(inter_start1)--A1--(inter_end1)-->
+ *
+ */
 static void CatExpr(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
@@ -160,47 +180,58 @@ static void CatExpr(PThompsonsConstruction *thompson,
             inter_start = thompson->state_stack[thompson->top_state];
             inter_end = thompson->state_stack[thompson->top_state - 3];
 
-            nfa_add_epsilon_transition(
-                thompson->nfa,
-                inter_end,
-                inter_start
-            );
+            nfa_merge_states(thompson->nfa, inter_end, inter_start);
 
             thompson->top_state -= 2;
         }
     }
 
-    printf("bottom of stack: %d \n", thompson->top_state - 1);
-
     thompson->state_stack[thompson->top_state - 1] = end;
 }
 
+/**
+ * For two sub-expression A and B, A|B is turned into the following structure:
+ *
+ * >--(a1_start)--A--(a1_end)-->
+ *
+ * >--(a2_start)--B--(a2_end)-->
+ *
+ * becomes:
+ *
+ *                 .--A--(a1_end)--.
+ * >--(a1_start)--|                 |--(end)-->
+ *                 `--B--(a2_end)--'
+ *
+ */
 static void OrExpr(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    unsigned int a1_start, a1_end, a2_start, a2_end, start, end;
+    unsigned int a1_start, a1_end, a2_start, a2_end, end;
 
     a1_start = thompson->state_stack[thompson->top_state--];
     a1_end = thompson->state_stack[thompson->top_state--];
     a2_start = thompson->state_stack[thompson->top_state--];
     a2_end = thompson->state_stack[thompson->top_state--];
 
-    start = nfa_add_state(thompson->nfa);
+    nfa_merge_states(thompson->nfa, a1_start, a2_start);
     end = nfa_add_state(thompson->nfa);
-
-    nfa_add_epsilon_transition(thompson->nfa, start, a1_start);
-    nfa_add_epsilon_transition(thompson->nfa, start, a2_start);
 
     nfa_add_epsilon_transition(thompson->nfa, a1_end, end);
     nfa_add_epsilon_transition(thompson->nfa, a2_end, end);
 
     thompson->state_stack[++thompson->top_state] = end;
-    thompson->state_stack[++thompson->top_state] = start;
+    thompson->state_stack[++thompson->top_state] = a1_start;
 }
 
-static void String(PThompsonsConstruction *thompson,
+/**
+ * For some character A, A is turned into the following structure:
+ *
+ * (start)--A--(end)
+ *
+ */
+static void Char(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
@@ -208,20 +239,19 @@ static void String(PThompsonsConstruction *thompson,
     unsigned int start, prev, end, i;
     PT_Terminal *character;
 
-    start = nfa_add_state(thompson->nfa);
-    prev = start;
-
-    for(i = 0; i < num_branches; ++i) {
-        character = (PT_Terminal *) branches[i];
-        end = nfa_add_state(thompson->nfa);
-        nfa_add_value_transition(
-             thompson->nfa,
-             prev,
-             end,
-             character->lexeme->str[0]
-        );
-        prev = end;
+    if(thompson->top_state >= NFA_MAX-1) {
+        std_error("Internal Error: Unable to continue Thompson's Construction.");
     }
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    nfa_add_value_transition(
+         thompson->nfa,
+         start,
+         end,
+         ((PT_Terminal *) branches[0])->lexeme->str[0]
+    );
 
     thompson->state_stack[++thompson->top_state] = end;
     thompson->state_stack[++thompson->top_state] = start;
@@ -239,6 +269,10 @@ static void R_char_class(PThompsonsConstruction *thompson,
     unsigned int start, end, i;
     unsigned char range_start, range_end;
     PT_NonTerminal *range;
+
+    if(thompson->top_state >= NFA_MAX-1) {
+        std_error("Internal Error: Unable to continue Thompson's Construction.");
+    }
 
     for(i = 0; i < num_branches; ++i) {
         if(branches[i]->type == PT_NON_TERMINAL) {
@@ -262,6 +296,13 @@ static void R_char_class(PThompsonsConstruction *thompson,
     thompson->state_stack[++thompson->top_state] = start;
 }
 
+/**
+ * For all characters c in some character class C, C is turned into the following
+ * structure:
+ *
+ * >--(start)--IN({c1, c2, ..., cN})--(end)-->
+ *
+ */
 static void CharClass(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
@@ -276,6 +317,13 @@ static void CharClass(PThompsonsConstruction *thompson,
     );
 }
 
+/**
+ * For all characters c in some negated character class C, C is turned into the
+ * following structure:
+ *
+ * >--(start)--IN(COMPLEMENT({c1, c2, ..., cN}))--(end)-->
+ *
+ */
 static void NegatedCharClass(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
@@ -290,78 +338,91 @@ static void NegatedCharClass(PThompsonsConstruction *thompson,
     );
 }
 
+/**
+ * For some sub-expression A, A* is turned into the following structure:
+ *
+ * >--(loop_start)--A--(loop_end)-->
+ *
+ * becomes:
+ *                .-->--A--(loop_end)
+ *               |         .--<--'
+ * >--(start)----(loop_start)-->
+ *
+ */
 static void KleeneClosure(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
-    unsigned int c_start, c_end, start, end, loop_start, loop_end;
+    unsigned int start, loop_start, loop_end;
 
     loop_start = thompson->state_stack[thompson->top_state--];
     loop_end = thompson->state_stack[thompson->top_state--];
 
     start = nfa_add_state(thompson->nfa);
-    end = nfa_add_state(thompson->nfa);
 
-    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
-    nfa_add_epsilon_transition(thompson->nfa, start, end);
-    nfa_add_epsilon_transition(thompson->nfa, loop_end, end);
     nfa_add_epsilon_transition(thompson->nfa, loop_end, loop_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
 
-    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = loop_start;
     thompson->state_stack[++thompson->top_state] = start;
 }
 
+/**
+ * For some sub-expression A, A+ is turned into the following structure:
+ *
+ * >--(loop_start)--A--(loop_end)-->
+ *
+ * becomes:
+ *                 .-->--A--(loop_end)-->
+ *                |     .--<--'
+ * >--(start)-->--(loop_start)
+ *
+ */
 static void PositiveClosure(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
-    unsigned int c_start, c_end, start, end, loop_start, loop_end;
 
-    loop_start = thompson->state_stack[thompson->top_state--];
-    loop_end = thompson->state_stack[thompson->top_state--];
+    unsigned int start, loop_start, loop_end;
 
     start = nfa_add_state(thompson->nfa);
-    end = nfa_add_state(thompson->nfa);
+    loop_start = thompson->state_stack[thompson->top_state];
+    loop_end = thompson->state_stack[thompson->top_state - 1];
 
-    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
-    nfa_add_epsilon_transition(thompson->nfa, loop_end, end);
     nfa_add_epsilon_transition(thompson->nfa, loop_end, loop_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
 
-    thompson->state_stack[++thompson->top_state] = end;
-    thompson->state_stack[++thompson->top_state] = start;
+    thompson->state_stack[thompson->top_state] = start;
 }
 
+/**
+ * For some sub-expression A, A? is turned into the following structure:
+ *
+ * >--(start)--A--(end)-->
+ *        '--<--<--'
+ *
+ */
 static void OptionalTerm(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
-unsigned int c_start, c_end, start, end, loop_start, loop_end;
 
-    loop_start = thompson->state_stack[thompson->top_state--];
-    loop_end = thompson->state_stack[thompson->top_state--];
-
-    start = nfa_add_state(thompson->nfa);
-    end = nfa_add_state(thompson->nfa);
-
-    nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
-    nfa_add_epsilon_transition(thompson->nfa, start, end);
-    nfa_add_epsilon_transition(thompson->nfa, loop_end, end);
-
-    thompson->state_stack[++thompson->top_state] = end;
-    thompson->state_stack[++thompson->top_state] = start;
+    nfa_add_epsilon_transition(
+       thompson->nfa,
+       thompson->state_stack[thompson->top_state],
+       thompson->state_stack[thompson->top_state - 1]
+    );
 }
 
+/**
+ * Scan the input letter-by-letter until a lexeme is matched. Stuff the lexeme
+ * into the 'token' variable along with any other information such as
+ * line/column number, etc.
+ */
 static int R_get_token(PScanner *scanner, PToken *token) {
 
-    do {
-        ++column;
-        curr_char = fgetc(fp);
-
-        if(curr_char == '\n') {
-            ++line;
-            column = 0;
-        }
-    } while(isspace(curr_char));
+    ++column;
+    curr_char = fgetc(fp);
 
     if(feof(fp)) {
         return 0;
@@ -374,6 +435,27 @@ static int R_get_token(PScanner *scanner, PToken *token) {
 
     buffer[1] = 0;
     buffer[0] = curr_char;
+
+    if(isspace(curr_char)) {
+        switch(curr_char) {
+            case '\n':
+                ++line;
+                column = 0;
+                token->terminal = L_NEW_LINE;
+                break;
+            case '\r':
+                token->terminal = L_CARRIAGE_RETURN;
+                break;
+            case '\t':
+                token->terminal = L_TAB;
+                break;
+            default:
+                token->terminal = L_SPACE;
+                break;
+        }
+
+        return 1;
+    }
 
     if(in_char_class) {
         goto any_char;
@@ -464,7 +546,11 @@ all_chars:
     return 1;
 }
 
+/**
+ * Construct the grammar for recognizing a regular expression.
+ */
 static PGrammar *regex_grammar(void) {
+
     PGrammar *G = grammar_alloc(
         P_MACHINE, /* production to start matching with */
         16, /* number of non-terminals */
@@ -593,7 +679,7 @@ static PGrammar *regex_grammar(void) {
      * Term
      *     : -NegatedCharacterClass
      *     : -CharacterClass
-     *     : -String
+     *     : -Char
      *     : <start_group> ^Expr <end_group>
      *     ;
      */
@@ -602,7 +688,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_CHARACTER_CLASS, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_STRING, G_NON_EXCLUDABLE);
+    grammar_add_non_terminal_symbol(G, P_CHAR, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_START_GROUP, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
@@ -696,30 +782,23 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_CARRIAGE_RETURN, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR, &grammar_null_action);
-
-    /*
-     * String
-     *     : ^Char ^String
-     *     : ^Char
-     *     ;
-     */
-
-    grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
-    grammar_add_non_terminal_symbol(G, P_STRING, G_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_STRING, (G_ProductionRuleFunc *) &String);
+    grammar_add_production_rule(G, P_CHAR,(G_ProductionRuleFunc *) &Char);
 
     return G;
 }
 
+/**
+ * Parse a regular expression, turn it into a NFA using Thompson's construction,
+ * then turn that NFA into a DFA using subset construction, then minimize the
+ * DFA.
+ */
 void parse_regexp(const char *file) {
 
     PScanner *scanner = (PScanner *) 0x1; /* fake scanner */
     PGrammar *grammar = regex_grammar();
     PThompsonsConstruction thom, *thompson = &thom;
+    PNFA *dfa;
+    int i;
 
     if(is_not_null(fp = fopen(file, "r"))) {
 
@@ -736,58 +815,22 @@ void parse_regexp(const char *file) {
 
         printf("\nFreeing memory.. \n");
 
+        fclose(fp);
         grammar_free(grammar);
 
         nfa_print_dot(thompson->nfa);
 
-        nfa_free(thompson->nfa);
+        printf("\n\n\n");
 
-        fclose(fp);
+
+        dfa = nfa_to_dfa(thompson->nfa);
+        nfa_print_dot(dfa);
+        nfa_free(dfa);
+
+
+        nfa_free(thompson->nfa);
     } else {
         printf("Error: Could not open file '%s'.", file);
     }
 }
-
-/*
-char terminal_names[19][40] = {
-    "start_group",
-    "end_group",
-    "start_class",
-    "start_neg_class",
-    "end_class",
-    "positive_closure",
-    "kleene_closure",
-    "optional",
-    "carrot",
-    "anchor_start",
-    "anchor_end",
-    "or",
-    "character_range",
-    "character",
-    "space",
-    "new_line",
-    "carriage_return",
-    "tab",
-    "any_char"
-};
-
-char production_names[16][40] = {
-    "Machine",
-    "Expr",
-    "Concatenate",
-    "Factor",
-    "Term",
-    "OrExpr",
-    "String",
-    "Char",
-    "CharClassString",
-    "OptCharClassString",
-    "CharRange",
-    "CharClass",
-    "NegatedCharClass",
-    "KleeneClosure",
-    "PositiveClosure",
-    "OptionalTerm"
-};
-*/
 
