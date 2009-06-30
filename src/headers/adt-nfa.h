@@ -48,10 +48,14 @@ void nfa_add_epsilon_transition(PNFA *nfa,
                                 unsigned int start_state,
                                 unsigned int end_state);
 
+void nfa_add_alpha_transition(PNFA *nfa,
+                              unsigned int start_state,
+                              unsigned int end_state);
+
 void nfa_add_value_transition(PNFA *nfa,
                               unsigned int start_state,
                               unsigned int end_state,
-                              unsigned int test_value);
+                              int test_value);
 
 void nfa_add_set_transition(PNFA *nfa,
                             unsigned int start_state,

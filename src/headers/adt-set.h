@@ -35,6 +35,10 @@ void set_remove_elm(PSet *set, unsigned int elm);
 
 int set_has_elm(PSet *set, unsigned int elm);
 
+void set_truncate(PSet *set);
+
+void set_empty(PSet *set);
+
 int set_is_subset(PSet *super_set, PSet *possible_subset);
 
 int set_equals(const PSet *set_a, const PSet *set_b);

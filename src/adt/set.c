@@ -8,7 +8,7 @@
 
 #include <adt-set.h>
 
-#define S_DEFAULT_SIZE 8
+#define S_DEFAULT_SIZE 4
 
 static const unsigned int STOP_GROW_SIZE = (((unsigned int) -1) / 2);
 
@@ -118,13 +118,13 @@ static void S_union(PSet *set_a, PSet *set_b, PSet *new_set) {
     if(set_a->num_slots > set_b->num_slots) {
         elm_large = set_a->map;
         elm_small = set_b->map;
-        prefix_size = set_b->num_slots / 8;
-        suffix_size = (set_a->num_slots / 8) - prefix_size;
+        prefix_size = set_b->num_slots / 4;
+        suffix_size = (set_a->num_slots / 4) - prefix_size;
     } else {
         elm_large = set_b->map;
         elm_small = set_a->map;
-        prefix_size = set_a->num_slots / 8;
-        suffix_size = (set_b->num_slots / 8) - prefix_size;
+        prefix_size = set_a->num_slots / 4;
+        suffix_size = (set_b->num_slots / 4) - prefix_size;
     }
 
     elm_new = new_set->map;
@@ -138,26 +138,10 @@ static void S_union(PSet *set_a, PSet *set_b, PSet *new_set) {
         new_num_entries += S_num_bits(*elm_new);
         *++elm_new = *++elm_large | *++elm_small;
         new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
     }
 
     for(; suffix_size--; ++elm_large, ++elm_new) {
         *elm_new = *elm_large | *elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
-        new_num_entries += S_num_bits(*elm_new);
-        *++elm_new = *++elm_large | *++elm_small;
         new_num_entries += S_num_bits(*elm_new);
         *++elm_new = *++elm_large | *++elm_small;
         new_num_entries += S_num_bits(*elm_new);
@@ -240,6 +224,46 @@ int set_has_elm(PSet *set, unsigned int elm) {
 }
 
 /**
+ * Truncate a set down to the default size and then remove all elements.
+ */
+void set_truncate(PSet *set) {
+    if(is_not_null(set) && set->num_slots > S_DEFAULT_SIZE) {
+        set->num_slots = S_DEFAULT_SIZE;
+        set->num_bits = S_DEFAULT_SIZE * 32;
+        set->map = mem_realloc(set->map, sizeof(uint32_t) * S_DEFAULT_SIZE);
+        if(is_null(set->map)) {
+            mem_error("Internal Set Error: Unable to truncate set.");
+        }
+    }
+
+    set_empty(set);
+}
+
+/**
+ * Remove all elements from a set.
+ */
+void set_empty(PSet *set) {
+    int max;
+    uint32_t *map;
+
+    /* try to either fail or succeed fast */
+    if(is_null(set) || !set->num_entries) {
+        return;
+    }
+
+    max = set->num_slots / 4;
+    map = set->map;
+
+    /* go eight cells at a time and compare the sets */
+    for(; --max >= 0; ) {
+        *map = 0;
+        *++map = 0;
+        *++map = 0;
+        *++map = 0;
+    }
+}
+
+/**
  * Check if possible_subset is a subset of super_set.
  */
 int set_is_subset(PSet *super_set, PSet *possible_subset) {
@@ -293,17 +317,13 @@ int set_equals(const PSet *set_a, const PSet *set_b) {
         return 0;
     }
 
-    max = set_a->num_slots / 8;
+    max = set_a->num_slots / 4;
     map_a = set_a->map;
     map_b = set_b->map;
 
     /* go eight cells at a time and compare the sets */
     for(; --max >= 0; ) {
         if(*map_a != *map_b
-        || *++map_a != *++map_b
-        || *++map_a != *++map_b
-        || *++map_a != *++map_b
-        || *++map_a != *++map_b
         || *++map_a != *++map_b
         || *++map_a != *++map_b
         || *++map_a != *++map_b) {

@@ -21,15 +21,17 @@
 
 typedef struct NFA_Transition {
     enum {
-        T_VALUE,
-        T_SET,
-        T_EPSILON
+        T_VALUE=1,
+        T_SET=2,
+        T_EPSILON=4,
+        T_ALPHA=8
     } type;
     union {
-        unsigned int value;
+        int value;
         PSet *set;
     } condition;
-    unsigned int to_state;
+    unsigned int to_state,
+                 id;
     struct NFA_Transition *trans_next,
                           *dest_next;
 } NFA_Transition;
@@ -101,6 +103,7 @@ static NFA_Transition *NFA_alloc_transition(PNFA *nfa,
     trans->to_state = end_state;
     trans->trans_next = NULL;
     trans->dest_next = NULL;
+    trans->id = nfa->num_transitions - 1;
 
     /* first transition being added on the start state. */
     if(is_not_null(nfa->state_transitions[start_state])) {
@@ -144,9 +147,10 @@ static void NFA_state_map(NFA_EpsilonStack *stack, unsigned int state) {
  * Returns if the DFA state represented by the e-closure has an NFA state that
  * is accepting.
  */
-static int NFA_epsilon_closure(PNFA *nfa,
-                               PSet *states) {
-
+static int NFA_transitive_closure(PNFA *nfa,
+                                  PSet *states,
+                                  int transition_type) {
+    PSet *transitions;
     NFA_EpsilonStack stack;
     NFA_Transition *transition;
 
@@ -164,6 +168,8 @@ static int NFA_epsilon_closure(PNFA *nfa,
 
     /* add the states in the set to the stack */
     set_map(states, (void *) &stack, (PSetMap *) NFA_state_map);
+    set_truncate(states);
+    transitions = states; /* more meaningful */
 
     while(stack.ptr > stack.bottom && stack.ptr < stack.top) {
 
@@ -176,103 +182,92 @@ static int NFA_epsilon_closure(PNFA *nfa,
 
         for(; is_not_null(transition); transition = transition->trans_next) {
 
-            D( printf("\t\t in %p. \n", (void *) transition); )
-
-            if(transition->type == T_EPSILON
-            && !set_has_elm(states, transition->to_state)) {
-
-                if(stack.ptr >= stack.top) {
-                    std_error("Internal Error: Unable to continue e-closure.");
-                }
-
-                set_add_elm(states, transition->to_state);
-                *(stack.ptr++) = transition->to_state;
-
-                D( printf(
-                    "\t\t\t Epsilon closure contains state %d \n",
-                    transition->to_state
-                ); )
+            if(set_has_elm(transitions, transition->id)) {
+                continue;
             }
 
-            D( printf("\t\t out. \n"); )
+            if(transition->type == T_EPSILON) {
+                *(stack.ptr++) = transition->to_state;
+            } else {
+                set_add_elm(transitions, transition->id);
+            }
         }
     }
 
-    D( printf(
-        "\t done, epsilon closure has %d NFA states. \n",
-        set_cardinality(states)
-    ); )
+    D( printf("\t done. \n"); )
 
     return is_accepting;
 }
 
 /**
- * Simulate transitions from the states in the input_set over an input from our
- * alphabet. Return the set of states that we successfully transitioned to from
- * the set of input states.
+ * Simulate transitions from the transitions in input_transitions to their
+ * respective states and then return that set of states. *
  */
 static PSet *NFA_simulate_transition(PNFA *nfa,
-                                     PSet *input_set,
-                                     unsigned int input) {
+                                     PSet *input_transitions,
+                                     int input) {
 
-    PSet *output_set = NULL;
-
-    unsigned int state = 0;
-    int i = nfa->num_states;
-
-    NFA_Transition *transition,
-                   **state_transitions = (NFA_Transition **) nfa->state_transitions;
+    int i = nfa->num_transitions;
+    PSet *output_states = NULL;
+    NFA_Transition *transition = (NFA_Transition *) nfa->transitions;
 
     D( printf("\t simulating transition on ASCII %d... \n", input); )
 
-    for(; --i >= 0; ++state) {
+    for(; --i >= 0; ++transition) {
 
-        if(!set_has_elm(input_set, state)) {
+        if(!set_has_elm(input_transitions, transition->id)) {
             continue;
         }
 
-        transition = *(((NFA_Transition **) state_transitions) + state);
+        switch(transition->type) {
+        case T_VALUE:
+            if(transition->condition.value == input) {
 
-        for(; is_not_null(transition);
-            transition = transition->trans_next) {
+                D( printf(
+                    "\t\t transition found on '%c', adding state %d \n",
+                    (char) input,
+                    transition->to_state
+                ); )
 
-            if(transition->type == T_VALUE) {
-                if(transition->condition.value == input) {
-
-                    D( printf(
-                        "\t\t transition found on '%c', adding state %d \n",
-                        (char) input,
-                        transition->to_state
-                    ); )
-
-                    if(is_null(output_set)) {
-                        output_set = set_alloc();
-                    }
-
-                    set_add_elm(output_set, transition->to_state);
+                if(is_null(output_states)) {
+                    output_states = set_alloc();
                 }
-            } else if(transition->type == T_SET) {
-                if(set_has_elm(transition->condition.set, input)) {
 
-                    D( printf(
-                        "\t\t transition found on '%c', adding state %d \n",
-                        (char) input,
-                        transition->to_state
-                    ); )
-
-                    if(is_null(output_set)) {
-                        output_set = set_alloc();
-                    }
-
-                    set_add_elm(output_set, transition->to_state);
-                }
+                set_add_elm(output_states, transition->to_state);
             }
+            break;
+        case T_SET:
+            if(set_has_elm(transition->condition.set, input)) {
+
+                D( printf(
+                    "\t\t transition found on '%c', adding state %d \n",
+                    (char) input,
+                    transition->to_state
+                ); )
+
+                if(is_null(output_states)) {
+                    output_states = set_alloc();
+                }
+
+                set_add_elm(output_states, transition->to_state);
+            }
+            break;
+        case T_ALPHA:
+            if(input < 0) {
+                if(is_null(output_states)) {
+                    output_states = set_alloc();
+                }
+                set_add_elm(output_states, transition->to_state);
+            }
+            break;
+        default:
+            break;
         }
     }
 
-    D( printf("\t done, number of transitions %d. \n", set_cardinality(output_set)); )
+    D( printf("\t done. \n"); )
 
-    return output_set;
+    return output_states;
 }
 
 /**
@@ -280,11 +275,12 @@ static PSet *NFA_simulate_transition(PNFA *nfa,
  */
 static unsigned int NFA_max_alphabet_char(PNFA *nfa) {
 
-    unsigned int max = 0;
+    unsigned int i = nfa->num_transitions;
+    int max = 0,
+        j;
 
     NFA_Transition *trans = (NFA_Transition *) nfa->transitions;
-    unsigned int i = nfa->num_transitions,
-                 j;
+
     D( printf("\t finding the maximum alphabet character... \n"); )
 
     for(; i--; ++trans) {
@@ -388,14 +384,13 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
 
     unsigned int next_state_id,
                  prev_state_id,
-                 num_dfa_states = 0,
-                 num_dfa_slots = NFA_NUM_DEFAULT_STATES;
+                 num_dfa_states = 0;
 
     int largest_char = NFA_max_alphabet_char(nfa) + 1,
         c,
         is_accepting;
 
-    DFA_State *dfa_state_stack,
+    DFA_State dfa_state_stack[NFA_NUM_DEFAULT_STATES],
               *state,
               *new_state;
 
@@ -415,14 +410,6 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
 
     D( printf("starting. \n"); )
 
-    /* this stack holds all DFA state information. the set of NFA states
-     * represented by a DFA state is only meaningful in the context of DFA
-     * construction and so it is stored here instead of elsewhere. */
-    dfa_state_stack = mem_alloc(sizeof(DFA_State) * num_dfa_slots);
-    if(is_null(dfa_state_stack)) {
-        mem_error("Internal Error: Unable to begin converting NFA to DFA. \n");
-    }
-
     /* start everything off by finding the epsilon closure of the starting
      * state of the NFA. the starting state is simultaneously in all states
      * within the epsilon closure of itself, and so the set of those states
@@ -440,7 +427,7 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
        );
     )
 
-    if(NFA_epsilon_closure(nfa, dfa_state_stack->nfa_states)) {
+    if(NFA_transitive_closure(nfa, dfa_state_stack->nfa_states, T_EPSILON)) {
         nfa_add_accepting_state(dfa, dfa_state_stack->id);
     }
 
@@ -460,7 +447,7 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
 
     ++num_dfa_states;
 
-    while(num_dfa_states > 0 && num_dfa_states < num_dfa_slots) {
+    while(num_dfa_states > 0 && num_dfa_states < NFA_NUM_DEFAULT_STATES) {
 
         /* take the top state off of the stack and use it. */
         state = dfa_state_stack + --num_dfa_states;
@@ -469,7 +456,8 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
 
         D( printf("Simulating state transitions... \n"); )
 
-        for(c = largest_char; --c >= 0; ) {
+        /* -1 is for testing alpha-transitions */
+        for(c = largest_char; --c >= -1; ) {
 
             /* for each state in state->nfa_states, attempt to transition on the
              * input c and if a transition on c exists then add the destination
@@ -484,7 +472,7 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
              * they are simultaneously at by adding the transitive closure of
              * epsilon transitions to the transition_set. */
             is_accepting = 0;
-            if(NFA_epsilon_closure(nfa, transition_set)) {
+            if(NFA_transitive_closure(nfa, transition_set, T_EPSILON)) {
                 is_accepting = 1;
             }
 
@@ -545,8 +533,6 @@ clean_up:
         (PDictionaryFreeKeyFunc *) &set_free,
         &delegate_do_nothing
     );
-
-    mem_free(dfa_state_stack);
 
     D( printf("done. \n\n"); )
 
@@ -673,6 +659,18 @@ void nfa_add_epsilon_transition(PNFA *nfa,
 }
 
 /**
+ * Add an alpha transition to the NFA starting from start_state an going to
+ * end_state. These transitions are taken automatically iff all other non-alpha
+ * transitions have failed.
+ */
+void nfa_add_alpha_transition(PNFA *nfa,
+                              unsigned int start_state,
+                              unsigned int end_state) {
+    NFA_Transition *trans = NFA_alloc_transition(nfa, start_state, end_state);
+    trans->type = T_ALPHA;
+}
+
+/**
  * Add a value transition to the NFA starting from start_state an going to
  * end_state. These transitions are taken if their value corresponds with the
  * expected value.
@@ -680,10 +678,14 @@ void nfa_add_epsilon_transition(PNFA *nfa,
 void nfa_add_value_transition(PNFA *nfa,
                               unsigned int start_state,
                               unsigned int end_state,
-                              unsigned int test_value) {
+                              int test_value) {
     NFA_Transition *trans = NFA_alloc_transition(nfa, start_state, end_state);
-    trans->type = T_VALUE;
-    trans->condition.value = test_value;
+    if(test_value < 0) {
+        trans->type = T_ALPHA;
+    } else {
+        trans->type = T_VALUE;
+        trans->condition.value = test_value;
+    }
 }
 
 /**
@@ -759,6 +761,13 @@ void nfa_print_dot(PNFA *nfa) {
                 case T_EPSILON:
                     printf(
                         "Ox%d -> Ox%d [label=< &#949;  >] \n",
+                        state,
+                        transition->to_state
+                    );
+                    break;
+                case T_ALPHA:
+                    printf(
+                        "Ox%d -> Ox%d [label=< &#945;  >] \n",
                         state,
                         transition->to_state
                     );
