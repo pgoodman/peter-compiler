@@ -399,7 +399,7 @@ static void PositiveClosure(PThompsonsConstruction *thompson,
  * For some sub-expression A, A? is turned into the following structure:
  *
  * >--(start)--A--(end)-->
- *        '--<--<--'
+ *        '-->-->--'
  *
  */
 static void OptionalTerm(PThompsonsConstruction *thompson,
