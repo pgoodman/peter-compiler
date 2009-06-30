@@ -266,7 +266,7 @@ static void R_char_class(PThompsonsConstruction *thompson,
                          PSet *set,
                          R_set_elm_fnc_t *fnc) {
 
-    unsigned int start, end, i;
+    unsigned int start, end, char_start, char_end, i;
     unsigned char range_start, range_end;
     PT_NonTerminal *range;
 
@@ -289,10 +289,13 @@ static void R_char_class(PThompsonsConstruction *thompson,
     }
 
     start = nfa_add_state(thompson->nfa);
-    end = nfa_add_state(thompson->nfa);
-    nfa_add_set_transition(thompson->nfa, start, end, set);
+    char_start = nfa_add_state(thompson->nfa);
+    char_end = nfa_add_state(thompson->nfa);
 
-    thompson->state_stack[++thompson->top_state] = end;
+    nfa_add_alpha_transition(thompson->nfa, start, char_start);
+    nfa_add_set_transition(thompson->nfa, char_start, char_end, set);
+
+    thompson->state_stack[++thompson->top_state] = char_end;
     thompson->state_stack[++thompson->top_state] = start;
 }
 
@@ -345,7 +348,7 @@ static void NegatedCharClass(PThompsonsConstruction *thompson,
  *
  * becomes:
  *                .-->--A--(loop_end)
- *               |         .--<--'
+ *               |       .--<--'
  * >--(start)----(loop_start)-->
  *
  */
@@ -353,15 +356,17 @@ static void KleeneClosure(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
-    unsigned int start, loop_start, loop_end;
+    unsigned int start, end, loop_start, loop_end;
 
     loop_start = thompson->state_stack[thompson->top_state--];
     loop_end = thompson->state_stack[thompson->top_state--];
 
     start = nfa_add_state(thompson->nfa);
+    /*end = nfa_add_state(thompson->nfa);*/
 
     nfa_add_epsilon_transition(thompson->nfa, loop_end, loop_start);
     nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
+    /*nfa_add_alpha_transition(thompson->nfa, loop_start, end);*/
 
     thompson->state_stack[++thompson->top_state] = loop_start;
     thompson->state_stack[++thompson->top_state] = start;
@@ -374,7 +379,7 @@ static void KleeneClosure(PThompsonsConstruction *thompson,
  *
  * becomes:
  *                 .-->--A--(loop_end)-->
- *                |     .--<--'
+ *                |       .--<--'
  * >--(start)-->--(loop_start)
  *
  */
@@ -407,7 +412,7 @@ static void OptionalTerm(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    nfa_add_epsilon_transition(
+    nfa_add_alpha_transition(
        thompson->nfa,
        thompson->state_stack[thompson->top_state],
        thompson->state_stack[thompson->top_state - 1]
@@ -822,13 +827,15 @@ void parse_regexp(const char *file) {
 
         printf("\n\n\n");
 
-
         dfa = nfa_to_dfa(thompson->nfa);
+        nfa_free(thompson->nfa);
+        /*thompson->nfa = dfa;
+        dfa = nfa_to_dfa(thompson->nfa);
+        nfa_free(thompson->nfa);*/
         nfa_print_dot(dfa);
         nfa_free(dfa);
 
 
-        nfa_free(thompson->nfa);
     } else {
         printf("Error: Could not open file '%s'.", file);
     }
