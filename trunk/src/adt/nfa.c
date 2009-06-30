@@ -751,14 +751,14 @@ void nfa_print_dot(PNFA *nfa) {
                     break;
                 case T_SET:
                     printf(
-                        "Ox%d -> Ox%d [label=\" { ... } \"] \n",
+                        "Ox%d -> Ox%d [label=\" { ... }  \"] \n",
                         state,
                         transition->to_state
                     );
                     break;
                 case T_EPSILON:
                     printf(
-                        "Ox%d -> Ox%d [label=< &#949; >] \n",
+                        "Ox%d -> Ox%d [label=< &#949;  >] \n",
                         state,
                         transition->to_state
                     );
