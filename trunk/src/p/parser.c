@@ -352,13 +352,18 @@ void parse_tokens(PGrammar *grammar,
                   PTreeTraversalType tree_taversal_type) {
 
     PParser parser;
+
     P_Frame *frame = NULL,
             *caller = NULL;
+
     P_IntermediateResult *intermediate_result = NULL,
                          *temp_result = NULL;
+
     G_Symbol *symbol = NULL,
              *next_symbol = NULL;
+
     PParseTree *temp_parse_tree = NULL;
+
     PT_Terminal *token = NULL;
 
     /* useful counter, be it for hinting to GCC that a block shouldn't be
@@ -387,12 +392,6 @@ void parse_tokens(PGrammar *grammar,
     parser.call.frame = -1;
     parser.must_backtrack = 0;
 
-    /*
-    if(parser.num_tokens == 0) {
-        parse_tree_free((PParseTree *) token);
-        goto clean_the_rest;
-    }*/
-
     G_lock(grammar);
 
     /* allocate the cache table */
@@ -402,9 +401,7 @@ void parse_tokens(PGrammar *grammar,
     );
 
     /* clear out the frame stack */
-    for(j = 0; j < P_MAX_RECURSION_DEPTH; ++j) {
-        parser.call.stack[j] = NULL;
-    }
+    memset(parser.call.stack, 0, sizeof(P_Frame *) * P_MAX_RECURSION_DEPTH);
 
     /* get the starting production and push our first stack frame on. This
      * involves registering the start of the token list as the farthest back
@@ -418,9 +415,6 @@ void parse_tokens(PGrammar *grammar,
         grammar->production_rules + grammar->start_production_rule,
         token
     );
-
-    /*PTS_add(parser.tree_set, frame->parse_tree);*/
-    /*IR_create(&parser, frame->production.rule->production, 0);*/
 
     D( printf("beginning main parse...\n"); )
 
@@ -496,8 +490,6 @@ stop_left_recursion:
                     parser.must_backtrack = 0;
                     token = temp_result->end_token;
 
-
-
                     if(caller->left_recursion.is_direct) {
 
                         --(parser.call.frame);
@@ -512,8 +504,6 @@ stop_left_recursion:
 
                         goto phrase_completed;
                     }
-
-
 
                 } else {
 
@@ -637,6 +627,7 @@ pop_production_rule:
             }
 
         } else if(token->id >= parser.num_tokens && symbol->is_terminal) {
+
 end_of_input:
 
             D( printf("end of input with more tokens to parse, backtracking. \n"); )
@@ -667,6 +658,7 @@ match_cut_symbol:
             if(symbol->is_fail) {
 
 match_fail_symbol:
+
                 parser.must_backtrack = 1;
 
             /* the next non/terminal in the current rule list is a non-terminal,
@@ -773,6 +765,9 @@ cached_production_succeeded:
                 /* we do not have a cached result and so we will need to push a
                  * new frame onto the stack. */
                 } else {
+
+calling_production_symbol:
+
                     D( printf("pushing production onto stack.\n"); )
 
                     next_symbol = G_production_rule_get_symbol(

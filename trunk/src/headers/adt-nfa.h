@@ -27,6 +27,7 @@ typedef struct PNFA {
     void *transitions,
          **state_transitions,
          **destination_states;
+
     PSet *accepting_states;
 } PNFA;
 
@@ -47,10 +48,6 @@ void nfa_merge_states(PNFA *nfa, unsigned int state_a, unsigned int state_b);
 void nfa_add_epsilon_transition(PNFA *nfa,
                                 unsigned int start_state,
                                 unsigned int end_state);
-
-void nfa_add_alpha_transition(PNFA *nfa,
-                              unsigned int start_state,
-                              unsigned int end_state);
 
 void nfa_add_value_transition(PNFA *nfa,
                               unsigned int start_state,

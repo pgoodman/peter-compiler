@@ -21,7 +21,7 @@ typedef struct PSet {
     uint32_t *map;
 } PSet;
 
-typedef void (PSetMap)(void *state, unsigned int elm);
+typedef void (PSetMapFunc)(void *state, unsigned int elm);
 
 PSet *set_alloc(void);
 
@@ -39,6 +39,8 @@ void set_truncate(PSet *set);
 
 void set_empty(PSet *set);
 
+PSet *set_copy(PSet *set);
+
 int set_is_subset(PSet *super_set, PSet *possible_subset);
 
 int set_equals(const PSet *set_a, const PSet *set_b);
@@ -51,7 +53,9 @@ PSet *set_union(PSet *set_a, PSet *set_b);
 
 void set_union_inplace(PSet *set_a, PSet *set_b);
 
-void set_map(PSet *set, void *state, PSetMap *map_fnc);
+PSet *set_complement(PSet *set);
+
+void set_map(PSet *set, void *state, PSetMapFunc *map_fnc);
 
 unsigned int set_cardinality(const PSet *set);
 

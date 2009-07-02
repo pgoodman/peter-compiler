@@ -26,7 +26,7 @@ static PSet *S_alloc(unsigned int num_slots, int do_fill, unsigned char fill) {
         mem_error("Unable to allocate new set on the heap.");
     }
 
-    set = mem_calloc(1, sizeof(PSet));
+    set = mem_alloc(sizeof(PSet));
     map = mem_alloc(num_slots * sizeof(uint32_t));
 
     if(do_fill) {
@@ -220,7 +220,7 @@ int set_has_elm(PSet *set, unsigned int elm) {
     if(elm >= set->num_bits) {
         return 0;
     }
-    return set->map[(unsigned int) (elm / 32)] & (1 << (32 - (elm % 32)));
+    return 0 != (set->map[(unsigned int) (elm / 32)] & (1 << (32 - (elm % 32))));
 }
 
 /**
@@ -261,6 +261,45 @@ void set_empty(PSet *set) {
         *++map = 0;
         *++map = 0;
     }
+
+    set->num_entries = 0;
+}
+
+/**
+ * Return a duplicate copy of a set.
+ */
+PSet *set_copy(PSet *set) {
+    PSet *cset;
+    uint32_t *cmap,
+             *map;
+    int max;
+
+    assert_not_null(set);
+
+    max = set->num_slots;
+    cset = mem_alloc(sizeof(PSet));
+
+    cmap = mem_alloc(sizeof(uint32_t) * max);
+    map = set->map;
+
+    if(is_null(cset) || is_null(cmap)) {
+        mem_error("Internal Set Error: Unable to duplicate set.");
+    }
+
+    cset = memcpy(cset, set, sizeof(PSet));
+
+    max /= 4;
+
+    for(; --max >= 0; ) {
+        *cmap = *map;
+        *++cmap = *++map;
+        *++cmap = *++map;
+        *++cmap = *++map;
+    }
+
+    cset->map = cmap;
+
+    return cset;
 }
 
 /**
@@ -414,9 +453,43 @@ void set_union_inplace(PSet *set_a, PSet *set_b) {
 }
 
 /**
+ * Find a set's complement.
+ */
+PSet *set_complement(PSet *set) {
+    PSet *cset;
+    uint32_t *cmap,
+             *map;
+    int max;
+
+    assert_not_null(set);
+
+    max = set->num_slots;
+    cset = mem_alloc(sizeof(PSet));
+    cmap = mem_alloc(sizeof(uint32_t) * max);
+    map = set->map;
+
+    if(is_null(cset) || is_null(cmap)) {
+        mem_error("Internal Set Error: Unable to invert set.");
+    }
+
+    cset = memcpy(cset, set, sizeof(PSet));
+    max /= 4;
+
+    for(; --max >= 0; ) {
+        *cmap = ~*map;
+        *++cmap = ~*++map;
+        *++cmap = ~*++map;
+        *++cmap = ~*++map;
+    }
+
+    set->map = cmap;
+    return set;
+}
+
+/**
  * Map a function over the elements of a set.
  */
-void set_map(PSet *set, void *state, PSetMap *map_fnc) {
+void set_map(PSet *set, void *state, PSetMapFunc *map_fnc) {
     unsigned int i, j;
     uint32_t *map;
 
