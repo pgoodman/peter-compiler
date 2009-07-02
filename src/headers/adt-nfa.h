@@ -9,6 +9,8 @@
 #ifndef ADTNFA_H_
 #define ADTNFA_H_
 
+#include <string.h>
+
 #include "adt-dict.h"
 #include "adt-set.h"
 #include "func-delegate.h"

@@ -426,6 +426,7 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
             next_state_id = (unsigned int) dict_get(dfa_states, transition_set);
 
             if(next_state_id > 0) {
+                --next_state_id;
                 set_free(transition_set);
 
             /* this is a new DFA state to add. */
@@ -442,27 +443,28 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
                 state->id = next_state_id;
                 state->nfa_states = transition_set;
 
-                if(is_accepting) {
-                    nfa_add_accepting_state(dfa, next_state_id);
-                }
-
                 /* store the DFA state's state id in the dict, keyed by the
                  * subset of NFA states represented by this DFA state. */
                 dict_set(
                     dfa_states,
                     transition_set,
-                    (void *) ++next_state_id,
+                    (void *) (next_state_id + 1),
                     &delegate_do_nothing
                 );
 
                 ++num_dfa_states;
             }
 
+            /* just make sure ;) */
+            if(is_accepting) {
+                nfa_add_accepting_state(dfa, next_state_id);
+            }
+
             /* add in the new transition */
             nfa_add_value_transition(
                 dfa,
                 prev_state_id,
-                next_state_id - 1, /* -1 because we store state id+1 */
+                next_state_id,
                 c
             );
         }
@@ -498,45 +500,20 @@ typedef struct {
     int largest_char;
 } DFA_Partition;
 
-#if 0
-static void DFA_partition(DFA_Partition *p, unsigned int state) {
-    int c;
-    for(c = p->largest_char; --p >= 0; ) {
-
-    }
-}
-
-static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
-    DFA_Partition p;
-    p.top_partition = p.partitions + 2;
-    p.max_patition = p.partitions + NFA_NUM_DEFAULT_STATES;
-    p.curr_partition = p.partitions;
-    p.largest_char = ++largest_char;
-    p.dfa = dfa;
-
-    int i;
-
-    /* go partition the set of DFA states into accepting and non-accepting
-     * states. This is done become non-accepting states are distinguished from
-     * accepting ones. */
-    *p.partitions = p.new_partition = set_copy(dfa->accepting_states);
-    *(p.partitions+1) = set_complement(p.new_partition);
-
-    do {
-        while(p.curr_partition < p.top_partition) {
-            p.new_partition = NULL;
-            set_map(p.curr_partition, &p, &DFA_partition);
-        }
-    } while(0);
-}
-#endif
-
-static void DFA_test_minimize(PNFA *dfa, int largest_char) {
+/**
+ * Perform localized minimization on a NFA. For simple NFAs this will generally
+ * work at minimization; however, for more complex ones this will simply not do
+ * anything as it only looks at the local similarities between states instead of
+ * the global picture.
+ *
+ * The local minimization algorithm works by growing outward to other states,
+ * marking and merging states as it goes.
+ */
+static void DFA_local_minimize(PNFA *dfa, int largest_char) {
 
     PSet *astates = dfa->accepting_states,
          *seen_set = set_alloc(),
          *merged_set = set_alloc(),
-         *unused_transitions_set = set_alloc(),
          **trans_to_states,
          *equiv_trans_set;
 
@@ -558,13 +535,14 @@ static void DFA_test_minimize(PNFA *dfa, int largest_char) {
     int i, /* counter used here and there */
         j, /* " */
         k, /* " */
-        *state_trans_values;
+        *state_trans_values,
+        malloced_trans_to_states = 0;
 
     size_t trans_table_size = sizeof(PSet *) * ++largest_char,
            state_trans_table_size = sizeof(int) * dfa->num_states;
 
     D( printf("\n\n"); )
-    D( printf("configuring DFA minimzer. \n"); )
+    D( printf("configuring DFA minimizer. \n"); )
 
     /* initialize the two stacks */
     stack.ptr = stack.bottom;
@@ -575,6 +553,7 @@ static void DFA_test_minimize(PNFA *dfa, int largest_char) {
     trans_to_states = alloca(trans_table_size);
     if(is_null(trans_to_states)) {
         trans_to_states = mem_alloc(trans_table_size);
+        malloced_trans_to_states = 1;
         if(is_null(trans_to_states)) {
             mem_error("Internal DFA Error: Unable to minimize DFA.");
         }
@@ -593,7 +572,6 @@ static void DFA_test_minimize(PNFA *dfa, int largest_char) {
     memset(trans_to_states, 0, trans_table_size);
 
     set_map(astates, (void *) &stack, (PSetMapFunc *) &NFA_state_stack_push);
-    set_empty(seen_set);
 
     D( printf("starting.. \n"); )
 
@@ -625,10 +603,10 @@ static void DFA_test_minimize(PNFA *dfa, int largest_char) {
             /* we've already processed this state and all of its out-bound
              * transitions. We need to add a special condition to not ignore
              * self-transitions. */
-            /*if(set_has_elm(seen_set, trans->from_state)
+            if(set_has_elm(seen_set, trans->from_state)
             && trans->from_state != state) {
                 continue;
-            }*/
+            }
 
             if(is_null(trans_to_states[trans->condition.value])) {
                 trans_to_states[trans->condition.value] = set_alloc();
@@ -844,7 +822,6 @@ static void DFA_test_minimize(PNFA *dfa, int largest_char) {
                     trans = all_sources[state_a];
                     for(; is_not_null(trans); trans = trans->trans_next) {
                         trans->type = T_UNUSED;
-                        set_add_elm(unused_transitions_set, trans->id);
 
                         /* undo changes while we're at it */
                         state_trans_values[trans->to_state] = -1;
@@ -873,9 +850,6 @@ investigate_next_state:
                 D( printf("\t\t\t done. \n"); )
 
                 continue;
-
-            /* loop until we no longer have at least *two* states to compare,
-             * hence the +1. */
             }
 
             /* go over all of the states and add all of the non-merged states
@@ -889,18 +863,240 @@ investigate_next_state:
                 && !set_has_elm(seen_set, state_a)) {
                     D( printf("\t\t\t Adding state %d to stack. \n", state_a); )
                     NFA_state_stack_push(&stack, state_a);
+                } else {
+                    D( printf("\t\t\t Didn't add state %d to stack. \n", state_a); )
                 }
             }
 
             /* we're done with these set, clear them out */
-            set_empty(equiv_trans_set);
             D( printf("\t\t done testing group. \n"); )
         }
 
         D( printf("\t done testing groups. \n\n"); )
     }
 
+clean_up:
+
+    for(i = 0; i < largest_char; ++i) {
+        if(is_not_null(trans_to_states[i])) {
+            set_free(trans_to_states[i]);
+        }
+    }
+
+    if(malloced_trans_to_states) {
+        mem_free(trans_to_states);
+    }
+
+    mem_free(state_trans_values);
+
+    set_free(seen_set);
+    set_free(merged_set);
+
     D( printf("done. \n"); )
+}
+
+typedef struct DFA_StateTuple {
+    unsigned int state_a,
+                 state_b;
+    int is_marked;
+} DFA_StateTuple;
+
+static PNFA *DFA_global_minimize(PNFA *dfa, int largest_char) {
+
+    PNFA *min_dfa = nfa_alloc();
+
+    PSet *astates = dfa->accepting_states;
+
+    char *mark_table,
+         *row,
+         *cell,
+         *cell_p,
+         *temp;
+
+    NFA_Transition *trans,
+                   **source_transitions,
+                   *transitions = (NFA_Transition *) dfa->transitions;
+
+    const int num_states = dfa->num_states,
+              num_transitions = dfa->num_transitions;
+
+    int i = dfa->num_transitions,
+        j,
+        k,
+        m,
+        *state_trans_values;
+
+    const long int jp = num_states - 1,
+                   jjp = num_states * jp;
+
+    const size_t mark_table_size = (sizeof(char) * num_states) * num_states;
+
+    D( printf("configuring global minimize.. \n"); )
+
+    mark_table = mem_alloc(mark_table_size);
+    state_trans_values = mem_alloc(sizeof(int) * ++largest_char);
+
+    if(is_null(mark_table) || is_null(state_trans_values)) {
+        mem_error("Internal DFA Error: Unable to minimize DFA.");
+    }
+
+    source_transitions = (NFA_Transition **) dfa->state_transitions;
+    memset(state_trans_values, -1, sizeof(int) * largest_char);
+
+    D( printf("marking initial bad transitions... \n"); )
+
+    /* populate the table and mark all transitions where one of the states is
+     * accepting and the other is not. */
+    cell = mark_table;
+    for(i = num_states; --i >= 0; ) {
+        m = set_has_elm(astates, i);
+        for(j = num_states; --j >= 0; ++cell) {
+            *cell = (m != set_has_elm(astates, j));
+        }
+    }
+
+    /**************************************************************/
+    cell = mark_table;
+    for(i = num_states; --i >= 0; ) {
+        printf("%2d | ", i);
+        for(j = num_states; --j >= 0; ) {
+
+            D( printf("%2d ", *cell); )
+            ++cell;
+        }
+
+        D( printf("\n"); )
+    }
+    printf("     ");
+    for(i = num_states; --i >= 0; ) {
+        printf("---");
+    }
+    printf("\n     ");
+    for(i = num_states; --i >= 0; ) {
+        printf("%2d ", i);
+    }
+    printf("\n");
+    /**************************************************************/
+
+
+    D( printf("running main algorithm... \n"); )
+
+    do {
+        D( printf("marking cells... \n"); )
+
+        m = 0;
+        row = cell = mark_table;
+
+        for(i = num_states; --i >= 0; row += num_states) {
+
+            /* fill in the values, this will allow us to compare transitions between
+             * any two states. */
+            trans = source_transitions[i];
+            for(; is_not_null(trans); trans = trans->trans_next) {
+                state_trans_values[trans->condition.value] = trans->to_state;
+            }
+
+            D( printf("Looking at state %d \n", i); )
+
+            trans = transitions;
+            for(j = num_transitions; --j >= 0; ++trans) {
+
+                k = state_trans_values[trans->condition.value];
+
+                cell = row + (num_states - trans->from_state - 1);
+                cell_p = mark_table + (jjp - (num_states * trans->from_state) + jp - i);
+
+                if(k < 0 || *cell == 1 || *cell_p == 1) {
+                    D( printf("\t marking (%d, %d) \n", i, trans->from_state); )
+                    *cell = 1;
+                    *cell_p = 1;
+                    continue;
+                }
+
+                temp = mark_table + (jjp - (num_states * k) + jp - trans->to_state);
+
+                if(*temp) {
+                    ++m;
+                    *cell = 1;
+                    *cell_p = 1;
+                    D( printf("\t marking (%d, %d) \n", i, trans->from_state); )
+                }
+            }
+
+            trans = source_transitions[i];
+            for(; is_not_null(trans); trans = trans->trans_next) {
+                state_trans_values[trans->condition.value] = -1;
+            }
+
+
+
+            /*
+            for(j = num_states; --j >= 0; ++cell) {
+
+                if(*cell) {
+                    continue;
+                }
+
+                trans = source_transitions[j];
+
+                for(; is_not_null(trans); trans = trans->trans_next) {
+                    k = state_trans_values[trans->condition.value];
+
+                    if(k < 0) {
+                        *cell = 1;
+                        continue;
+                    }
+
+                    temp = mark_table + (jjp - (num_states * k) + jp - trans->to_state);
+                    if(*temp) {
+                        ++m;
+                        *cell = 1;
+                        D( printf("marking (%d, %d) \n", i, j); )
+                        break;
+                    }
+                }
+            }
+
+            trans = source_transitions[i];
+            for(; is_not_null(trans); trans = trans->trans_next) {
+                state_trans_values[trans->condition.value] = -1;
+            }
+            */
+        }
+    } while(m > 0);
+
+    D( printf("states marked. \n"); )
+
+    /**************************************************************/
+    cell = mark_table;
+    for(i = num_states; --i >= 0; ) {
+        printf("%2d | ", i);
+        for(j = num_states; --j >= 0; ) {
+
+            D( printf("%2d ", *cell); )
+            ++cell;
+        }
+
+        D( printf("\n"); )
+    }
+    printf("     ");
+    for(i = num_states; --i >= 0; ) {
+        printf("---");
+    }
+    printf("\n     ");
+    for(i = num_states; --i >= 0; ) {
+        printf("%2d ", i);
+    }
+    printf("\n");
+    /**************************************************************/
+
+
+    D( printf("cleaning up. \n"); )
+
+    mem_free(state_trans_values);
+    mem_free(mark_table);
+
+    return min_dfa;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -976,15 +1172,26 @@ void nfa_free(PNFA *nfa) {
 
 PNFA *nfa_to_dfa(PNFA *nfa) {
     int largest_char;
+    PNFA *dfa = NULL;
     assert_not_null(nfa);
 
     largest_char = NFA_max_alphabet_char(nfa);
 
     nfa = NFA_subset_construction(nfa, largest_char);
 
-    nfa_print_dot(nfa);
+    printf("\n\n");
 
-    DFA_test_minimize(nfa, largest_char);
+    nfa_print_dot(nfa);
+    printf("\n\n");
+
+    DFA_global_minimize(nfa, largest_char);
+
+    printf("\n\n");
+
+    DFA_local_minimize(nfa, largest_char);
+    printf("\n\n");
+
+    /*nfa_free(nfa);*/
 
     return nfa;
 }
