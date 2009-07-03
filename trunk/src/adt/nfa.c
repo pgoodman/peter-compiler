@@ -43,6 +43,10 @@ typedef struct NFA_Transition {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Generic slot allocation mechanism. This will grow the size of a slot space
+ * by a factor of two.
+ */
 static void NFA_alloc_slot(void **slots,
                            unsigned int *num_entries,
                            unsigned int *num_slots,
@@ -85,6 +89,9 @@ static void NFA_alloc_slot(void **slots,
     }
 }
 
+/**
+ * Allocate and return a new transition to be used in the NFA.
+ */
 static NFA_Transition *NFA_alloc_transition(PNFA *nfa,
                                             unsigned int start_state,
                                             unsigned int end_state) {
@@ -138,6 +145,7 @@ static void NFA_mark_unused_state(PNFA *nfa, unsigned state) {
     }
 }
 
+/* fixed-size integer stack, generally used for keeping tracking of states. */
 typedef struct {
     unsigned int bottom[NFA_MAX_EPSILON_STACK],
                  *ptr,
@@ -164,17 +172,17 @@ static void NFA_state_stack_push(NFA_StateStack *stack, unsigned int state) {
  * states. The epsilon closure for the set of states is added to the set of
  * states in place.
  *
- * Returns if the DFA state represented by the e-closure has an NFA state that
- * is accepting.
+ * If the subset of NFA states contains at least one accepting state than any
+ * one of those state ids can be returned, or -1 if no accepting state is an
+ * element of the subset.
  */
 static int NFA_transitive_closure(PNFA *nfa,
                                   PSet *states,
                                   int transition_type) {
-    PSet *transitions;
     NFA_StateStack stack;
     NFA_Transition *transition;
 
-    int is_accepting = 0,
+    int accepting_id = -1,
         i;
 
     stack.ptr = stack.bottom;
@@ -188,8 +196,6 @@ static int NFA_transitive_closure(PNFA *nfa,
 
     /* add the states in the set to the stack */
     set_map(states, (void *) &stack, (PSetMapFunc *) &NFA_state_stack_push);
-    set_truncate(states);
-    transitions = states; /* more meaningful */
 
     while(stack.ptr > stack.bottom && stack.ptr < stack.top) {
 
@@ -197,83 +203,77 @@ static int NFA_transitive_closure(PNFA *nfa,
 
         if(set_has_elm(nfa->accepting_states, *stack.ptr)) {
             D( printf("\t\t\t %d is an accepting state. \n", *stack.ptr); )
-            is_accepting = 1;
+            accepting_id = *stack.ptr;
         }
 
         for(; is_not_null(transition); transition = transition->trans_next) {
-
-            if(set_has_elm(transitions, transition->id)) {
+            if(set_has_elm(states, transition->to_state)) {
                 continue;
             }
-
             if(transition->type == T_EPSILON) {
+                set_add_elm(states, transition->to_state);
                 NFA_state_stack_push(&stack, transition->to_state);
-            } else {
-                set_add_elm(transitions, transition->id);
             }
         }
     }
 
     D( printf("\t done. \n"); )
 
-    return is_accepting;
+    return accepting_id;
 }
 
 /**
- * Simulate transitions from the transitions in input_transitions to their
- * respective states and then return that set of states. *
+ * Simulate transitions from the transitions on the states in input_states to
+ * their respective states and then return that set of states.
  */
 static PSet *NFA_simulate_transition(PNFA *nfa,
-                                     PSet *input_transitions,
+                                     PSet *input_states,
                                      int input) {
 
-    int i = nfa->num_transitions;
+    int i,
+        j = 0;
+
+    const int num_transitions = nfa->num_transitions;
+
     PSet *output_states = NULL;
-    NFA_Transition *transition = (NFA_Transition *) nfa->transitions;
+    NFA_Transition **transitions = (NFA_Transition **) nfa->state_transitions,
+                   *trans;
 
     D( printf("\t simulating transition on ASCII %d... \n", input); )
 
-    for(; --i >= 0; ++transition) {
+    for(i = nfa->num_states; --i >= 0; ++j) {
 
-        if(!set_has_elm(input_transitions, transition->id)) {
+        if(!set_has_elm(input_states, j)) {
             continue;
         }
 
-        switch(transition->type) {
-        case T_VALUE:
-            if(transition->condition.value == input) {
-
-                D( printf(
-                    "\t\t transition found on '%c', adding state %d \n",
-                    (char) input,
-                    transition->to_state
-                ); )
-
-                if(is_null(output_states)) {
-                    output_states = set_alloc();
+        trans = transitions[j];
+        for(; is_not_null(trans); trans = trans->trans_next) {
+            if(trans->type == T_VALUE) {
+                if(trans->condition.value == input) {
+                    D( printf(
+                        "\t\t transition found on '%c', adding state %d \n",
+                        (char) input,
+                        transition->to_state
+                    ); )
+                    if(is_null(output_states)) {
+                        output_states = set_alloc();
+                    }
+                    set_add_elm(output_states, trans->to_state);
                 }
-
-                set_add_elm(output_states, transition->to_state);
-            }
-            break;
-        case T_SET:
-            if(set_has_elm(transition->condition.set, input)) {
-
-                D( printf(
-                    "\t\t transition found on '%c', adding state %d \n",
-                    (char) input,
-                    transition->to_state
-                ); )
-
-                if(is_null(output_states)) {
-                    output_states = set_alloc();
+            } else if(trans->type == T_SET) {
+                if(set_has_elm(trans->condition.set, input)) {
+                    D( printf(
+                        "\t\t transition found on '%c', adding state %d \n",
+                        (char) input,
+                        transition->to_state
+                    ); )
+                    if(is_null(output_states)) {
+                        output_states = set_alloc();
+                    }
+                    set_add_elm(output_states, trans->to_state);
                 }
-
-                set_add_elm(output_states, transition->to_state);
             }
-            break;
-        default:
-            break;
         }
     }
 
@@ -313,14 +313,16 @@ static unsigned int NFA_max_alphabet_char(PNFA *nfa) {
     return max;
 }
 
+/* DFA state, represents a subset of all NFA states. */
+typedef struct DFA_State {
+    PSet *nfa_states;
+    unsigned int id,
+                 accepting_id;
+} DFA_State;
+
 /**
  * Perform the subset construction on the NFA to turn it into a DFA.
  */
-typedef struct DFA_State {
-    PSet *nfa_states;
-    unsigned int id;
-} DFA_State;
-
 static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
 
     unsigned int next_state_id,
@@ -328,6 +330,7 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
                  num_dfa_states = 0;
 
     int c,
+        as,
         is_accepting;
 
     DFA_State dfa_state_stack[NFA_NUM_DEFAULT_STATES],
@@ -367,7 +370,8 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
        );
     )
 
-    if(NFA_transitive_closure(nfa, dfa_state_stack->nfa_states, T_EPSILON)) {
+    as = NFA_transitive_closure(nfa, dfa_state_stack->nfa_states, T_EPSILON);
+    if(as >= 0) {
         nfa_add_accepting_state(dfa, dfa_state_stack->id);
     }
 
@@ -408,7 +412,6 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
              * input c and if a transition on c exists then add the destination
              * state to the return set. */
             transition_set = NFA_simulate_transition(nfa, nfa_state_set, c);
-
             if(!set_cardinality(transition_set)) {
                 set_free(transition_set);
                 continue;
@@ -417,10 +420,7 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
             /* for each state in the transition set, find all of the states that
              * they are simultaneously at by adding the transitive closure of
              * epsilon transitions to the transition_set. */
-            is_accepting = 0;
-            if(NFA_transitive_closure(nfa, transition_set, T_EPSILON)) {
-                is_accepting = 1;
-            }
+            as = NFA_transitive_closure(nfa, transition_set, T_EPSILON);
 
             /* we have already seen this DFA state */
             next_state_id = (unsigned int) dict_get(dfa_states, transition_set);
@@ -440,6 +440,8 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
 
                 next_state_id = nfa_add_state(dfa);
                 state = dfa_state_stack + num_dfa_states;
+
+                state->accepting_id = as;
                 state->id = next_state_id;
                 state->nfa_states = transition_set;
 
@@ -456,7 +458,7 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
             }
 
             /* just make sure ;) */
-            if(is_accepting) {
+            if(as >= 0) {
                 nfa_add_accepting_state(dfa, next_state_id);
             }
 
@@ -467,6 +469,8 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
                 next_state_id,
                 c
             );
+
+            printf("adding transition '%c' as ASCII %d \n", c, (int)c);
         }
 
         D( printf("done. \n"); )
@@ -734,6 +738,7 @@ PNFA *nfa_alloc(void) {
     NFA_Transition *transitions,
                    **state_transitions,
                    **transition_destinations;
+    int *conclusions;
 
     nfa = mem_alloc(sizeof(PNFA));
     transitions = mem_calloc(
@@ -748,6 +753,8 @@ PNFA *nfa_alloc(void) {
         NFA_NUM_DEFAULT_STATES,
         sizeof(NFA_Transition *)
     );
+
+    conclusions = mem_alloc(NFA_NUM_DEFAULT_STATES * sizeof(int));
 
     if(is_null(nfa)
     || is_null(transitions)
@@ -765,6 +772,7 @@ PNFA *nfa_alloc(void) {
     nfa->state_transitions = (void **) state_transitions;
     nfa->destination_states = (void **) transition_destinations;
     nfa->transitions = (void *) transitions;
+    nfa->conclusions = conclusions;
     nfa->num_unused_states = 0;
 
     return nfa;
@@ -790,6 +798,7 @@ void nfa_free(PNFA *nfa) {
     mem_free(nfa->transitions);
     mem_free(nfa->state_transitions);
     mem_free(nfa->destination_states);
+    mem_free(nfa->conclusions);
     mem_free(nfa);
 }
 
@@ -800,6 +809,10 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
 
     largest_char = NFA_max_alphabet_char(nfa);
     nfa = NFA_subset_construction(nfa, largest_char);
+
+    nfa_print_dot(nfa);
+    printf("\n\n");
+
     dfa = DFA_minimize(nfa, largest_char);
     nfa_free(nfa);
 
@@ -821,7 +834,8 @@ void nfa_change_start_state(PNFA *nfa, unsigned int start_state) {
 unsigned int nfa_add_state(PNFA *nfa) {
 
     void *transitions,
-         *destinations;
+         *destinations,
+         *conclusions;
     unsigned int state;
 
     assert_not_null(nfa);
@@ -830,12 +844,20 @@ unsigned int nfa_add_state(PNFA *nfa) {
 
         transitions = (void *) nfa->state_transitions;
         destinations = (void *) nfa->destination_states;
+        conclusions = (void *) nfa->conclusions;
 
         NFA_alloc_slot(
             &destinations,
             &nfa->num_states,
             &nfa->num_state_slots,
             sizeof(NFA_Transition *),
+            0
+        );
+        NFA_alloc_slot(
+            &conclusions,
+            &nfa->num_states,
+            &nfa->num_state_slots,
+            sizeof(int),
             0
         );
         NFA_alloc_slot(
@@ -851,8 +873,10 @@ unsigned int nfa_add_state(PNFA *nfa) {
         state = nfa->unused_states[--(nfa->num_unused_states)];
     }
 
+    nfa->conclusions[state] = -1;
     nfa->state_transitions[state] = NULL;
     nfa->destination_states[state] = NULL;
+
     return state;
 }
 

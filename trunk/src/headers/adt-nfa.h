@@ -18,6 +18,7 @@
 #define NFA_MAX_KNOWN_UNUSED_STATES 64
 
 typedef struct PNFA {
+
     unsigned int num_states,
                  num_transitions,
                  num_state_slots,
@@ -26,6 +27,9 @@ typedef struct PNFA {
                  current_state,
                  num_unused_states,
                  unused_states[NFA_MAX_KNOWN_UNUSED_STATES];
+
+    int *conclusions;
+
     void *transitions,
          **state_transitions,
          **destination_states;

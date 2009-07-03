@@ -237,7 +237,8 @@ static void Char(PThompsonsConstruction *thompson,
                  PParseTree *branches[]) {
 
     unsigned int start, prev, end, i;
-    PT_Terminal *character;
+    PT_Terminal *character = (PT_Terminal *) branches[0];
+    PSet *all_chars;
 
     if(thompson->top_state >= NFA_MAX-1) {
         std_error("Internal Error: Unable to continue Thompson's Construction.");
@@ -246,12 +247,24 @@ static void Char(PThompsonsConstruction *thompson,
     start = nfa_add_state(thompson->nfa);
     end = nfa_add_state(thompson->nfa);
 
-    nfa_add_value_transition(
-         thompson->nfa,
-         start,
-         end,
-         ((PT_Terminal *) branches[0])->lexeme->str[0]
-    );
+    if(character->terminal == L_ANY_CHAR) {
+
+        all_chars = set_alloc_inverted();
+        set_remove_elm(all_chars, '\n');
+        nfa_add_set_transition(
+            thompson->nfa,
+            start,
+            end,
+            all_chars
+        );
+    } else {
+        nfa_add_value_transition(
+             thompson->nfa,
+             start,
+             end,
+             ((PT_Terminal *) branches[0])->lexeme->str[0]
+        );
+    }
 
     thompson->state_stack[++thompson->top_state] = end;
     thompson->state_stack[++thompson->top_state] = start;

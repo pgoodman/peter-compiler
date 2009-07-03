@@ -375,6 +375,7 @@ void parse_tokens(PGrammar *grammar,
 
     parser.tree_set = PTS_alloc();
 
+
     D( printf("accumulating tokens... \n"); )
 
     /* get all of the tokens as terminal trees */
