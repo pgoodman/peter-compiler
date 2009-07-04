@@ -460,6 +460,11 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
             /* just make sure ;) */
             if(as >= 0) {
                 nfa_add_accepting_state(dfa, next_state_id);
+                nfa_add_conclusion(
+                    dfa,
+                    next_state_id,
+                    *(nfa->conclusions + as)
+                );
             }
 
             /* add in the new transition */
@@ -469,8 +474,6 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
                 next_state_id,
                 c
             );
-
-            printf("adding transition '%c' as ASCII %d \n", c, (int)c);
         }
 
         D( printf("done. \n"); )
@@ -660,6 +663,11 @@ static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
 
             if(set_has_elm(astates, n)) {
                 nfa_add_accepting_state(min_dfa, m);
+                nfa_add_conclusion(
+                    min_dfa,
+                    m,
+                    *(dfa->conclusions + n)
+                );
             }
         }
     }
@@ -763,6 +771,8 @@ PNFA *nfa_alloc(void) {
         mem_error("Unable to allocate DFA on the heap.");
     }
 
+    memset(conclusions, -1, NFA_NUM_DEFAULT_STATES * sizeof(int));
+
     nfa->accepting_states = set_alloc();
     nfa->current_state = 0;
     nfa->num_state_slots = NFA_NUM_DEFAULT_STATES;
@@ -809,10 +819,6 @@ PNFA *nfa_to_dfa(PNFA *nfa) {
 
     largest_char = NFA_max_alphabet_char(nfa);
     nfa = NFA_subset_construction(nfa, largest_char);
-
-    nfa_print_dot(nfa);
-    printf("\n\n");
-
     dfa = DFA_minimize(nfa, largest_char);
     nfa_free(nfa);
 
@@ -887,6 +893,20 @@ void nfa_add_accepting_state(PNFA *nfa, unsigned int which_state) {
     assert_not_null(nfa);
     assert(which_state < nfa->num_states);
     set_add_elm(nfa->accepting_states, which_state);
+}
+
+/**
+ * Add a 'conclusion' to particular accepting state. I.e. if being at some
+ * accepting state implies something then this is a means to add that
+ * information so that such an implication can be checked later.
+ */
+void nfa_add_conclusion(PNFA *nfa, unsigned int which_state, int conclusion) {
+    int *c;
+    assert_not_null(nfa);
+    if(set_has_elm(nfa->accepting_states, which_state)) {
+        c = nfa->conclusions + which_state;
+        *c = conclusion;
+    }
 }
 
 /**
@@ -974,6 +994,8 @@ void nfa_add_set_transition(PNFA *nfa,
     trans->condition.set = test_set;
 }
 
+/* -------------------------------------------------------------------------- */
+
 /**
  * Print out the NFA in the DOT language.
  */
@@ -1045,4 +1067,95 @@ void nfa_print_dot(PNFA *nfa) {
             }
         }
     }
+}
+
+/* -------------------------------------------------------------------------- */
+
+#define P fprintf
+
+/**
+ * Print a NFA as C code into the file specified.
+ */
+void nfa_print_to_file(const PNFA *nfa, const char *out_file) {
+    FILE *F;
+    PSet *astates;
+    NFA_Transition *trans,
+                   **transitions;
+    int i,
+        n;
+
+    assert_not_null(nfa);
+    assert_not_null(out_file);
+
+    F = fopen(out_file, "w");
+    if(is_null(F)) {
+        std_error("Error: Unable to create file gen/match_pattern.c");
+    }
+
+    astates = nfa->accepting_states;
+    transitions = (NFA_Transition **) nfa->state_transitions;
+
+    P(F, "\n");
+    P(F, "#include <std-include.h>\n");
+    P(F, "#include <p-types.h>\n");
+    P(F, "#include <p-scanner.h>\n\n");
+    P(F, "extern G_Terminal lex_analyze(PScanner *);\n\n");
+    P(F, "G_Terminal lex_analyze(PScanner *S) {\n");
+    P(F, "    G_Terminal pterm = -1, term = -1;\n");
+    P(F, "    unsigned int n = 0, seen_accepting_state = 0;\n");
+    P(F, "    int cc, nc = 0, pnc = 0;\n");
+    P(F, "    scanner_mark_lexeme_start(S);\n");
+
+    if(nfa->start_state > 0) {
+        P(F, "    goto state_%d;\n", nfa->start_state);
+    }
+
+    for(n = 0, i = nfa->num_states; --i >= 0; ++n) {
+
+        P(F, "state_%d:\n", n);
+        P(F, "    if(!(cc = scanner_advance(S))) { goto undo_and_commit; }\n");
+
+        if(set_has_elm(astates, n)) {
+            P(F, "    pterm = term;\n");
+            P(F, "    term = %d;\n", *(nfa->conclusions+n));
+            P(F, "    pnc = nc;\n");
+            P(F, "    seen_accepting_state = 1;\n");
+        }
+
+        P(F, "    ++nc;\n");
+        P(F, "    switch(cc) {\n");
+
+        trans = transitions[n];
+        for(; is_not_null(trans); trans = trans->trans_next) {
+
+            if(trans->type != T_VALUE) {
+                std_error(
+                    "Internal DFA Print Error: Cannot print non-value "
+                    "transitions."
+                );
+            }
+
+            P(
+                F,
+                "        case %d: goto state_%d;\n",
+                trans->condition.value,
+                trans->to_state
+            );
+        }
+        P(F, "        default: goto undo_and_commit;\n");
+        P(F, "    }\n");
+    }
+
+    P(F, "undo_and_commit:\n");
+    P(F, "    if(!seen_accepting_state) {\n");
+    P(F, "        std_error(\"Scanner Error: Unable to match token.\");\n");
+    P(F, "    }\n");
+    P(F, "    scanner_pushback(S, nc - pnc);\n");
+    P(F, "    scanner_mark_lexeme_end(S);\n");
+    P(F, "    return pterm;\n");
+    P(F, "}\n\n");
+
+    fclose(F);
+
+    return;
 }

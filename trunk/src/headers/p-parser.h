@@ -27,7 +27,7 @@
 
 void parse_tokens(PGrammar *grammar,
                   PScanner *scanner,
-                  PScannerFunction *scanner_fnc,
+                  PScannerFunc *scanner_fnc,
                   void *state,
                   PTreeTraversalType tree_taversal_type);
 

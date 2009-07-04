@@ -38,19 +38,13 @@ typedef struct PScanner {
     } buffer;
 
     struct {
-        unsigned char *curr_start,
-                      *curr_end;
+        unsigned char *start,
+                      *end;
 
-        uint32_t curr_line,
-                 curr_column;
+        uint32_t line,
+                 column;
 
-        unsigned char *prev_start;
-
-        uint32_t prev_line,
-                 prev_column,
-                 prev_length;
-
-        unsigned char term_char;
+        PString *as_string;
     } lexeme;
 
     struct {
@@ -62,7 +56,8 @@ typedef struct PScanner {
 
 } PScanner;
 
-typedef int (PScannerFunction)(PScanner *scanner, PToken *token);
+typedef G_Terminal (PScannerFunc)(PScanner *scanner);
+typedef int (PScannerSkipFunc)(int);
 
 /* -------------------------------------------------------------------------- */
 

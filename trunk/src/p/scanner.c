@@ -8,6 +8,9 @@
  * Parts of this scanner are either heavily influenced by or adapted from the
  * code in "Compiler Design in C" by Allen I. Holub, edited by Brian W.
  * Kernighan, and published by Prentice-Hall.
+ *
+ * This scanner is strictly forward-looking. Once a request is made on the
+ * canner to
  */
 
 #include <p-scanner.h>
@@ -35,49 +38,6 @@
 /* -------------------------------------------------------------------------- */
 
 /**
- * Mark where the current lexeme begins and return its start position.
- */
-static unsigned char *L_current_mark_start(PScanner *scanner) {
-    unsigned char *start = scanner->buffer.next_char;
-    scanner->lexeme.curr_start = start;
-    scanner->lexeme.curr_end = start;
-    scanner->lexeme.curr_line = scanner->input.line;
-    scanner->lexeme.curr_column = scanner->input.column;
-    return start;
-}
-
-/**
- * Mark where the current lexeme ends and return its end position.
- */
-static unsigned char *L_current_mark_end(PScanner *scanner) {
-    return (scanner->lexeme.curr_end = scanner->buffer.end);
-}
-
-/**
- * Mark where the previous lexeme begins and return its start position.
- */
-static unsigned char *L_prev_mark_start(PScanner *scanner) {
-    unsigned char *start = scanner->lexeme.curr_start;
-    scanner->lexeme.prev_start = start;
-    scanner->lexeme.prev_length = scanner->lexeme.curr_end - start;
-    scanner->lexeme.prev_line = scanner->lexeme.curr_line;
-    scanner->lexeme.prev_column = scanner->lexeme.curr_column;
-    return start;
-}
-
-/**
- * Clear out the previous token information.
- */
-static void L_prev_clear(PScanner *scanner) {
-    scanner->lexeme.prev_start = NULL;
-    scanner->lexeme.prev_length = 0;
-    scanner->lexeme.prev_line = 0;
-    scanner->lexeme.prev_column = 0;
-}
-
-/* -------------------------------------------------------------------------- */
-
-/**
  * Close any open file descriptors.
  */
 static void I_close(PScanner *scanner) {
@@ -85,53 +45,6 @@ static void I_close(PScanner *scanner) {
         close(scanner->input.file_descriptor);
         scanner->input.file_descriptor = -1;
     }
-}
-
-/**
- * Open a new file for the scanner to use. If the file cannot be opened then
- * 0 is returned, else 1.
- */
-static int I_open(PScanner *scanner, const char *file_name) {
-
-    int file_descriptor;
-    unsigned char *end_of_buffer;
-
-    assert_not_null(scanner);
-    assert_not_null(file_name);
-
-    /* close any file that was previously open. */
-    I_close(scanner);
-
-    /* prepare the scanner's buffer for this file. this means putting the end of
-     * the buffer just *after* the actual end of the buffer, setting the
-     * starting flush point, and making sure any lexeme information that exists
-     * in the scanner already has been cleared out. */
-    end_of_buffer = scanner->buffer.start + S_INPUT_BUFFER_SIZE;
-
-    scanner->buffer.end = end_of_buffer;
-    scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
-    scanner->buffer.next_char = end_of_buffer;
-
-    scanner->lexeme.curr_end = end_of_buffer;
-    scanner->lexeme.curr_start = end_of_buffer;
-
-    scanner->lexeme.term_char = 0;
-
-    L_prev_clear(scanner);
-
-    scanner->input.column = 1;
-    scanner->input.line = 0;
-    scanner->input.eof_read = 0;
-
-    /* open the file, if the fail opens then */
-    file_descriptor = open(file_name, O_RDONLY | O_BINARY);
-    if(-1 == file_descriptor) {
-        return 0;
-    }
-
-    scanner->input.file_descriptor = file_descriptor;
-
-    return 1;
 }
 
 /**
@@ -160,10 +73,11 @@ static int B_fill(PScanner *scanner, unsigned char *starting_from) {
 
     unsigned char *end = scanner->buffer.end;
 
+    /*
     if(!scanner->input.line) {
         *starting_from = '\n';
         ++starting_from;
-    }
+    }*/
 
     if(end < starting_from) {
         std_error("Internal Scanner Error: trying to fill buffer beyond buffer.");
@@ -213,7 +127,7 @@ static int B_fill(PScanner *scanner, unsigned char *starting_from) {
  *      0 - We're at the end of the file.
  *      1 - Everything is okay. A flush may or may not have been executed.
  */
-static int B_flush(PScanner *scanner, int force_flush) {
+int scanner_flush(PScanner *scanner, int force_flush) {
 
     unsigned int copy_amount = 0,
                  shift_amount = 0;
@@ -232,14 +146,7 @@ static int B_flush(PScanner *scanner, int force_flush) {
 
     if(PAST_FLUSH_POINT(scanner) || force_flush) {
 
-        left_edge = scanner->lexeme.prev_start;
-        if(is_not_null(scanner->lexeme.prev_start)) {
-            left_edge = MIN(
-                left_edge,
-                scanner->lexeme.prev_start
-            );
-        }
-
+        left_edge = scanner->lexeme.start;
         shift_amount = left_edge - buffer_start;
 
         /* we're not adding enough room to the buffer in order to accommodate a
@@ -253,9 +160,7 @@ static int B_flush(PScanner *scanner, int force_flush) {
             /* this effectively destroys the current lexeme and annihilates the
              * previous one, setting the parser into a similar state to what
              * it would be in if it had just opened a file. */
-            L_prev_clear(scanner);
-            left_edge = L_current_mark_start(scanner);
-
+            left_edge = scanner_mark_lexeme_start(scanner);
             shift_amount = left_edge - buffer_start;
         }
 
@@ -268,17 +173,79 @@ static int B_flush(PScanner *scanner, int force_flush) {
             std_error("Internal Error: Cannot fill buffer, buffer is full.");
         }
 
-        if(is_not_null(scanner->lexeme.prev_start)) {
-            scanner->lexeme.prev_start -= shift_amount;
-        }
-
         /* this works even if we forced the buffer full because we used
          * L_current_mark_start to move the current lexeme's pointer information
          * to the next char in the buffer as that becomes the shift boundary. */
-        scanner->lexeme.curr_start -= shift_amount;
-        scanner->lexeme.curr_end -= shift_amount;
+        scanner->lexeme.start -= shift_amount;
+        scanner->lexeme.end -= shift_amount;
         scanner->buffer.next_char -= shift_amount;
     }
+
+    return 1;
+}
+
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Allocate a new scanner on the heap and return it.
+ */
+PScanner *scanner_alloc(void) {
+    PScanner *scanner = mem_alloc(sizeof(PScanner));
+    if(is_null(scanner)) {
+        mem_error("Unable to heap-allocate a new scanner.");
+    }
+    return scanner;
+}
+
+/**
+ * Free a scanner.
+ */
+void scanner_free(PScanner *scanner) {
+    assert_not_null(scanner);
+    I_close(scanner);
+    mem_free(scanner);
+}
+
+/**
+ * Open a new file for the scanner to use. If the file cannot be opened then
+ * 0 is returned, else 1.
+ */
+int scanner_open(PScanner *scanner, const char *file_name) {
+
+    int file_descriptor;
+    unsigned char *end_of_buffer;
+
+    assert_not_null(scanner);
+    assert_not_null(file_name);
+
+    /* close any file that was previously open. */
+    I_close(scanner);
+
+    /* prepare the scanner's buffer for this file. this means putting the end of
+     * the buffer just *after* the actual end of the buffer, setting the
+     * starting flush point, and making sure any lexeme information that exists
+     * in the scanner already has been cleared out. */
+    end_of_buffer = scanner->buffer.start + S_INPUT_BUFFER_SIZE;
+
+    scanner->buffer.end = end_of_buffer;
+    scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
+    scanner->buffer.next_char = end_of_buffer;
+
+    scanner->lexeme.end = end_of_buffer;
+    scanner->lexeme.start = end_of_buffer;
+    scanner->lexeme.as_string = NULL;
+
+    scanner->input.column = 1;
+    scanner->input.line = 0;
+    scanner->input.eof_read = 0;
+
+    /* open the file, if the fail opens then */
+    file_descriptor = open(file_name, O_RDONLY | O_BINARY);
+    if(-1 == file_descriptor) {
+        return 0;
+    }
+
+    scanner->input.file_descriptor = file_descriptor;
 
     return 1;
 }
@@ -288,14 +255,14 @@ static int B_flush(PScanner *scanner, int force_flush) {
  * past it. Returns 0 if end-of-file is reached. Returns -1 if the buffer is
  * too full to be flushed.
  */
-static char B_advance(PScanner *scanner) {
+char scanner_advance(PScanner *scanner) {
     char next;
 
     if(NO_MORE_CHARS(scanner)) {
         return 0;
     }
 
-    if(!scanner->input.eof_read && B_flush(scanner, 0) < 0) {
+    if(!scanner->input.eof_read && scanner_flush(scanner, 0) < 0) {
         return -1;
     }
 
@@ -315,8 +282,8 @@ static char B_advance(PScanner *scanner) {
  * EOF if trying to look beyond the end of the file, 0 if trying to look beyond
  * either end of the buffer.
  */
-static char B_look(PScanner *scanner, int n) {
-    unsigned char *ch = (scanner->buffer.next_char - n);
+char scanner_look(PScanner *scanner, const int n) {
+    unsigned char *ch = scanner->buffer.next_char + (n - 1);
 
     if(ch >= scanner->buffer.end) {
         if(scanner->input.eof_read) {
@@ -337,9 +304,9 @@ static char B_look(PScanner *scanner, int n) {
  *
  * Returns 1 if all n characters were pushed back, 0 otherwise.
  */
-static int B_pushback(PScanner *scanner, int n) {
+int scanner_pushback(PScanner *scanner, int n) {
 
-    unsigned char *curr_lexeme_start = scanner->lexeme.curr_start,
+    unsigned char *curr_lexeme_start = scanner->lexeme.start,
                   *next_char = scanner->buffer.next_char;
 
     unsigned int new_line = scanner->input.line,
@@ -358,9 +325,9 @@ static int B_pushback(PScanner *scanner, int n) {
 
     /* figure out what column we're looking at on whatever line we have ended
      * up on. */
-    if(new_line == scanner->lexeme.curr_line) {
+    if(new_line == scanner->lexeme.line) {
         new_column = (next_char - curr_lexeme_start)
-                   + scanner->lexeme.curr_column;
+                   + scanner->lexeme.column;
 
     } else if(new_line == scanner->input.line) {
         new_column = scanner->input.column
@@ -380,21 +347,61 @@ static int B_pushback(PScanner *scanner, int n) {
     scanner->input.line = new_line;
     scanner->input.column = new_column;
 
-    if(next_char < scanner->lexeme.curr_end) {
-        scanner->lexeme.curr_end = next_char;
+    if(next_char < scanner->lexeme.end) {
+        scanner->lexeme.end = next_char;
     }
 
     return (-1 == n);
 }
 
-/* -------------------------------------------------------------------------- */
-
-PScanner *scanner_alloc(void) {
-    PScanner *scanner = NULL;
-
-    return scanner;
+/**
+ * Instruct the scanner to skip characters up until the predicate fails.
+ */
+void scanner_skip(PScanner *scanner, PScannerSkipFunc *predicate) {
+    assert_not_null(scanner);
+    while(predicate(scanner_look(scanner, 1))) {
+        scanner_advance(scanner);
+    }
 }
 
-void scanner_free(PScanner *scanner) {
-
+/**
+ * Mark where the current lexeme begins and return its start position.
+ */
+unsigned char *scanner_mark_lexeme_start(PScanner *scanner) {
+    unsigned char *start = scanner->buffer.next_char;
+    scanner->lexeme.start = start;
+    scanner->lexeme.end = start;
+    scanner->lexeme.line = scanner->input.line;
+    scanner->lexeme.column = scanner->input.column;
+    scanner->lexeme.as_string = NULL;
+    return start;
 }
+
+/**
+ * Mark where the current lexeme ends and return its end position.
+ */
+void scanner_mark_lexeme_end(PScanner *scanner) {
+    scanner->lexeme.end = scanner->buffer.next_char;
+}
+
+/**
+ * Return the current lexeme as a PString. If the lexeme is empty (or no end
+ * was marked for the lexeme) then NULL is returned. If the scanner is at the
+ * end of input then NULL is returned.
+ */
+PString *scanner_get_lexeme(PScanner *scanner) {
+
+    assert_not_null(scanner);
+
+    if(is_not_null(scanner->lexeme.as_string)) {
+        return scanner->lexeme.as_string;
+    } else if(scanner->lexeme.end > scanner->lexeme.start) {
+        return scanner->lexeme.as_string = string_alloc_char(
+            (char *) scanner->lexeme.start,
+            (uint32_t) (scanner->lexeme.end - scanner->lexeme.start - 1)
+        );
+    }
+
+    return NULL;
+}
+

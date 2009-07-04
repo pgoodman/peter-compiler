@@ -17,8 +17,8 @@
  * Grammar types
  */
 
-typedef unsigned short G_Terminal;
-typedef unsigned short G_NonTerminal;
+typedef short G_Terminal;
+typedef short G_NonTerminal;
 
 /* -------------------------------------------------------------------------- */
 

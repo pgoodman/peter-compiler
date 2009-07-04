@@ -8,18 +8,15 @@
 
 #include <p-regexp.h>
 
+
+#include "../gen/lex.h"
+
+
 #define NFA_MAX 256
 
-static char buffer[3],
-            curr_char;
-
-static unsigned int line = 0,
-                    column = 0,
-                    in_char_class = 0,
+static unsigned int in_char_class = 0,
                     first_char_in_class = 1,
                     got_char = 0;
-
-static FILE *fp = NULL;
 
 /* grammar terminals */
 enum {
@@ -37,10 +34,6 @@ enum {
     L_OR,
     L_CHARACTER_RANGE,
     L_CHARACTER,
-    L_SPACE,
-    L_NEW_LINE,
-    L_CARRIAGE_RETURN,
-    L_TAB,
     L_ANY_CHAR
 };
 
@@ -288,7 +281,9 @@ static void R_char_class(PThompsonsConstruction *thompson,
     }
 
     for(i = 0; i < num_branches; ++i) {
+
         if(branches[i]->type == PT_NON_TERMINAL) {
+
             range = (PT_NonTerminal *) branches[i];
             range_start = ((PT_Terminal *) tree_get_branch(range, 0))->lexeme->str[0];
             range_end = ((PT_Terminal *) tree_get_branch(range, 1))->lexeme->str[0];
@@ -429,47 +424,19 @@ static void OptionalTerm(PThompsonsConstruction *thompson,
 }
 
 /**
- * Scan the input letter-by-letter until a lexeme is matched. Stuff the lexeme
- * into the 'token' variable along with any other information such as
- * line/column number, etc.
+ * Scan the input letter-by-letter until a lexeme is matched. The matched token.
  */
-static int R_get_token(PScanner *scanner, PToken *token) {
+static G_Terminal R_get_token(PScanner *scanner) {
 
-    ++column;
-    curr_char = fgetc(fp);
+    char curr_char;
+    G_Terminal term;
 
-    if(feof(fp)) {
-        return 0;
-    }
+    scanner_skip(scanner, &isspace);
+    scanner_mark_lexeme_start(scanner);
+    curr_char = scanner_advance(scanner);
 
-    token->lexeme_length = 1;
-    token->line = line;
-    token->column = column;
-    token->lexeme = buffer;
-
-    buffer[1] = 0;
-    buffer[0] = curr_char;
-
-    if(isspace(curr_char)) {
-        switch(curr_char) {
-            case '\n':
-                return 0; /***********/
-                ++line;
-                column = 0;
-                token->terminal = L_NEW_LINE;
-                break;
-            case '\r':
-                token->terminal = L_CARRIAGE_RETURN;
-                break;
-            case '\t':
-                token->terminal = L_TAB;
-                break;
-            default:
-                token->terminal = L_SPACE;
-                break;
-        }
-
-        return 1;
+    if(!curr_char) {
+        return -1;
     }
 
     if(in_char_class) {
@@ -477,88 +444,64 @@ static int R_get_token(PScanner *scanner, PToken *token) {
     }
 
     switch(curr_char) {
-        case '(': token->terminal = L_START_GROUP; break;
-        case ')': token->terminal = L_END_GROUP; break;
+        case '(': term = L_START_GROUP; break;
+        case ')': term = L_END_GROUP; break;
         case '[':
-            token->terminal = L_START_CLASS;
+            term = L_START_CLASS;
             in_char_class = 1;
             first_char_in_class = 1;
 
-            curr_char = fgetc(fp);
-
-            got_char = 1;
-
-            ++column;
-            if(feof(fp)) {
-                return 0;
-            }
-
-            if(curr_char == '^') {
-                buffer[0] = '[';
-                buffer[1] = '^';
-                buffer[2] = 0;
-                token->terminal = L_START_NEG_CLASS;
-            } else {
-                ungetc(curr_char, fp);
+            if(scanner_look(scanner, 1) == '^') {
+                scanner_advance(scanner);
+                term = L_START_NEG_CLASS;
             }
 
             break;
-        case '+': token->terminal = L_POSITIVE_CLOSURE; break;
-        case '*': token->terminal = L_KLEENE_CLOSURE; break;
-        case '^': token->terminal = L_ANCHOR_START; break;
-        case '$': token->terminal = L_ANCHOR_END; break;
-        case '?': token->terminal = L_OPTIONAL; break;
-        case '|': token->terminal = L_OR; break;
-        case '.': token->terminal = L_ANY_CHAR; break;
+        case '+': term = L_POSITIVE_CLOSURE; break;
+        case '*': term = L_KLEENE_CLOSURE; break;
+        case '^': term = L_ANCHOR_START; break;
+        case '$': term = L_ANCHOR_END; break;
+        case '?': term = L_OPTIONAL; break;
+        case '|': term = L_OR; break;
+        case '.': term = L_ANY_CHAR; break;
         default:
 any_char:
             switch(curr_char) {
-
                 case ']':
-                    token->terminal = L_END_CLASS; in_char_class = 0;
+                    term = L_END_CLASS; in_char_class = 0;
                     break;
 
                 case '\\':
-                    curr_char = fgetc(fp);
-                    ++column;
-                    if(feof(fp)) {
-                        return 0;
-                    }
-
-                    buffer[0] = curr_char;
-
-                    switch(curr_char) {
-                        case '-': token->terminal = L_CHARACTER; break;
-                        case 'n': token->terminal = L_NEW_LINE; break;
-                        case 's': token->terminal = L_SPACE; break;
-                        case 't': token->terminal = L_TAB; break;
-                        case 'r': token->terminal = L_CARRIAGE_RETURN; break;
+                    switch(scanner_look(scanner, 1)) {
+                        case 0:
+                            return -1;
+                        case 'n': case 's': case 't': case 'r':
+                            scanner_advance(scanner);
+                            break;
                         default:
-                            if(isspace(curr_char)) {
-                                printf(
-                                    "Scanner Error: a space cannot follow a "
-                                    "backslash.\n"
-                                );
-                                exit(1);
-                            }
+                            scanner_mark_lexeme_start(scanner);
+                            scanner_advance(scanner);
 
-                            goto all_chars;
                     }
-                    break;
+                    goto all_chars;
 
                 default:
                     if(in_char_class && curr_char == '-') {
-                        token->terminal = L_CHARACTER_RANGE;
+                        term = L_CHARACTER_RANGE;
                     } else {
 all_chars:
-                        token->terminal = L_CHARACTER;
+                        term = L_CHARACTER;
                     }
             }
-
             first_char_in_class = 0;
     }
 
-    return 1;
+    /* go drop the lexeme unless it's a character */
+    if(term == L_CHARACTER) {
+        scanner_mark_lexeme_end(scanner);
+    }
+
+    return term;
 }
 
 /**
@@ -789,14 +732,6 @@ static PGrammar *regex_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_ANY_CHAR, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_SPACE, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_TAB, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_NEW_LINE, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_CARRIAGE_RETURN, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
     grammar_add_production_rule(G, P_CHAR,(G_ProductionRuleFunc *) &Char);
 
     return G;
@@ -809,29 +744,31 @@ static PGrammar *regex_grammar(void) {
  */
 void parse_regexp(const char *file) {
 
-    PScanner *scanner = (PScanner *) 0x1; /* fake scanner */
+    PScanner *scanner = scanner_alloc(); /* fake scanner */
     PGrammar *grammar = regex_grammar();
     PThompsonsConstruction thom, *thompson = &thom;
     PNFA *dfa;
     int i;
 
-    if(is_not_null(fp = fopen(file, "r"))) {
+    if(scanner_open(scanner, file)) {
+        scanner_flush(scanner, 1);
 
+        lex_analyze(scanner);
+        printf("lexeme %s \n", scanner_get_lexeme(scanner)->str);
+
+        /*
         thompson->nfa = nfa_alloc();
         thompson->top_state = -1;
 
         parse_tokens(
             grammar,
             scanner,
-            (PScannerFunction *) &R_get_token,
+            (PScannerFunc *) &R_get_token,
             (void *) thompson,
             TREE_TRAVERSE_POSTORDER
         );
 
         printf("\nFreeing memory.. \n");
-
-        fclose(fp);
-        grammar_free(grammar);
 
         nfa_print_dot(thompson->nfa);
 
@@ -840,18 +777,17 @@ void parse_regexp(const char *file) {
         dfa = nfa_to_dfa(thompson->nfa);
         nfa_free(thompson->nfa);
 
-        /*
-        thompson->nfa = dfa;
-        dfa = nfa_to_dfa(thompson->nfa);
-        nfa_free(thompson->nfa);
-        */
-
         nfa_print_dot(dfa);
+        nfa_print_to_file(dfa, "src/gen/lex.h");
+
         nfa_free(dfa);
-
-
+        */
+        printf("Success! \n");
     } else {
         printf("Error: Could not open file '%s'.", file);
     }
+
+    grammar_free(grammar);
+    scanner_free(scanner);
 }
 

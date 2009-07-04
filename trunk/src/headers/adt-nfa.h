@@ -49,6 +49,8 @@ unsigned int nfa_add_state(PNFA *nfa);
 
 void nfa_add_accepting_state(PNFA *nfa, unsigned int which_state);
 
+void nfa_add_conclusion(PNFA *nfa, unsigned int which_state, int conclusion);
+
 void nfa_merge_states(PNFA *nfa, unsigned int state_a, unsigned int state_b);
 
 void nfa_add_epsilon_transition(PNFA *nfa,
@@ -66,5 +68,7 @@ void nfa_add_set_transition(PNFA *nfa,
                             PSet *test_set);
 
 void nfa_print_dot(PNFA *nfa);
+
+void nfa_print_to_file(const PNFA *nfa, const char *out_file);
 
 #endif /* ADTDFA_H_ */
