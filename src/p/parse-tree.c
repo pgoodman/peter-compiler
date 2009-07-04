@@ -58,35 +58,26 @@ PT_Epsilon *PT_alloc_epsilon(void) {
  * Return a linked list of all tokens in the current file being parsed.
  */
 PT_Terminal *PT_alloc_terminals(PScanner *scanner,
-                                PScannerFunction *scanner_fnc,
+                                PScannerFunc *scanner_fnc,
                                 PT_Set *tree_set) {
 
     PT_Terminal *curr = NULL,
                 *prev = NULL,
                 *first = NULL;
 
-    PToken token,
-           *tok = &token;
-
-    PString *lexeme;
+    G_Terminal term;
 
     unsigned int id = 0;
 
     assert_not_null(scanner);
 
     /* bring the entire token stream into memory */
-    while(scanner_fnc(scanner, tok)) {
-
-        lexeme = NULL;
-        if(is_not_null(token.lexeme)) {
-            lexeme = string_alloc_char(token.lexeme, token.lexeme_length);
-        }
-
+    while((term = scanner_fnc(scanner)) >= 0) {
         curr = PT_alloc_terminal(
-            token.terminal,
-            lexeme,
-            token.line,
-            token.column,
+            term,
+            scanner_get_lexeme(scanner),
+            scanner->lexeme.line,
+            scanner->lexeme.column,
             id
         );
 

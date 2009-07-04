@@ -18,7 +18,7 @@
 
 int main(void) {
 
-    parse_regexp("src/grammars/regexp.g");
+    parse_regexp("src/grammars/float.g");
     /*
     PNFA *nfa = nfa_alloc();
 
