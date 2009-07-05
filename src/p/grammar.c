@@ -86,13 +86,24 @@ PGrammar *grammar_alloc(G_NonTerminal start_production,
         )
     );
 
+    grammar->actions = NULL;
+
     return grammar;
 }
 /**
  * Free the parser adt.
  */
 void grammar_free(PGrammar *grammar) {
+    G_ActionRules *curr,
+                  *next;
+
     assert_not_null(grammar);
+
+    for(curr = grammar->actions; is_not_null(curr); curr = next) {
+        next = curr->next;
+        mem_free(curr);
+    }
+
     mem_free(grammar);
 }
 
@@ -108,9 +119,7 @@ void grammar_free(PGrammar *grammar) {
  * The production rule for the production "A" has two phrases in it. The
  * production rule for the production "D" has only one phrase.
  */
-void grammar_add_production_rule(PGrammar *grammar,
-                                 G_NonTerminal production,
-                                 G_ProductionRuleFunc *action_fnc) {
+void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production) {
     G_ProductionRule *rule,
                      *prev_rule;
 
@@ -142,7 +151,6 @@ void grammar_add_production_rule(PGrammar *grammar,
     ++(grammar->counter[C_PRODUCTION_RULES]);
 
     rule->production = production;
-    rule->action_fnc = action_fnc;
 
     return;
 }
@@ -242,6 +250,53 @@ void grammar_add_epsilon_symbol(PGrammar *grammar, G_TreeOp tree_op) {
  */
 void grammar_null_action(void *s, unsigned char r, unsigned int n, PParseTree *c[]) {
     return;
+}
+
+/**
+ * Add a set of actions to the production rules in the grammar. Multiple action
+ * passes can be added, where the first one added is the first one executed.
+ *
+ * Note: This function assumes that all production rules have been added and
+ *       that no further production rules will be added.
+ */
+void grammar_add_actions(PGrammar *grammar,
+                         PTreeTraversalType traversal_type,
+                         G_ProductionRuleFunc *actions[]) {
+    int i, j;
+    char *data;
+    G_ActionRules *new,
+                  *next;
+    G_ProductionRuleFunc **arr;
+
+    assert_not_null(grammar);
+    assert(grammar->num_productions > 0);
+
+    data = mem_alloc(
+        sizeof(G_ActionRules)
+      + (sizeof(G_ProductionRuleFunc *) * (grammar->num_productions - 1))
+    );
+
+    if(is_null(data)) {
+        mem_error("Internal Grammar Error: Unable to add action functions.");
+    }
+
+    new = (G_ActionRules *) data;
+    arr = new->actions;
+
+    for(i = grammar->num_productions, j = 0; --i >= 0; ++j) {
+       arr[j] = actions[j];
+    }
+
+    new->next = NULL;
+    new->traversal_type = traversal_type;
+
+    if(is_null(grammar->actions)) {
+        grammar->actions = new;
+    } else {
+        for(next = grammar->actions; is_not_null(next->next); next = next->next)
+            ;
+        next->next = new;
+    }
 }
 
 /* -------------------------------------------------------------------------- */

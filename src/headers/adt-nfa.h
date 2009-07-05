@@ -98,8 +98,14 @@ void nfa_add_set_transition(PNFA *nfa,
                             unsigned int end_state,
                             PSet *test_set);
 
+/* -------------------------------------------------------------------------- */
+
 void nfa_print_dot(PNFA *nfa);
 
-void nfa_print_to_file(const PNFA *nfa, const char *out_file);
+/* -------------------------------------------------------------------------- */
+
+void nfa_print_to_file(const PNFA *nfa,
+                       const char *out_file,
+                       const char *func_name);
 
 #endif /* ADTDFA_H_ */

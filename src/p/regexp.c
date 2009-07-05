@@ -8,10 +8,6 @@
 
 #include <p-regexp.h>
 
-
-#include "../gen/lex.h"
-
-
 #define NFA_MAX 256
 
 static unsigned int in_char_class = 0,
@@ -519,6 +515,24 @@ PGrammar *regexp_grammar(void) {
         80 /* number of phrase symbols */
     );
 
+    G_ProductionRuleFunc *grammar_actions[15] = {
+        (G_ProductionRuleFunc *) &Machine,          /* P_MACHINE */
+        &grammar_null_action,                       /* P_EXPR */
+        (G_ProductionRuleFunc *) &CatExpr,          /* P_CAT_EXPR */
+        &grammar_null_action,                       /* P_FACTOR */
+        &grammar_null_action,                       /* P_TERM */
+        (G_ProductionRuleFunc *) &OrExpr,           /* P_OR_EXPR */
+        (G_ProductionRuleFunc *) &Char,             /* P_CHAR */
+        &grammar_null_action,                       /* P_CHAR_CLASS_STRING */
+        &grammar_null_action,                       /* P_OPT_CHAR_CLASS_STRING */
+        &grammar_null_action,                       /* P_CHAR_RANGE */
+        (G_ProductionRuleFunc *) &CharClass,        /* P_CHARACTER_CLASS */
+        (G_ProductionRuleFunc *) &NegatedCharClass, /* P_NEGATED_CHARACTER_CLASS */
+        (G_ProductionRuleFunc *) &KleeneClosure,    /* P_KLEENE_CLOSURE */
+        (G_ProductionRuleFunc *) &PositiveClosure,  /* P_POSITIVE_CLOSURE */
+        (G_ProductionRuleFunc *) &OptionalTerm      /* P_OPTIONAL_TERM */
+    };
+
     /*
      * Machine
      *     : ^Expr
@@ -544,7 +558,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_epsilon_symbol(G, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_MACHINE, (G_ProductionRuleFunc *) &Machine);
+    grammar_add_production_rule(G, P_MACHINE);
 
 
     /*
@@ -557,7 +571,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_terminal_symbol(G, L_OR, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_OR_EXPR, (G_ProductionRuleFunc *) &OrExpr);
+    grammar_add_production_rule(G, P_OR_EXPR);
 
     /*
      * Expr
@@ -570,7 +584,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_EXPR, &grammar_null_action);
+    grammar_add_production_rule(G, P_EXPR);
 
     /*
      * CatExpr
@@ -584,7 +598,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_FACTOR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CAT_EXPR, (G_ProductionRuleFunc *) &CatExpr);
+    grammar_add_production_rule(G, P_CAT_EXPR);
 
     /*
      * KleeneClosure : ^Term <kleene_closure> ;
@@ -593,7 +607,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_KLEENE_CLOSURE, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_KLEENE_CLOSURE, (G_ProductionRuleFunc *) &KleeneClosure);
+    grammar_add_production_rule(G, P_KLEENE_CLOSURE);
 
     /*
      * PositiveClosure : ^Term <positive_closure> ;
@@ -602,7 +616,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_POSITIVE_CLOSURE, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_POSITIVE_CLOSURE, (G_ProductionRuleFunc *) &PositiveClosure);
+    grammar_add_production_rule(G, P_POSITIVE_CLOSURE);
 
     /*
      * OptionalTerm : ^Term <optional> ;
@@ -611,7 +625,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_OPTIONAL, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_OPTIONAL_TERM, (G_ProductionRuleFunc *) &OptionalTerm);
+    grammar_add_production_rule(G, P_OPTIONAL_TERM);
 
     /*
      * Factor
@@ -630,7 +644,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_TERM, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_FACTOR, &grammar_null_action);
+    grammar_add_production_rule(G, P_FACTOR);
 
     /*
      * Term
@@ -651,7 +665,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_GROUP, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_TERM, &grammar_null_action);
+    grammar_add_production_rule(G, P_TERM);
 
     /*
      * NegatedCharacterClass : <start_neg_class> ^CharClassString <end_class> ;
@@ -661,7 +675,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_CHAR_CLASS_STRING, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_CLASS, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_NEGATED_CHARACTER_CLASS, (G_ProductionRuleFunc *) &NegatedCharClass);
+    grammar_add_production_rule(G, P_NEGATED_CHARACTER_CLASS);
 
     /*
      * CharRange
@@ -673,7 +687,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_terminal_symbol(G, L_CHARACTER_RANGE, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR_RANGE, &grammar_null_action);
+    grammar_add_production_rule(G, P_CHAR_RANGE);
 
     /*
      * OptCharClassString
@@ -686,7 +700,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_epsilon_symbol(G, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_OPT_CHAR_CLASS_STRING, &grammar_null_action);
+    grammar_add_production_rule(G, P_OPT_CHAR_CLASS_STRING);
 
     /*
      * CharClassString
@@ -704,7 +718,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_CHAR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR_CLASS_STRING, &grammar_null_action);
+    grammar_add_production_rule(G, P_CHAR_CLASS_STRING);
 
     /*
      * CharacterClass : <start_class> ^CharClassString <end_class> ;
@@ -714,7 +728,7 @@ PGrammar *regexp_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_CHAR_CLASS_STRING, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_END_CLASS, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHARACTER_CLASS, (G_ProductionRuleFunc *) &CharClass);
+    grammar_add_production_rule(G, P_CHARACTER_CLASS);
 
     /*
      * Char
@@ -731,7 +745,10 @@ PGrammar *regexp_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_ANY_CHAR, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_CHAR,(G_ProductionRuleFunc *) &Char);
+    grammar_add_production_rule(G, P_CHAR);
+
+    /* add in the actions */
+    grammar_add_actions(G, TREE_TRAVERSE_POSTORDER, grammar_actions);
 
     return G;
 }
@@ -761,8 +778,7 @@ void regexp_parse(PGrammar *grammar,
         grammar,
         scanner,
         (PScannerFunc *) &R_get_token,
-        (void *) thompson,
-        TREE_TRAVERSE_POSTORDER
+        (void *) thompson
     );
 
     if(!thom.top_state) {

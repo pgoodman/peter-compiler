@@ -1123,7 +1123,9 @@ void nfa_print_dot(PNFA *nfa) {
 /**
  * Print a NFA as C code into the file specified.
  */
-void nfa_print_to_file(const PNFA *nfa, const char *out_file) {
+void nfa_print_to_file(const PNFA *nfa,
+                       const char *out_file,
+                       const char *func_name) {
     FILE *F;
     PSet *astates;
     NFA_Transition *trans,
@@ -1140,17 +1142,21 @@ void nfa_print_to_file(const PNFA *nfa, const char *out_file) {
     }
 
     astates = nfa->accepting_states;
-    transitions = (NFA_Transition **) nfa->state_transitions;
+    transitions = nfa->state_transitions;
 
     P(F, "\n");
+    P(F, "#ifndef _P_LEX_H_\n");
+    P(F, "#define _P_LEX_H_\n");
+    P(F, "#include <ctype.h>\n");
     P(F, "#include <std-include.h>\n");
     P(F, "#include <p-types.h>\n");
     P(F, "#include <p-scanner.h>\n\n");
-    P(F, "extern G_Terminal lex_analyze(PScanner *);\n\n");
-    P(F, "G_Terminal lex_analyze(PScanner *S) {\n");
+    P(F, "extern G_Terminal %s(PScanner *);\n\n", func_name);
+    P(F, "G_Terminal %s(PScanner *S) {\n", func_name);
     P(F, "    G_Terminal pterm = -1, term = -1;\n");
     P(F, "    unsigned int n = 0, seen_accepting_state = 0;\n");
     P(F, "    int cc, nc = 0, pnc = 0;\n");
+    P(F, "    scanner_skip(S, &isspace);\n");
     P(F, "    scanner_mark_lexeme_start(S);\n");
 
     if(nfa->start_state > 0) {
@@ -1160,37 +1166,42 @@ void nfa_print_to_file(const PNFA *nfa, const char *out_file) {
     for(n = 0, i = nfa->num_states; --i >= 0; ++n) {
 
         P(F, "state_%d:\n", n);
-        P(F, "    if(!(cc = scanner_advance(S))) { goto undo_and_commit; }\n");
-
-        if(set_has_elm(astates, n)) {
-            P(F, "    pterm = term;\n");
-            P(F, "    term = %d;\n", *(nfa->conclusions+n));
-            P(F, "    pnc = nc;\n");
-            P(F, "    seen_accepting_state = 1;\n");
-        }
-
-        P(F, "    ++nc;\n");
-        P(F, "    switch(cc) {\n");
 
         trans = transitions[n];
-        for(; is_not_null(trans); trans = trans->trans_next) {
+        if(is_null(trans) && set_has_elm(astates, n)) {
+            P(F, "    pterm = %d;\n", *(nfa->conclusions+n));
+            P(F, "    goto commit;\n");
+        } else {
+            P(F, "    if(!(cc = scanner_advance(S))) { goto undo_and_commit; }\n");
 
-            if(trans->type != T_VALUE) {
-                std_error(
-                    "Internal NFA Print Error: Cannot print non-value "
-                    "transitions."
-                );
+            if(set_has_elm(astates, n)) {
+                P(F, "    pterm = term;\n");
+                P(F, "    term = %d;\n", *(nfa->conclusions+n));
+                P(F, "    pnc = nc;\n");
+                P(F, "    seen_accepting_state = 1;\n");
             }
 
-            P(
-                F,
-                "        case %d: goto state_%d;\n",
-                trans->condition.value,
-                trans->to_state
-            );
+            P(F, "    ++nc;\n");
+            P(F, "    switch(cc) {\n");
+            for(; is_not_null(trans); trans = trans->trans_next) {
+
+                if(trans->type != T_VALUE) {
+                    std_error(
+                        "Internal NFA Print Error: Cannot print non-value "
+                        "transitions."
+                    );
+                }
+
+                P(
+                    F,
+                    "        case %d: goto state_%d;\n",
+                    trans->condition.value,
+                    trans->to_state
+                );
+            }
+            P(F, "        default: goto undo_and_commit;\n");
+            P(F, "    }\n");
         }
-        P(F, "        default: goto undo_and_commit;\n");
-        P(F, "    }\n");
     }
 
     P(F, "undo_and_commit:\n");
@@ -1198,9 +1209,14 @@ void nfa_print_to_file(const PNFA *nfa, const char *out_file) {
     P(F, "        std_error(\"Scanner Error: Unable to match token.\");\n");
     P(F, "    }\n");
     P(F, "    scanner_pushback(S, nc - pnc);\n");
+    P(F, "commit:\n");
     P(F, "    scanner_mark_lexeme_end(S);\n");
+    P(F, "    if(seen_accepting_state && pterm < 0 && term >= 0) {\n");
+    P(F, "        return term;\n");
+    P(F, "    }\n");
     P(F, "    return pterm;\n");
     P(F, "}\n\n");
+    P(F, "#endif\n\n");
 
     fclose(F);
 

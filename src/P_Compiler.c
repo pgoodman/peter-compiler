@@ -18,6 +18,8 @@
 #include <p-grammar.h>
 #include <p-regexp.h>
 
+#include "gen/parser.g.h"
+
 enum {
     L_NON_TERMINAL,
     L_TERMINAL,
@@ -32,6 +34,100 @@ enum {
 int main(void) {
 
     PScanner *scanner = scanner_alloc();
+
+    G_Terminal t;
+    /*
+    if(scanner_use_file(scanner, "src/grammars/parser.g")) {
+        scanner_flush(scanner, 1);
+
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_NON_TERMINAL
+            );
+        }
+
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_COLON
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_UP_ARROW
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_NON_TERMINAL
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_NON_TERMINAL
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_COLON
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_EPSILON
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_SEMICOLON
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_NON_TERMINAL
+            );
+        }
+        if((t = lex_parser(scanner)) >= 0) {
+            printf(
+                "Next lexeme: %s, term %d =? %d \n",
+                scanner_get_lexeme(scanner)->str,
+                t,
+                L_COLON
+            );
+        }
+    } else {
+        printf("Error: Unable to open file. \n");
+    }
+
+    scanner_free(scanner);
+    */
+
     PGrammar *grammar = regexp_grammar();
     PNFA *nfa = nfa_alloc(),
          *dfa;
@@ -118,10 +214,9 @@ int main(void) {
     dfa = nfa_to_dfa(nfa);
     nfa_free(nfa);
 
-    nfa_print_dot(dfa);
-
-    nfa_print_to_file(dfa, "src/gen/lex.h");
+    nfa_print_to_file(dfa, "src/gen/parser.g.h", "lex_parser");
     nfa_free(dfa);
+
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
