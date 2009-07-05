@@ -22,6 +22,12 @@ PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
     tree = tree_alloc(sizeof(PT_Terminal), 0);
     ((PParseTree *) tree)->type = PT_TERMINAL;
 
+    /*
+    if(is_not_null(lexeme)) {
+        printf("lexeme: { %s } %d \n", lexeme->str, terminal);
+    }
+    */
+
     tree->terminal = terminal;
     tree->lexeme = lexeme;
     tree->line = line;

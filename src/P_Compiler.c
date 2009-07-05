@@ -32,8 +32,9 @@ enum {
 };
 
 enum {
-    P_PRODUCTIONS,
+    P_GRAMMAR_RULES,
     P_PRODUCTION,
+    P_TERMINAL,
     P_PRODUCTION_RULES,
     P_PRODUCTION_RULE,
     P_RULES,
@@ -71,11 +72,11 @@ static void print_branches(unsigned int num_branches, PParseTree *branches[]) {
     }
 }
 
-static void Productions(void *state,
+static void GrammarRules(void *state,
                         unsigned char phrase,
                         unsigned int num_branches,
                         PParseTree *branches[]) {
-    printf("Ox%d [label=Productions]\n", (unsigned int) branches);
+    printf("Ox%d [label=GrammarRules]\n", (unsigned int) branches);
     print_branches(num_branches, branches);
 }
 
@@ -84,6 +85,14 @@ static void Production(void *state,
                         unsigned int num_branches,
                         PParseTree *branches[]) {
     printf("Ox%d [label=Production]\n", (unsigned int) branches);
+    print_branches(num_branches, branches);
+}
+
+static void Terminal(void *state,
+                        unsigned char phrase,
+                        unsigned int num_branches,
+                        PParseTree *branches[]) {
+    printf("Ox%d [label=Terminal]\n", (unsigned int) branches);
     print_branches(num_branches, branches);
 }
 
@@ -146,16 +155,17 @@ static void RaiseChildren(void *state,
 static PGrammar *parser_grammar_grammar(void) {
 
     PGrammar *G = grammar_alloc(
-        P_PRODUCTIONS, /* production to start matching with */
-        9, /* number of productions */
-        8, /* number of tokens */
-        17, /* number of production phrases */
-        27 /* number of phrase symbols */
+        P_GRAMMAR_RULES, /* production to start matching with */
+        10,              /* number of productions */
+        8,               /* number of tokens */
+        19,              /* number of production phrases */
+        33               /* number of phrase symbols */
     );
 
     G_ProductionRuleFunc *actions[] = {
-        &Productions,     /* P_PRODUCTIONS */
+        &GrammarRules,    /* P_GRAMMAR_RULES */
         &Production,      /* P_PRODUCTION */
+        &Terminal,        /* P_TERMINAL */
         &ProductionRules, /* P_PRODUCTION_RULES */
         &ProductionRule,  /* P_PRODUCTION_RULE */
         &Rules,           /* P_RULES */
@@ -167,18 +177,28 @@ static PGrammar *parser_grammar_grammar(void) {
 
     grammar_add_actions(G, TREE_TRAVERSE_POSTORDER, actions);
 
-    grammar_add_non_terminal_symbol(G, P_PRODUCTION, G_AUTO);
-    grammar_add_non_terminal_symbol(G, P_PRODUCTIONS, G_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_GRAMMAR_RULES, G_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_PRODUCTION, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_non_terminal_symbol(G, P_GRAMMAR_RULES, G_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_TERMINAL, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_epsilon_symbol(G, G_AUTO);
     grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_PRODUCTIONS);
+    grammar_add_production_rule(G, P_GRAMMAR_RULES);
 
     grammar_add_terminal_symbol(G, L_NON_TERMINAL, G_NON_EXCLUDABLE);
     grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULES, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_SEMICOLON, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_PRODUCTION);
+
+    grammar_add_terminal_symbol(G, L_TERMINAL, G_NON_EXCLUDABLE);
+    grammar_add_terminal_symbol(G, L_COLON, G_AUTO);
+    grammar_add_terminal_symbol(G, L_REGEXP, G_NON_EXCLUDABLE);
+    grammar_add_terminal_symbol(G, L_SEMICOLON, G_AUTO);
+    grammar_add_phrase(G);
+    grammar_add_production_rule(G, P_TERMINAL);
 
     grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULE, G_NON_EXCLUDABLE);
     grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULES, G_RAISE_CHILDREN);
@@ -235,6 +255,8 @@ static PGrammar *parser_grammar_grammar(void) {
 int main(void) {
 
     PScanner *scanner = scanner_alloc();
+
+
     PGrammar *grammar = parser_grammar_grammar();
 
     if(scanner_use_file(scanner, "src/grammars/parser.g")) {
@@ -344,7 +366,7 @@ int main(void) {
     scanner_free(scanner);
     */
 
-    /*
+/*
     PGrammar *grammar = regexp_grammar();
     PNFA *nfa = nfa_alloc(),
          *dfa;
@@ -384,7 +406,7 @@ int main(void) {
         grammar,
         scanner,
         nfa,
-        (unsigned char *) "'.+'",
+        (unsigned char *) "'([^']*\\')*[^']*'",
         start,
         L_REGEXP
     );
@@ -433,7 +455,7 @@ int main(void) {
 
     nfa_print_scanner(dfa, "src/gen/parser.g.h", "parser_grammar_lexer");
     nfa_free(dfa);
-    */
+*/
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());

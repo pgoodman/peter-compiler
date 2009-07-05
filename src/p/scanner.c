@@ -164,6 +164,7 @@ int scanner_use_file(PScanner *scanner, const char *file_name) {
     scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
     scanner->buffer.next_char = end_of_buffer;
     scanner->buffer.allowed_to_flush = 1;
+    scanner->buffer.ptr_start = (unsigned char *) scanner->buffer.start;
 
     scanner->lexeme.end = end_of_buffer;
     scanner->lexeme.start = end_of_buffer;
@@ -199,6 +200,7 @@ int scanner_use_string(PScanner *scanner, unsigned char *string) {
     for(s = string; *s; ++s)
         ;
 
+    scanner->buffer.ptr_start = string;
     scanner->buffer.end = s;
     scanner->buffer.flush_point = s;
     scanner->buffer.next_char = string;
@@ -232,7 +234,7 @@ int scanner_flush(PScanner *scanner, int force_flush) {
                  shift_amount = 0;
 
     unsigned char *left_edge,
-                  *buffer_start = scanner->buffer.start,
+                  *buffer_start = scanner->buffer.ptr_start,
                   *buffer_end = scanner->buffer.end;
 
     if(NO_MORE_CHARS(scanner)) {
@@ -323,7 +325,7 @@ char scanner_look(PScanner *scanner, const int n) {
             return EOF;
         }
         return 0;
-    } else if(ch < scanner->buffer.start) {
+    } else if(ch < scanner->buffer.ptr_start) {
         return 0;
     }
 

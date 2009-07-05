@@ -89,10 +89,6 @@ state_1:
     seen_accepting_state = 1;
     ++nc;
     switch(cc) {
-        case 109: goto state_1;
-        case 110: goto state_1;
-        case 111: goto state_1;
-        case 112: goto state_1;
         case 113: goto state_1;
         case 114: goto state_1;
         case 115: goto state_1;
@@ -152,6 +148,10 @@ state_1:
         case 106: goto state_1;
         case 107: goto state_1;
         case 108: goto state_1;
+        case 109: goto state_1;
+        case 110: goto state_1;
+        case 111: goto state_1;
+        case 112: goto state_1;
         default: goto undo_and_commit;
     }
 state_2:
@@ -253,6 +253,7 @@ state_7:
         case 7: goto state_8;
         case 8: goto state_8;
         case 9: goto state_8;
+        case 10: goto state_8;
         case 11: goto state_8;
         case 12: goto state_8;
         case 13: goto state_8;
@@ -281,7 +282,7 @@ state_7:
         case 36: goto state_8;
         case 37: goto state_8;
         case 38: goto state_8;
-        case 39: goto state_9;
+        case 39: goto state_10;
         case 40: goto state_8;
         case 41: goto state_8;
         case 42: goto state_8;
@@ -334,7 +335,7 @@ state_7:
         case 89: goto state_8;
         case 90: goto state_8;
         case 91: goto state_8;
-        case 92: goto state_8;
+        case 92: goto state_9;
         case 93: goto state_8;
         case 94: goto state_8;
         case 95: goto state_8;
@@ -376,9 +377,6 @@ state_8:
     if(!(cc = scanner_advance(S))) { goto undo_and_commit; }
     ++nc;
     switch(cc) {
-        case 54: goto state_8;
-        case 55: goto state_8;
-        case 56: goto state_8;
         case 57: goto state_8;
         case 58: goto state_8;
         case 59: goto state_8;
@@ -414,7 +412,7 @@ state_8:
         case 89: goto state_8;
         case 90: goto state_8;
         case 91: goto state_8;
-        case 92: goto state_8;
+        case 92: goto state_9;
         case 93: goto state_8;
         case 94: goto state_8;
         case 95: goto state_8;
@@ -460,6 +458,7 @@ state_8:
         case 7: goto state_8;
         case 8: goto state_8;
         case 9: goto state_8;
+        case 10: goto state_8;
         case 11: goto state_8;
         case 12: goto state_8;
         case 13: goto state_8;
@@ -488,7 +487,7 @@ state_8:
         case 36: goto state_8;
         case 37: goto state_8;
         case 38: goto state_8;
-        case 39: goto state_10;
+        case 39: goto state_12;
         case 40: goto state_8;
         case 41: goto state_8;
         case 42: goto state_8;
@@ -503,17 +502,15 @@ state_8:
         case 51: goto state_8;
         case 52: goto state_8;
         case 53: goto state_8;
+        case 54: goto state_8;
+        case 55: goto state_8;
+        case 56: goto state_8;
         default: goto undo_and_commit;
     }
 state_9:
     if(!(cc = scanner_advance(S))) { goto undo_and_commit; }
-    pterm = term;
-    term = 2;
-    pnc = nc;
-    seen_accepting_state = 1;
     ++nc;
     switch(cc) {
-        case 56: goto state_8;
         case 57: goto state_8;
         case 58: goto state_8;
         case 59: goto state_8;
@@ -549,7 +546,7 @@ state_9:
         case 89: goto state_8;
         case 90: goto state_8;
         case 91: goto state_8;
-        case 92: goto state_8;
+        case 92: goto state_9;
         case 93: goto state_8;
         case 94: goto state_8;
         case 95: goto state_8;
@@ -595,6 +592,7 @@ state_9:
         case 7: goto state_8;
         case 8: goto state_8;
         case 9: goto state_8;
+        case 10: goto state_8;
         case 11: goto state_8;
         case 12: goto state_8;
         case 13: goto state_8;
@@ -623,7 +621,7 @@ state_9:
         case 36: goto state_8;
         case 37: goto state_8;
         case 38: goto state_8;
-        case 39: goto state_10;
+        case 39: goto state_11;
         case 40: goto state_8;
         case 41: goto state_8;
         case 42: goto state_8;
@@ -640,9 +638,13 @@ state_9:
         case 53: goto state_8;
         case 54: goto state_8;
         case 55: goto state_8;
+        case 56: goto state_8;
         default: goto undo_and_commit;
     }
 state_10:
+    pterm = 2;
+    goto commit;
+state_11:
     if(!(cc = scanner_advance(S))) { goto undo_and_commit; }
     pterm = term;
     term = 3;
@@ -660,6 +662,7 @@ state_10:
         case 7: goto state_8;
         case 8: goto state_8;
         case 9: goto state_8;
+        case 10: goto state_8;
         case 11: goto state_8;
         case 12: goto state_8;
         case 13: goto state_8;
@@ -688,7 +691,7 @@ state_10:
         case 36: goto state_8;
         case 37: goto state_8;
         case 38: goto state_8;
-        case 39: goto state_10;
+        case 39: goto state_12;
         case 40: goto state_8;
         case 41: goto state_8;
         case 42: goto state_8;
@@ -741,7 +744,7 @@ state_10:
         case 89: goto state_8;
         case 90: goto state_8;
         case 91: goto state_8;
-        case 92: goto state_8;
+        case 92: goto state_9;
         case 93: goto state_8;
         case 94: goto state_8;
         case 95: goto state_8;
@@ -779,6 +782,9 @@ state_10:
         case 127: goto state_8;
         default: goto undo_and_commit;
     }
+state_12:
+    pterm = 3;
+    goto commit;
 undo_and_commit:
     if(!seen_accepting_state) {
         std_error("Scanner Error: Unable to match token.");

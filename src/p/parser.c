@@ -495,7 +495,7 @@ parser_begin_loop:
 
         frame = parser.call.stack[j = parser.call.frame];
 
-        D( printf("\nframe is %p, phrase is %d, symbol is %d, at %d \n", (void *) frame, frame->production.phrase, frame->production.symbol, (int) parser.call.frame); )
+        D( printf("\nframe is %d=%p, phrase is %d, symbol is %d, at %d \n", j, (void *) frame, frame->production.phrase, frame->production.symbol, (int) parser.call.frame); )
 
         /* get the cached result for the frame on the top of the stack */
         intermediate_result = IR_get(
@@ -625,7 +625,9 @@ phrase_completed:
             /* there are tokens to parse but we have a single frame on
              * on stack. this is a parse error, so we will backtrack. */
             if(parser.call.frame == 0 && token->id < parser.num_tokens) {
-
+                if(frame->left_recursion.is_used == 1) {
+                    goto grow_left_recursion;
+                }
                 D( printf("no rules left to parse remaining tokens. \n"); )
                 parser.must_backtrack = 1;
 
