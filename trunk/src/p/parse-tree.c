@@ -12,11 +12,11 @@
 /**
  * Allocate a new terminal tree.
  */
-static PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
-                                      PString *lexeme,
-                                      uint32_t line,
-                                      uint32_t column,
-                                      uint32_t id) {
+PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
+                               PString *lexeme,
+                               uint32_t line,
+                               uint32_t column,
+                               uint32_t id) {
     PT_Terminal *tree = NULL;
 
     tree = tree_alloc(sizeof(PT_Terminal), 0);
@@ -52,61 +52,6 @@ PT_Epsilon *PT_alloc_epsilon(void) {
     PT_Epsilon *tree = tree_alloc(sizeof(PT_Epsilon), 0);
     ((PParseTree *) tree)->type = PT_EPSILON;
     return tree;
-}
-
-/**
- * Return a linked list of all tokens in the current file being parsed.
- */
-PT_Terminal *PT_alloc_terminals(PScanner *scanner,
-                                PScannerFunc *scanner_fnc,
-                                PT_Set *tree_set) {
-
-    PT_Terminal *curr = NULL,
-                *prev = NULL,
-                *first = NULL;
-
-    G_Terminal term;
-
-    unsigned int id = 0;
-
-    assert_not_null(scanner);
-
-    /* bring the entire token stream into memory */
-    while((term = scanner_fnc(scanner)) >= 0) {
-        curr = PT_alloc_terminal(
-            term,
-            scanner_get_lexeme(scanner),
-            scanner->lexeme.line,
-            scanner->lexeme.column,
-            id
-        );
-
-        PTS_add(tree_set, (PParseTree *) curr);
-
-        if(is_not_null(prev)) {
-            prev->next = curr;
-        } else {
-            first = curr;
-        }
-
-        ++id;
-        prev = curr;
-    }
-
-    /* add in the end-of-stream token */
-    curr = PT_alloc_terminal(0, string_alloc_char("EOF", 3), 0, 0, id);
-    curr->next = NULL;
-    PTS_add(tree_set, (PParseTree *) curr);
-
-    if(is_not_null(prev)) {
-        prev->next = curr;
-    }
-
-    if(is_null(first)) {
-        return curr;
-    }
-
-    return first;
 }
 
 /**

@@ -89,6 +89,8 @@ typedef struct PGrammar {
 
     G_NonTerminal start_production_rule;
 
+    G_ActionRules *actions;
+
 } PGrammar;
 
 /* -------------------------------------------------------------------------- */

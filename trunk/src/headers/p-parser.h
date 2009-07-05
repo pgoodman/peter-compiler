@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <string.h>
+#include <ctype.h>
 
 #include "std-include.h"
 #include "std-input.h"
@@ -28,7 +29,6 @@
 void parse_tokens(PGrammar *grammar,
                   PScanner *scanner,
                   PScannerFunc *scanner_fnc,
-                  void *state,
-                  PTreeTraversalType tree_taversal_type);
+                  void *state);
 
 #endif /* PPARSER_H_ */

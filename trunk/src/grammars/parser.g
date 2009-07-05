@@ -1,7 +1,7 @@
 
 Productions
     : ^Temp Production
-    : <>
+    : ''
     ;
 
 Temp
@@ -9,34 +9,34 @@ Temp
     ;
 
 Production
-    : -<non_terminal> ^ProductionRules <semicolon>
+    : -non_terminal ^ProductionRules semicolon
     ;
 
 ProductionRules
     : -ProductionRule ^ProductionRules
-    : <>
+    : ''
     ;
 
 ProductionRule
-    : <colon> ^Rules
+    : colon ^Rules
     ;
 
 Rules
     : ^Rule ^Rules
-    : <>
+    : ''
     ;
 
 Rule
-    : RuleFlag -<non_terminal>
-    : RuleFlag -<terminal>
-    : RuleFlag -<epsilon>
+    : RuleFlag -non_terminal
+    : RuleFlag -terminal
+    : RuleFlag -epsilon
     ;
 
 RuleFlag
     : -NonExcludable
     : -Subsumable
-    : <>
+    : ''
     ;
 
-NonExcludable : <dash> ;
-Subsumable : <up_arrow> ;
+NonExcludable : dash ;
+Subsumable : up_arrow ;

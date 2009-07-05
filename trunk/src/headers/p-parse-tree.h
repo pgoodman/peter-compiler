@@ -13,14 +13,16 @@
 #include "p-types.h"
 #include "p-scanner.h"
 
+PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
+                               PString *lexeme,
+                               uint32_t line,
+                               uint32_t column,
+                               uint32_t id);
+
 PT_NonTerminal *PT_alloc_non_terminal(G_NonTerminal production,
                                       unsigned short num_branches);
 
 PT_Epsilon *PT_alloc_epsilon(void);
-
-PT_Terminal *PT_alloc_terminals(PScanner *scanner,
-                                PScannerFunc *scanner_fnc,
-                                PT_Set *tree_set);
 
 /* -------------------------------------------------------------------------- */
 

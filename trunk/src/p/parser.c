@@ -277,35 +277,106 @@ static void LR_mark_origin(PParser *parser, P_IntermediateResult *result) {
 
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Return a linked list of all tokens in the current file being parsed.
+ */
+static PT_Terminal *P_alloc_terminals(PScanner *scanner,
+                                      PScannerFunc *scanner_fnc,
+                                      PT_Set *tree_set) {
+
+    PT_Terminal *curr = NULL,
+                *prev = NULL,
+                *first = NULL;
+
+    G_Terminal term;
+
+    unsigned int id = 0;
+
+    assert_not_null(scanner);
+
+    /* bring the entire token stream into memory */
+    while((term = scanner_fnc(scanner)) >= 0) {
+        curr = PT_alloc_terminal(
+            term,
+            scanner_get_lexeme(scanner),
+            scanner->lexeme.line,
+            scanner->lexeme.column,
+            id
+        );
+
+        PTS_add(tree_set, (PParseTree *) curr);
+
+        if(is_not_null(prev)) {
+            prev->next = curr;
+        } else {
+            first = curr;
+        }
+
+        ++id;
+        prev = curr;
+    }
+
+    /* add in the end-of-stream token */
+    curr = PT_alloc_terminal(0, string_alloc_char("EOF", 3), 0, 0, id);
+    curr->next = NULL;
+    PTS_add(tree_set, (PParseTree *) curr);
+
+    if(is_not_null(prev)) {
+        prev->next = curr;
+    }
+
+    if(is_null(first)) {
+        return curr;
+    }
+
+    return first;
+}
+
+/* -------------------------------------------------------------------------- */
+
 static void P_perform_production_rule_actions(PGrammar *grammar,
                                               PParseTree *tree,
-                                              void *state,
-                                              PTreeTraversalType tree_taversal_type) {
-    PTreeGenerator *tree_generator = NULL;
+                                              void *state) {
+    PTreeGenerator *gen = NULL;
     PT_NonTerminal *non_terminal;
+    G_ActionRules *action = grammar->actions;
+    PTreeTraversalType traversal_type,
+                       prev_traversal_type = -1;
+    PParseTree *curr;
 
-    /* go over our reduced parse tree and remove any references to trees
-     * listed in our all trees hash table to that we can free all of the
-     * remaining trees in there at once. */
-    tree_generator = tree_generator_alloc(
-        (PTree *) tree,
-        tree_taversal_type
-    );
+    /* execute the action passes in sequence */
+    for(; is_not_null(action); action = action->next) {
+        traversal_type = action->traversal_type;
 
-    while(generator_next(tree_generator)) {
-        tree = generator_current(tree_generator);
-        if(tree->type == PT_NON_TERMINAL) {
-            non_terminal = (PT_NonTerminal *) tree;
-            (grammar->production_rules + non_terminal->production)->action_fnc(
-                state,
-                non_terminal->phrase,
-                tree_get_num_branches((PTree *) non_terminal),
-                (PParseTree **) (((PTree *) non_terminal)->_branches)
-            );
+        /* re-use or allocate a new tree generator */
+        if(traversal_type == prev_traversal_type && is_not_null(gen)) {
+            tree_generator_reuse(gen, (PTree *) tree);
+        } else {
+            if(is_not_null(gen)) {
+                generator_free(gen);
+            }
+            gen = tree_generator_alloc((PTree *) tree, traversal_type);
+        }
+
+        /* go and apply the specific action function to this non-terminal
+         * node. */
+        while(generator_next(gen)) {
+            curr = generator_current(gen);
+            if(curr->type == PT_NON_TERMINAL) {
+                non_terminal = (PT_NonTerminal *) curr;
+                action->actions[non_terminal->production](
+                    state,
+                    non_terminal->phrase,
+                    tree_get_num_branches((PTree *) non_terminal),
+                    (PParseTree **) (((PTree *) non_terminal)->_branches)
+                );
+            }
         }
     }
 
-    generator_free(tree_generator);
+    if(is_not_null(gen)) {
+        generator_free(gen);
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -348,8 +419,7 @@ static void P_perform_production_rule_actions(PGrammar *grammar,
 void parse_tokens(PGrammar *grammar,
                   PScanner *scanner,
                   PScannerFunc *scanner_fnc,
-                  void *state,
-                  PTreeTraversalType tree_taversal_type) {
+                  void *state) {
 
     PParser parser;
 
@@ -379,7 +449,7 @@ void parse_tokens(PGrammar *grammar,
     D( printf("accumulating tokens... \n"); )
 
     /* get all of the tokens as terminal trees */
-    token = PT_alloc_terminals(
+    token = P_alloc_terminals(
         scanner,
         scanner_fnc,
         parser.tree_set
@@ -889,8 +959,7 @@ done_parsing:
     P_perform_production_rule_actions(
         grammar,
         (PParseTree *) frame->parse_tree,
-        state,
-        tree_taversal_type
+        state
     );
 
     G_unlock(grammar);

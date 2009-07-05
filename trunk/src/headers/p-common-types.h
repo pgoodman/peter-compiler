@@ -102,9 +102,14 @@ typedef struct G_Phrase {
 
 typedef struct G_ProductionRule {
     G_Phrase *phrases;
-    G_ProductionRuleFunc *action_fnc;
     G_NonTerminal production;
     unsigned int num_phrases;
 } G_ProductionRule;
+
+typedef struct G_ActionRules {
+    struct G_ActionRules *next;
+    PTreeTraversalType traversal_type;
+    G_ProductionRuleFunc *actions[1]; /* this will be expanded */
+} G_ActionRules;
 
 #endif /* PPRODCOMMON_H_ */
