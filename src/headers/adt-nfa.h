@@ -104,7 +104,7 @@ void nfa_print_dot(PNFA *nfa);
 
 /* -------------------------------------------------------------------------- */
 
-void nfa_print_to_file(const PNFA *nfa,
+void nfa_print_scanner(const PNFA *nfa,
                        const char *out_file,
                        const char *func_name);
 
