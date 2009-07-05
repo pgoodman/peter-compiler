@@ -30,7 +30,12 @@ enum {
     L_OR,
     L_CHARACTER_RANGE,
     L_CHARACTER,
-    L_ANY_CHAR
+    L_ANY_CHAR,
+
+    L_NEW_LINE,
+    L_CARRIAGE_RETURN,
+    L_SPACE,
+    L_TAB
 };
 
 /* grammar non-terminals */
@@ -227,7 +232,8 @@ static void Char(PThompsonsConstruction *thompson,
                  PParseTree *branches[]) {
 
     unsigned int start, prev, end, i;
-    PT_Terminal *character = (PT_Terminal *) branches[0];
+    int the_char;
+    PT_Terminal *term = (PT_Terminal *) branches[0];
     PSet *all_chars;
 
     if(thompson->top_state >= NFA_MAX-1) {
@@ -237,7 +243,7 @@ static void Char(PThompsonsConstruction *thompson,
     start = nfa_add_state(thompson->nfa);
     end = nfa_add_state(thompson->nfa);
 
-    if(character->terminal == L_ANY_CHAR) {
+    if(term->terminal == L_ANY_CHAR) {
         all_chars = set_alloc_inverted();
         set_remove_elm(all_chars, '\n');
         nfa_add_set_transition(
@@ -247,11 +253,31 @@ static void Char(PThompsonsConstruction *thompson,
             all_chars
         );
     } else {
+        switch(term->terminal) {
+            case L_CHARACTER:
+                the_char = term->lexeme->str[0];
+                break;
+            case L_NEW_LINE:
+                the_char = 10;
+                break;
+            case L_SPACE:
+                the_char = 32;
+                break;
+            case L_CARRIAGE_RETURN:
+                the_char = 13;
+                break;
+            case L_TAB:
+                the_char = 9;
+                break;
+            default:
+                std_error("Internal Regular Expression Error.");
+        }
+
         nfa_add_value_transition(
              thompson->nfa,
              start,
              end,
-             ((PT_Terminal *) branches[0])->lexeme->str[0]
+             the_char
         );
     }
 
@@ -271,6 +297,7 @@ static void R_char_class(PThompsonsConstruction *thompson,
     unsigned int char_start, char_end, i;
     unsigned char range_start, range_end;
     PT_NonTerminal *range;
+    PT_Terminal *term;
 
     if(thompson->top_state >= NFA_MAX-1) {
         std_error("Internal Error: Unable to continue Thompson's Construction.");
@@ -288,7 +315,25 @@ static void R_char_class(PThompsonsConstruction *thompson,
                 fnc(set, range_start);
             }
         } else {
-            fnc(set,((PT_Terminal *) branches[i])->lexeme->str[0]);
+            term = (PT_Terminal *) branches[i];
+            switch(term->terminal) {
+                case L_CHARACTER:
+                    fnc(set, term->lexeme->str[0]);
+                    break;
+                case L_NEW_LINE:
+                    fnc(set, 10);
+                    break;
+                case L_SPACE:
+                    fnc(set, 32);
+                    break;
+                case L_CARRIAGE_RETURN:
+                    fnc(set, 13);
+                    break;
+                case L_TAB:
+                    fnc(set, 9);
+                    break;
+            }
+
         }
     }
 
@@ -471,33 +516,50 @@ any_char:
 
                 case '\\':
                     switch(scanner_look(scanner, 1)) {
-                        case 0:
-                            return -1;
-                        case 'n': case 's': case 't': case 'r':
-                            scanner_advance(scanner);
-                            break;
-                        default:
-                            scanner_mark_lexeme_start(scanner);
-                            scanner_advance(scanner);
+                    case 'n':
+                        term = L_NEW_LINE;
+                        scanner_advance(scanner);
+                        break;
+                    case 's':
+                        term = L_SPACE;
+                        scanner_advance(scanner);
+                        break;
+                    case 't':
+                        term = L_TAB;
+                        scanner_advance(scanner);
+                        break;
+                    case 'r':
+                        term = L_CARRIAGE_RETURN;
+                        scanner_advance(scanner);
+                        break;
+                    /*
+                    case 0:
+                        goto all_chars;
 
+                    default:
+                        scanner_mark_lexeme_start(scanner);
+                        scanner_advance(scanner);
+                        goto all_chars;
+                    */
                     }
-                    goto all_chars;
 
                 default:
-                    if(in_char_class && curr_char == '-') {
-                        term = L_CHARACTER_RANGE;
-                    } else {
+                if(in_char_class && curr_char == '-') {
+                    term = L_CHARACTER_RANGE;
+                } else {
 all_chars:
-                        term = L_CHARACTER;
-                    }
+                    term = L_CHARACTER;
+                }
             }
             first_char_in_class = 0;
     }
 
     /* go drop the lexeme unless it's a character */
-    if(term == L_CHARACTER) {
+    /*if(term == L_CHARACTER) {*/
         scanner_mark_lexeme_end(scanner);
-    }
+    /*}*/
+
+done:
 
     return term;
 }
@@ -509,7 +571,7 @@ PGrammar *regexp_grammar(void) {
 
     PGrammar *G = grammar_alloc(
         P_MACHINE, /* production to start matching with */
-        16, /* number of non-terminals */
+        20, /* number of non-terminals */
         19, /* number of terminals */
         50, /* number of production phrases */
         80 /* number of phrase symbols */
@@ -744,6 +806,14 @@ PGrammar *regexp_grammar(void) {
     grammar_add_terminal_symbol(G, L_CHARACTER, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_ANY_CHAR, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_SPACE, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_TAB, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_NEW_LINE, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_CARRIAGE_RETURN, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_CHAR);
 

@@ -1,12 +1,15 @@
 
-Productions
-    : Production ^Productions
-    : ''
+GrammarRules
+    : ^GrammarRules -Production
+    : ^GrammarRules -Terminal
+    : '\''
     ;
 
 Production
-    : -non_terminal ^ProductionRules semicolon
+    : -non_terminal ^ProductionRules ';'
     ;
+
+Terminal : -terminal ':' -regexp ';' ;
 
 ProductionRules
     : -ProductionRule ^ProductionRules
