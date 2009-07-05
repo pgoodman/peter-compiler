@@ -1121,9 +1121,9 @@ void nfa_print_dot(PNFA *nfa) {
 #define P fprintf
 
 /**
- * Print a NFA as C code into the file specified.
+ * Print a NFA as a C scanner into the file specified.
  */
-void nfa_print_to_file(const PNFA *nfa,
+void nfa_print_scanner(const PNFA *nfa,
                        const char *out_file,
                        const char *func_name) {
     FILE *F;
@@ -1157,6 +1157,10 @@ void nfa_print_to_file(const PNFA *nfa,
     P(F, "    unsigned int n = 0, seen_accepting_state = 0;\n");
     P(F, "    int cc, nc = 0, pnc = 0;\n");
     P(F, "    scanner_skip(S, &isspace);\n");
+    P(F, "    cc = scanner_look(S, 1);\n");
+    P(F, "    if(cc == EOF || !cc) {\n");
+    P(F, "        return -1;\n");
+    P(F, "    }\n");
     P(F, "    scanner_mark_lexeme_start(S);\n");
 
     if(nfa->start_state > 0) {

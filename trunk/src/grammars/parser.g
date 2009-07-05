@@ -1,11 +1,7 @@
 
 Productions
-    : ^Temp Production
+    : Production ^Productions
     : ''
-    ;
-
-Temp
-    : ^Productions
     ;
 
 Production
@@ -18,7 +14,7 @@ ProductionRules
     ;
 
 ProductionRule
-    : colon ^Rules
+    : ':' ^Rules
     ;
 
 Rules
@@ -28,15 +24,16 @@ Rules
 
 Rule
     : RuleFlag -non_terminal
+    : RuleFlag -regexp
     : RuleFlag -terminal
     : RuleFlag -epsilon
     ;
 
 RuleFlag
     : -NonExcludable
-    : -Subsumable
+    : -RaiseChildren
     : ''
     ;
 
-NonExcludable : dash ;
-Subsumable : up_arrow ;
+NonExcludable : '-' ;
+RaiseChildren : '^' ;

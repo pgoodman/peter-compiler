@@ -6,13 +6,17 @@
 #include <p-types.h>
 #include <p-scanner.h>
 
-extern G_Terminal lex_parser(PScanner *);
+extern G_Terminal parser_grammar_lexer(PScanner *);
 
-G_Terminal lex_parser(PScanner *S) {
+G_Terminal parser_grammar_lexer(PScanner *S) {
     G_Terminal pterm = -1, term = -1;
     unsigned int n = 0, seen_accepting_state = 0;
     int cc, nc = 0, pnc = 0;
     scanner_skip(S, &isspace);
+    cc = scanner_look(S, 1);
+    if(cc == EOF || !cc) {
+        return -1;
+    }
     scanner_mark_lexeme_start(S);
 state_0:
     if(!(cc = scanner_advance(S))) { goto undo_and_commit; }

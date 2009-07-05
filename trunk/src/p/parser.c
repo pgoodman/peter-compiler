@@ -948,8 +948,11 @@ match_epsilon_symbol:
 
 parse_error:
 
+    /* TODO: do something more useful here. */
     temp_parse_tree = NULL;
-    D( printf("A parse error occurred. \n"); )
+    printf("A parse error occurred. \n");
+    exit(1);
+
     goto return_from_parser;
 
 done_parsing:

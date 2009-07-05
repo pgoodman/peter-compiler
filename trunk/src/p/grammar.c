@@ -256,8 +256,8 @@ void grammar_null_action(void *s, unsigned char r, unsigned int n, PParseTree *c
  * Add a set of actions to the production rules in the grammar. Multiple action
  * passes can be added, where the first one added is the first one executed.
  *
- * Note: This function assumes that all production rules have been added and
- *       that no further production rules will be added.
+ * Note: This function assumes that an array of length grammar->num_productions
+ *       of production rule action function pointers is being passed to it.
  */
 void grammar_add_actions(PGrammar *grammar,
                          PTreeTraversalType traversal_type,
