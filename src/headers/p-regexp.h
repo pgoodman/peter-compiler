@@ -19,6 +19,13 @@
 #include "adt-set.h"
 #include "adt-nfa.h"
 
-void parse_regexp(const char *file);
+void regexp_parse(PGrammar *grammar,
+                  PScanner *scanner,
+                  PNFA *nfa,
+                  unsigned char *regexp,
+                  unsigned int start_state,
+                  G_Terminal terminal);
+
+PGrammar *regexp_grammar(void);
 
 #endif /* PREGEXP_H_ */

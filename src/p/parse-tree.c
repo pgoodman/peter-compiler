@@ -115,7 +115,9 @@ PT_Terminal *PT_alloc_terminals(PScanner *scanner,
 static void PT_clear(PParseTree *parse_tree) {
     PT_Terminal *pt_as_terminal;
     if(parse_tree->type == PT_TERMINAL) {
+
         pt_as_terminal = (PT_Terminal *) parse_tree;
+
         if(is_not_null(pt_as_terminal->lexeme)) {
             string_free(pt_as_terminal->lexeme);
             pt_as_terminal->lexeme = NULL;
@@ -130,6 +132,7 @@ static void PT_clear(PParseTree *parse_tree) {
  * Free a parse tree (excluding its branches).
  */
 static void PT_free(PParseTree *parse_tree) {
+    PT_Terminal *term;
     PT_clear(parse_tree);
     tree_free((PTree *) parse_tree, &delegate_do_nothing);
 }

@@ -35,6 +35,7 @@ typedef struct PScanner {
                       *end,
                       *next_char,
                       *flush_point;
+        unsigned int allowed_to_flush;
     } buffer;
 
     struct {

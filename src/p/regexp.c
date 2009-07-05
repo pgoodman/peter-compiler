@@ -85,8 +85,13 @@ static void Machine(PThompsonsConstruction *thompson,
             }
             start = thompson->state_stack[thompson->top_state--];
             end = thompson->state_stack[thompson->top_state--];
-            break;
 
+            nfa_add_accepting_state(thompson->nfa, end);
+            thompson->state_stack[1] = start;
+            thompson->state_stack[0] = end;
+            thompson->top_state = 2;
+
+            break;
         case 2:
             /* ^ ... */
             if(branches[0]->type == PT_TERMINAL) {
@@ -138,13 +143,9 @@ static void Machine(PThompsonsConstruction *thompson,
             );
             break;
         default:
-            start = nfa_add_state(thompson->nfa);
-            end = start;
+            thompson->top_state = 0;
             break;
     }
-
-    nfa_change_start_state(thompson->nfa, start);
-    nfa_add_accepting_state(thompson->nfa, end);
 }
 
 /**
@@ -241,7 +242,6 @@ static void Char(PThompsonsConstruction *thompson,
     end = nfa_add_state(thompson->nfa);
 
     if(character->terminal == L_ANY_CHAR) {
-
         all_chars = set_alloc_inverted();
         set_remove_elm(all_chars, '\n');
         nfa_add_set_transition(
@@ -459,8 +459,10 @@ static G_Terminal R_get_token(PScanner *scanner) {
             break;
         case '+': term = L_POSITIVE_CLOSURE; break;
         case '*': term = L_KLEENE_CLOSURE; break;
+        /*
         case '^': term = L_ANCHOR_START; break;
         case '$': term = L_ANCHOR_END; break;
+        */
         case '?': term = L_OPTIONAL; break;
         case '|': term = L_OR; break;
         case '.': term = L_ANY_CHAR; break;
@@ -507,7 +509,7 @@ all_chars:
 /**
  * Construct the grammar for recognizing a regular expression.
  */
-static PGrammar *regex_grammar(void) {
+PGrammar *regexp_grammar(void) {
 
     PGrammar *G = grammar_alloc(
         P_MACHINE, /* production to start matching with */
@@ -519,15 +521,11 @@ static PGrammar *regex_grammar(void) {
 
     /*
      * Machine
-     *     : -<anchor_line_start> -<anchor_line_end>
-     *     : -<anchor_line_start> ^Expr -<anchor_line_end>
-     *     : -<anchor_line_start> ^Expr
-     *     : ^Expr -<anchor_line_end>
      *     : ^Expr
      *     : <>
      *     ;
      */
-
+    /*
     grammar_add_terminal_symbol(G, L_ANCHOR_START, G_NON_EXCLUDABLE);
     grammar_add_terminal_symbol(G, L_ANCHOR_END, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
@@ -541,6 +539,7 @@ static PGrammar *regex_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_terminal_symbol(G, L_ANCHOR_END, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
+    */
     grammar_add_non_terminal_symbol(G, P_EXPR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_epsilon_symbol(G, G_AUTO);
@@ -742,52 +741,35 @@ static PGrammar *regex_grammar(void) {
  * then turn that NFA into a DFA using subset construction, then minimize the
  * DFA.
  */
-void parse_regexp(const char *file) {
+void regexp_parse(PGrammar *grammar,
+                  PScanner *scanner,
+                  PNFA *nfa,
+                  unsigned char *regexp,
+                  unsigned int start_state,
+                  G_Terminal terminal) {
 
-    PScanner *scanner = scanner_alloc(); /* fake scanner */
-    PGrammar *grammar = regex_grammar();
     PThompsonsConstruction thom, *thompson = &thom;
     PNFA *dfa;
-    int i;
 
-    if(scanner_open(scanner, file)) {
-        scanner_flush(scanner, 1);
+    thom.nfa = nfa;
+    thom.top_state = -1;
 
-        lex_analyze(scanner);
-        printf("lexeme %s \n", scanner_get_lexeme(scanner)->str);
+    scanner_use_string(scanner, regexp);
+    scanner_flush(scanner, 1);
 
-        /*
-        thompson->nfa = nfa_alloc();
-        thompson->top_state = -1;
+    parse_tokens(
+        grammar,
+        scanner,
+        (PScannerFunc *) &R_get_token,
+        (void *) thompson,
+        TREE_TRAVERSE_POSTORDER
+    );
 
-        parse_tokens(
-            grammar,
-            scanner,
-            (PScannerFunc *) &R_get_token,
-            (void *) thompson,
-            TREE_TRAVERSE_POSTORDER
-        );
-
-        printf("\nFreeing memory.. \n");
-
-        nfa_print_dot(thompson->nfa);
-
-        printf("\n\n\n");
-
-        dfa = nfa_to_dfa(thompson->nfa);
-        nfa_free(thompson->nfa);
-
-        nfa_print_dot(dfa);
-        nfa_print_to_file(dfa, "src/gen/lex.h");
-
-        nfa_free(dfa);
-        */
-        printf("Success! \n");
-    } else {
-        printf("Error: Could not open file '%s'.", file);
+    if(!thom.top_state) {
+        return;
     }
 
-    grammar_free(grammar);
-    scanner_free(scanner);
+    nfa_add_epsilon_transition(nfa, start_state, thom.state_stack[1]);
+    nfa_add_conclusion(nfa, thom.state_stack[0], terminal);
 }
 

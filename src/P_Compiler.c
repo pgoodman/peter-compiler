@@ -12,37 +12,117 @@
 #include <std-include.h>
 #include <std-string.h>
 
+#include <adt-nfa.h>
+
+#include <p-scanner.h>
+#include <p-grammar.h>
 #include <p-regexp.h>
 
-#include <adt-nfa.h>
+enum {
+    L_NON_TERMINAL,
+    L_TERMINAL,
+    L_EPSILON,
+    L_REGEXP,
+    L_COLON,
+    L_SEMICOLON,
+    L_DASH,
+    L_UP_ARROW
+};
 
 int main(void) {
 
-    parse_regexp("src/grammars/float.g");
-    /*
-    PNFA *nfa = nfa_alloc();
+    PScanner *scanner = scanner_alloc();
+    PGrammar *grammar = regexp_grammar();
+    PNFA *nfa = nfa_alloc(),
+         *dfa;
+    unsigned int start;
 
-    unsigned int i, j, k, l;
+    start = nfa_add_state(nfa);
+    nfa_change_start_state(nfa, start);
 
-    i = nfa_add_state(nfa, 0);
-    j = nfa_add_state(nfa, 0);
-    k = nfa_add_state(nfa, 0);
-    l = nfa_add_state(nfa, 1);
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) "[A-Z][a-zA-Z0-9_]*",
+        start,
+        L_NON_TERMINAL
+    );
 
-    nfa_change_start_state(nfa, i);
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) "[a-z][a-zA-Z0-9_]*",
+        start,
+        L_TERMINAL
+    );
 
-    nfa_add_epsilon_transition(nfa, i, j);
-    nfa_add_epsilon_transition(nfa, i, l);
-    nfa_add_epsilon_transition(nfa, k, l);
-    nfa_add_epsilon_transition(nfa, k, j);
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) "''",
+        start,
+        L_EPSILON
+    );
 
-    nfa_add_value_transition(nfa, j, k, 'a');
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) "'.+'",
+        start,
+        L_REGEXP
+    );
 
-    nfa_print_dot(nfa);
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) ":",
+        start,
+        L_COLON
+    );
 
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) ";",
+        start,
+        L_SEMICOLON
+    );
+
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) "-",
+        start,
+        L_DASH
+    );
+
+    regexp_parse(
+        grammar,
+        scanner,
+        nfa,
+        (unsigned char *) "^",
+        start,
+        L_UP_ARROW
+    );
+
+    grammar_free(grammar);
+    scanner_free(scanner);
+
+    dfa = nfa_to_dfa(nfa);
     nfa_free(nfa);
 
-    */
+    nfa_print_dot(dfa);
+
+    nfa_print_to_file(dfa, "src/gen/lex.h");
+    nfa_free(dfa);
+
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
 #endif
@@ -57,15 +137,7 @@ int main(void) {
 
 #define P(x) printf(x)
 
-enum {
-    L_NON_TERMINAL,
-    L_TERMINAL,
-    L_EPSILON,
-    L_COLON,
-    L_SEMICOLON,
-    L_DASH,
-    L_UP_ARROW
-};
+
 
 enum {
     P_PRODUCTIONS,

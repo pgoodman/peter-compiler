@@ -16,7 +16,7 @@ static const unsigned int STOP_GROW_SIZE = (((unsigned int) -1) / 2);
  * Allocate a new set on the heap with space for num_slots elements. If do_fill
  * is set then the slots are filled 8 at a time with 'fill'.
  */
-static PSet *S_alloc(unsigned int num_slots, int do_fill, unsigned char fill) {
+static PSet *S_alloc(unsigned int num_slots, int do_fill, unsigned int fill) {
     PSet *set;
     uint32_t *map;
 
@@ -167,7 +167,7 @@ PSet *set_alloc(void) {
  * Allocate a new set of everything (of the default size).
  */
 PSet *set_alloc_inverted(void) {
-    PSet *set = S_alloc(S_DEFAULT_SIZE, 1, (unsigned char) -1);
+    PSet *set = S_alloc(S_DEFAULT_SIZE, 1, (unsigned int) -1);
     set->num_entries = set->num_slots;
     return set;
 }

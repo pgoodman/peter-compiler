@@ -16,13 +16,44 @@
 #include "func-delegate.h"
 
 #define NFA_MAX_KNOWN_UNUSED_STATES 64
+#define NFA_NUM_DEFAULT_TRANSITIONS 256
+
+typedef enum {
+    T_VALUE,
+    T_SET,
+    T_EPSILON,
+    T_UNUSED
+} NFA_TransitionType;
+
+typedef struct NFA_Transition {
+
+    NFA_TransitionType type;
+
+    union {
+        int value;
+        PSet *set;
+    } condition;
+
+    unsigned int from_state,
+                 to_state,
+                 id;
+
+    struct NFA_Transition *trans_next,
+                          *dest_next;
+} NFA_Transition;
+
+typedef struct NFA_TransitionGroup {
+    struct NFA_TransitionGroup *next;
+    NFA_Transition transitions[NFA_NUM_DEFAULT_TRANSITIONS];
+    unsigned int num_transitions;
+
+} NFA_TransitionGroup;
 
 typedef struct PNFA {
 
     unsigned int num_states,
                  num_transitions,
                  num_state_slots,
-                 num_transition_slots,
                  start_state,
                  current_state,
                  num_unused_states,
@@ -30,9 +61,9 @@ typedef struct PNFA {
 
     int *conclusions;
 
-    void *transitions,
-         **state_transitions,
-         **destination_states;
+    NFA_TransitionGroup *transition_group;
+    NFA_Transition **state_transitions,
+                   **destination_states;
 
     PSet *accepting_states;
 } PNFA;
