@@ -22,7 +22,9 @@ PScanner *scanner_alloc(void);
 
 void scanner_free(PScanner *scanner);
 
-int scanner_open(PScanner *scanner, const char *file_name);
+int scanner_use_file(PScanner *scanner, const char *file_name);
+
+int scanner_use_string(PScanner *scanner, unsigned char *string);
 
 int scanner_flush(PScanner *scanner, int force_flush);
 

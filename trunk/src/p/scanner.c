@@ -117,6 +117,105 @@ static int B_fill(PScanner *scanner, unsigned char *starting_from) {
     return total;
 }
 
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Allocate a new scanner on the heap and return it.
+ */
+PScanner *scanner_alloc(void) {
+    PScanner *scanner = mem_alloc(sizeof(PScanner));
+    if(is_null(scanner)) {
+        mem_error("Unable to heap-allocate a new scanner.");
+    }
+    return scanner;
+}
+
+/**
+ * Free a scanner.
+ */
+void scanner_free(PScanner *scanner) {
+    assert_not_null(scanner);
+    I_close(scanner);
+    mem_free(scanner);
+}
+
+/**
+ * Open a new file for the scanner to use. If the file cannot be opened then
+ * 0 is returned, else 1.
+ */
+int scanner_use_file(PScanner *scanner, const char *file_name) {
+
+    int file_descriptor;
+    unsigned char *end_of_buffer;
+
+    assert_not_null(scanner);
+    assert_not_null(file_name);
+
+    /* close any file that was previously open. */
+    I_close(scanner);
+
+    /* prepare the scanner's buffer for this file. this means putting the end of
+     * the buffer just *after* the actual end of the buffer, setting the
+     * starting flush point, and making sure any lexeme information that exists
+     * in the scanner already has been cleared out. */
+    end_of_buffer = scanner->buffer.start + S_INPUT_BUFFER_SIZE;
+
+    scanner->buffer.end = end_of_buffer;
+    scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
+    scanner->buffer.next_char = end_of_buffer;
+    scanner->buffer.allowed_to_flush = 1;
+
+    scanner->lexeme.end = end_of_buffer;
+    scanner->lexeme.start = end_of_buffer;
+    scanner->lexeme.as_string = NULL;
+
+    scanner->input.column = 1;
+    scanner->input.line = 0;
+    scanner->input.eof_read = 0;
+
+    /* open the file, if the fail opens then */
+    file_descriptor = open(file_name, O_RDONLY | O_BINARY);
+    if(-1 == file_descriptor) {
+        return 0;
+    }
+
+    scanner->input.file_descriptor = file_descriptor;
+
+    return 1;
+}
+
+/**
+ * Have the scanner take its contents from a string in memory. 1 is returned
+ * automatically.
+ *
+ * This expects a null-terminated string.
+ */
+int scanner_use_string(PScanner *scanner, unsigned char *string) {
+    int i;
+    unsigned char *s = string;
+
+    assert_not_null(scanner);
+
+    for(s = string; *s; ++s)
+        ;
+
+    scanner->buffer.end = s;
+    scanner->buffer.flush_point = s;
+    scanner->buffer.next_char = string;
+    scanner->buffer.allowed_to_flush = 0;
+
+    scanner->input.column = 1;
+    scanner->input.line = 0;
+    scanner->input.eof_read = 0;
+    scanner->input.file_descriptor = -1;
+
+    scanner->lexeme.end = s;
+    scanner->lexeme.start = s;
+    scanner->lexeme.as_string = NULL;
+
+    return 1;
+}
+
 /**
  * Shift the contents of the contents of the buffer out until the previous
  * lexeme is at the head of the buffer. If the current character isn't past the
@@ -140,7 +239,7 @@ int scanner_flush(PScanner *scanner, int force_flush) {
         return 0;
     }
 
-    if(scanner->input.eof_read) {
+    if(scanner->input.eof_read || !scanner->buffer.allowed_to_flush) {
         return 1;
     }
 
@@ -180,72 +279,6 @@ int scanner_flush(PScanner *scanner, int force_flush) {
         scanner->lexeme.end -= shift_amount;
         scanner->buffer.next_char -= shift_amount;
     }
-
-    return 1;
-}
-
-/* -------------------------------------------------------------------------- */
-
-/**
- * Allocate a new scanner on the heap and return it.
- */
-PScanner *scanner_alloc(void) {
-    PScanner *scanner = mem_alloc(sizeof(PScanner));
-    if(is_null(scanner)) {
-        mem_error("Unable to heap-allocate a new scanner.");
-    }
-    return scanner;
-}
-
-/**
- * Free a scanner.
- */
-void scanner_free(PScanner *scanner) {
-    assert_not_null(scanner);
-    I_close(scanner);
-    mem_free(scanner);
-}
-
-/**
- * Open a new file for the scanner to use. If the file cannot be opened then
- * 0 is returned, else 1.
- */
-int scanner_open(PScanner *scanner, const char *file_name) {
-
-    int file_descriptor;
-    unsigned char *end_of_buffer;
-
-    assert_not_null(scanner);
-    assert_not_null(file_name);
-
-    /* close any file that was previously open. */
-    I_close(scanner);
-
-    /* prepare the scanner's buffer for this file. this means putting the end of
-     * the buffer just *after* the actual end of the buffer, setting the
-     * starting flush point, and making sure any lexeme information that exists
-     * in the scanner already has been cleared out. */
-    end_of_buffer = scanner->buffer.start + S_INPUT_BUFFER_SIZE;
-
-    scanner->buffer.end = end_of_buffer;
-    scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
-    scanner->buffer.next_char = end_of_buffer;
-
-    scanner->lexeme.end = end_of_buffer;
-    scanner->lexeme.start = end_of_buffer;
-    scanner->lexeme.as_string = NULL;
-
-    scanner->input.column = 1;
-    scanner->input.line = 0;
-    scanner->input.eof_read = 0;
-
-    /* open the file, if the fail opens then */
-    file_descriptor = open(file_name, O_RDONLY | O_BINARY);
-    if(-1 == file_descriptor) {
-        return 0;
-    }
-
-    scanner->input.file_descriptor = file_descriptor;
 
     return 1;
 }
