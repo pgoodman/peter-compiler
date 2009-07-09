@@ -363,3 +363,82 @@ uint32_t dict_pointer_hash_fnc(void *pointer) {
 int dict_pointer_collision_fnc(void *a, void *b) {
     return (a != b);
 }
+
+/* -------------------------------------------------------------------------- */
+
+static H_Entry *H_generator_next_entry(PDictionaryGenerator *gen) {
+    unsigned int i;
+    PDictionary *H;
+    H_Entry *ret;
+
+    if(is_null(gen->entry)) {
+        H = gen->dict;
+        for(i = gen->slot; i < gen->dict->num_slots; ++i) {
+            if(is_not_null(H->slots[i])) {
+                gen->slot = i+1;
+                gen->entry = H->slots[i]->next;
+                return H->slots[i];
+            }
+        }
+    } else {
+        ret = gen->entry;
+        gen->entry = gen->entry->next;
+        return ret;
+    }
+
+    return NULL;
+}
+
+static void *H_generator_next_key(PDictionaryGenerator *gen) {
+    H_Entry *entry = H_generator_next_entry(gen);
+    if(is_not_null(entry)) {
+        return entry->key;
+    }
+    return NULL;
+}
+
+static void *H_generator_next_val(PDictionaryGenerator *gen) {
+    H_Entry *entry = H_generator_next_entry(gen);
+    if(is_not_null(entry)) {
+        return entry->entry;
+    }
+    return NULL;
+}
+
+static void H_generator_free(PDictionaryGenerator *gen) {
+    mem_free(gen);
+}
+
+PDictionaryGenerator *dict_keys_generator_alloc(PDictionary *H) {
+    unsigned int i;
+    PDictionaryGenerator *gen = generator_alloc(sizeof(PDictionaryGenerator));
+
+    gen->dict = H;
+    gen->entry = NULL;
+    gen->slot = 0;
+
+    generator_init(
+        gen,
+        (PFunction *) &H_generator_next_key,
+        (PDelegate *) &H_generator_free
+    );
+
+    return gen;
+}
+
+PDictionaryGenerator *dict_values_generator_alloc(PDictionary *H) {
+    unsigned int i;
+    PDictionaryGenerator *gen = generator_alloc(sizeof(PDictionaryGenerator));
+
+    gen->dict = H;
+    gen->entry = NULL;
+    gen->slot = 0;
+
+    generator_init(
+        gen,
+        (PFunction *) &H_generator_next_val,
+        (PDelegate *) &H_generator_free
+    );
+
+    return gen;
+}

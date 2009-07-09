@@ -267,6 +267,7 @@ static void LR_mark_origin(PParser *parser, P_IntermediateResult *result) {
                 origin->production.phrase,
                 origin->production.symbol
             );
+            origin->left_recursion.seed_phrase = origin->production.phrase;
 
             break;
         }
@@ -317,7 +318,7 @@ static PT_Terminal *P_alloc_terminals(PScanner *scanner,
     }
 
     /* add in the end-of-stream token */
-    curr = PT_alloc_terminal(0, string_alloc_char("EOF", 3), 0, 0, id);
+    curr = PT_alloc_terminal(-1, string_alloc_char("EOF", 3), 0, 0, id);
     curr->next = NULL;
     PTS_add(tree_set, (PParseTree *) curr);
 
@@ -334,9 +335,9 @@ static PT_Terminal *P_alloc_terminals(PScanner *scanner,
 
 /* -------------------------------------------------------------------------- */
 
-static void P_perform_production_rule_actions(PGrammar *grammar,
-                                              PParseTree *tree,
-                                              void *state) {
+static void P_perform_grammar_actions(PGrammar *grammar,
+                                      PParseTree *tree,
+                                      void *state) {
     PTreeGenerator *gen = NULL;
     PT_NonTerminal *non_terminal;
     G_ActionRules *action = grammar->actions;
@@ -346,7 +347,15 @@ static void P_perform_production_rule_actions(PGrammar *grammar,
 
     /* execute the action passes in sequence */
     for(; is_not_null(action); action = action->next) {
-        traversal_type = action->traversal_type;
+
+        /* if this is a simple state action then run it, otherwise fall through
+         * to perform a tree traversal. */
+        if(action->type == G_STATE_ACTION) {
+            action->action.func(state);
+            continue;
+        }
+
+        traversal_type = action->action.rule.traversal_type;
 
         /* re-use or allocate a new tree generator */
         if(traversal_type == prev_traversal_type && is_not_null(gen)) {
@@ -364,7 +373,7 @@ static void P_perform_production_rule_actions(PGrammar *grammar,
             curr = generator_current(gen);
             if(curr->type == PT_NON_TERMINAL) {
                 non_terminal = (PT_NonTerminal *) curr;
-                action->actions[non_terminal->production](
+                action->action.rule.funcs[non_terminal->production](
                     state,
                     non_terminal->phrase,
                     tree_get_num_branches((PTree *) non_terminal),
@@ -563,6 +572,17 @@ stop_left_recursion:
 
                     if(caller->left_recursion.is_direct) {
 
+                        /* we now have a problem: there could be another left-
+                         * recursive rule in the caller in its next phrase, or
+                         * the next phrase could be the caller's phrase is its
+                         * seed phrase. We make a fairly strong assumption here
+                         * that there are no left-recursive phrases defined
+                         * after the seed phrase. */
+                        if(caller->production.phrase + 1
+                        >= caller->left_recursion.seed_phrase) {
+                            goto cascading_backtrack;
+                        }
+
                         --(parser.call.frame);
                         caller->left_recursion.is_used = 0;
                         caller->parse_tree = temp_result->intermediate_tree;
@@ -699,13 +719,13 @@ pop_production_rule:
                 }
             }
 
-        } else if(token->id >= parser.num_tokens && symbol->is_terminal) {
+        /*} else if(token->id >= parser.num_tokens && symbol->is_terminal) {
 
 end_of_input:
 
             D( printf("end of input with more tokens to parse, backtracking. \n"); )
             parser.must_backtrack = 1;
-
+        */
         } else {
 
             /* accept any number of consecutive symbols */
@@ -961,7 +981,7 @@ done_parsing:
 
     D( printf("\n\nSuccessfully parsed. \n"); )
 
-    P_perform_production_rule_actions(
+    P_perform_grammar_actions(
         grammar,
         (PParseTree *) frame->parse_tree,
         state

@@ -43,8 +43,10 @@ short grammar_get_num_production_rules(PGrammar *grammar);
 
 void grammar_null_action(void *s, unsigned char r, unsigned int n, PParseTree *c[]);
 
-void grammar_add_actions(PGrammar *grammar,
-                         PTreeTraversalType traversal_type,
-                         G_ProductionRuleFunc *actions[]);
+void grammar_add_tree_actions(PGrammar *grammar,
+                              PTreeTraversalType traversal_type,
+                              G_ProductionRuleFunc *actions[]);
+
+void grammar_add_state_action(PGrammar *grammar, PDelegate *action_fnc);
 
 #endif /* P_GRAMMAR_H_ */

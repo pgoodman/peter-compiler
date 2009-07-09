@@ -516,31 +516,31 @@ any_char:
 
                 case '\\':
                     switch(scanner_look(scanner, 1)) {
-                    case 'n':
-                        term = L_NEW_LINE;
-                        scanner_advance(scanner);
-                        break;
-                    case 's':
-                        term = L_SPACE;
-                        scanner_advance(scanner);
-                        break;
-                    case 't':
-                        term = L_TAB;
-                        scanner_advance(scanner);
-                        break;
-                    case 'r':
-                        term = L_CARRIAGE_RETURN;
-                        scanner_advance(scanner);
-                        break;
-                    /*
-                    case 0:
-                        goto all_chars;
+                        case 'n':
+                            term = L_NEW_LINE;
+                            scanner_advance(scanner);
+                            break;
+                        case 's':
+                            term = L_SPACE;
+                            scanner_advance(scanner);
+                            break;
+                        case 't':
+                            term = L_TAB;
+                            scanner_advance(scanner);
+                            break;
+                        case 'r':
+                            term = L_CARRIAGE_RETURN;
+                            scanner_advance(scanner);
+                            break;
+                        /*
+                        case 0:
+                            goto all_chars;
+                        */
+                        default:
+                            scanner_mark_lexeme_start(scanner);
+                            scanner_advance(scanner);
+                            goto all_chars;
 
-                    default:
-                        scanner_mark_lexeme_start(scanner);
-                        scanner_advance(scanner);
-                        goto all_chars;
-                    */
                     }
 
                 default:
@@ -594,6 +594,9 @@ PGrammar *regexp_grammar(void) {
         (G_ProductionRuleFunc *) &PositiveClosure,  /* P_POSITIVE_CLOSURE */
         (G_ProductionRuleFunc *) &OptionalTerm      /* P_OPTIONAL_TERM */
     };
+
+    /* add in the actions */
+    grammar_add_tree_actions(G, TREE_TRAVERSE_POSTORDER, grammar_actions);
 
     /*
      * Machine
@@ -650,13 +653,14 @@ PGrammar *regexp_grammar(void) {
 
     /*
      * CatExpr
-     *     : ^CatExpr ^Factor
+     *     : ^Factor ^CatExpr
      *     : ^Factor
      *     ;
      */
 
-    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_RAISE_CHILDREN);
+
     grammar_add_non_terminal_symbol(G, P_FACTOR, G_RAISE_CHILDREN);
+    grammar_add_non_terminal_symbol(G, P_CAT_EXPR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_FACTOR, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
@@ -816,9 +820,6 @@ PGrammar *regexp_grammar(void) {
     grammar_add_terminal_symbol(G, L_CARRIAGE_RETURN, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_CHAR);
-
-    /* add in the actions */
-    grammar_add_actions(G, TREE_TRAVERSE_POSTORDER, grammar_actions);
 
     return G;
 }

@@ -106,10 +106,21 @@ typedef struct G_ProductionRule {
     unsigned int num_phrases;
 } G_ProductionRule;
 
+typedef enum {
+    G_STATE_ACTION,
+    G_TREE_ACTIONS
+} G_ActionRuleType;
+
 typedef struct G_ActionRules {
     struct G_ActionRules *next;
-    PTreeTraversalType traversal_type;
-    G_ProductionRuleFunc *actions[1]; /* this will be expanded */
+    G_ActionRuleType type;
+    union {
+        PDelegate *func;
+        struct {
+            PTreeTraversalType traversal_type;
+            G_ProductionRuleFunc *funcs[1]; /* this will be expanded */
+        } rule;
+    } action;
 } G_ActionRules;
 
 #endif /* PPRODCOMMON_H_ */
