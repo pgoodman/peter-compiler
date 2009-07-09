@@ -4,6 +4,7 @@ terminal : '[a-z][a-zA-Z0-9_]*' ;
 epsilon : '\'\'' ;
 regexp : '\'([^\']*\\\')*[^\']*\'' ;
 cut : '!' ;
+fail : '><' ;
 
 GrammarRules
     : ^GrammarRules -Production
@@ -28,6 +29,7 @@ Rules
     ;
 
 Rule
+    : -fail
     : RuleFlag -non_terminal
     : RuleFlag -regexp
     : RuleFlag -terminal

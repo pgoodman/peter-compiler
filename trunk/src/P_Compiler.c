@@ -20,35 +20,10 @@
 
 #include <math.h>
 
-#include "gen/parser.g.h"
+#include "gen/tokenizer.h"
+#include "gen/grammar.h"
 
 #define P fprintf
-
-enum {
-    L_NON_TERMINAL,
-    L_TERMINAL,
-    L_EPSILON,
-    L_REGEXP,
-    L_COLON,
-    L_SEMICOLON,
-    L_DASH,
-    L_UP_ARROW,
-    L_CUT,
-    L_FAIL
-};
-
-enum {
-    P_GRAMMAR_RULES,
-    P_PRODUCTION,
-    P_TERMINAL,
-    P_PRODUCTION_RULES,
-    P_PRODUCTION_RULE,
-    P_RULES,
-    P_RULE,
-    P_RULE_FLAG,
-    P_NON_EXCLUDABLE,
-    P_RAISE_CHILDREN
-};
 
 typedef struct {
     PDictionary *terminals,
@@ -63,34 +38,6 @@ typedef struct {
     PString *first_production;
 } PParserInfo;
 
-/* print out the branches and terminals in the DOT graph language */
-static void print_branches(unsigned int num_branches, PParseTree *branches[]) {
-    unsigned int i;
-    PTree *t;
-    for(i = 0; i < num_branches; ++i) {
-        t = (PTree *) branches[i];
-        if(is_not_null(t->_branches)) {
-            printf(
-                "Ox%d -> Ox%d\n",
-                (unsigned int) branches,
-                (unsigned int) t->_branches
-            );
-        } else if(branches[i]->type == PT_TERMINAL) {
-            printf(
-                "Ox%d -> Ox%d\n",
-                (unsigned int) branches,
-                (unsigned int) t
-            );
-
-            printf(
-                "Ox%d [label=\"%s\" color=blue]\n",
-                (unsigned int) t,
-                ((PT_Terminal *) t)->lexeme->str
-            );
-        }
-    }
-}
-
 /* -------------------------------------------------------------------------- */
 
 static void I_Production(PParserInfo *state,
@@ -98,6 +45,7 @@ static void I_Production(PParserInfo *state,
                         unsigned int num_branches,
                         PParseTree *branches[]) {
     PString *production_name = ((PT_Terminal *) branches[0])->lexeme;
+
     if(dict_is_set(state->production_rules, production_name)) {
         std_error("Grammar Error: A Production rule cannot be defined twice.");
     }
@@ -149,7 +97,7 @@ static void I_ProductionRule(PParserInfo *state,
         term = (PT_Terminal *) branches[i];
 
         switch(term->terminal) {
-            case L_NON_TERMINAL:
+            case L_non_terminal:
                 ++(state->num_symbols);
                 dict_set(
                     state->non_terminals,
@@ -158,13 +106,13 @@ static void I_ProductionRule(PParserInfo *state,
                     &delegate_do_nothing
                 );
                 break;
-            case L_TERMINAL:
+            case L_terminal:
                 ++(state->num_symbols);
                 if(!dict_is_set(state->terminals, term->lexeme)) {
                     std_error("Grammar Error: Undefined terminal symbol.");
                 }
                 break;
-            case L_REGEXP:
+            case L_regexp:
                 ++(state->num_symbols);
 
                 /* get rid of the leading and trailing ' */
@@ -193,8 +141,9 @@ static void I_ProductionRule(PParserInfo *state,
                     );
                 }
                 break;
-            case L_CUT:
-            case L_EPSILON:
+            case L_cut:
+            case L_fail:
+            case L_epsilon:
                 ++(state->num_symbols);
                 break;
             default:
@@ -278,7 +227,7 @@ static void R_make_scanner(PParserInfo *state) {
 
     generator_free(keys);
 
-    P(state->fp, "extern PGrammar *make_grammar(void);");
+    P(state->fp, "extern PGrammar *make_grammar(void);\n\n");
     P(state->fp, "PGrammar *make_grammar(void) {\n");
     P(state->fp, "    PGrammar *G = grammar_alloc(\n");
     P(state->fp, "        P_%s, /* production to start matching with */\n", state->first_production->str);
@@ -316,7 +265,7 @@ static void C_ProductionRule(PParserInfo *state,
     for(; i < num_branches; ++i) {
         if(branches[i]->type == PT_NON_TERMINAL) {
             nterm = (PT_NonTerminal *) branches[i];
-            if(nterm->production == P_NON_EXCLUDABLE) {
+            if(nterm->production == P_NonExcludable) {
                 modifier = "G_NON_EXCLUDABLE";
             } else {
                 modifier = "G_RAISE_CHILDREN";
@@ -327,23 +276,23 @@ static void C_ProductionRule(PParserInfo *state,
         term = (PT_Terminal *) branches[i];
 
         switch(term->terminal) {
-            case L_NON_TERMINAL:
+            case L_non_terminal:
                 P(state->fp, "    grammar_add_non_terminal_symbol(G, P_%s, %s);\n", term->lexeme->str, modifier);
                 break;
-            case L_TERMINAL:
+            case L_terminal:
                 P(state->fp, "    grammar_add_terminal_symbol(G, L_%s, %s);\n", term->lexeme->str, modifier);
                 break;
-            case L_REGEXP:
+            case L_regexp:
                 str = dict_get(state->regexps, term->lexeme);
                 P(state->fp, "    grammar_add_terminal_symbol(G, L_%s, %s);\n", str->str, modifier);
                 break;
-            case L_CUT:
+            case L_cut:
                 P(state->fp, "    grammar_add_cut_symbol(G);\n");
                 break;
-            case L_FAIL:
+            case L_fail:
                 P(state->fp, "    grammar_add_fail_symbol(G);\n");
                 break;
-            case L_EPSILON:
+            case L_epsilon:
                 P(state->fp, "    grammar_add_epsilon_symbol(G, %s);\n", modifier);
                 break;
             default:
@@ -365,134 +314,44 @@ static void C_finish_parser(PParserInfo *state) {
 
 /* -------------------------------------------------------------------------- */
 
-static PGrammar *parser_grammar_grammar(void) {
-
-    PGrammar *G = grammar_alloc(
-        P_GRAMMAR_RULES, /* production to start matching with */
-        10,              /* number of productions */
-        9,               /* number of tokens */
-        20,              /* number of production phrases */
-        34               /* number of phrase symbols */
-    );
-
-    G_ProductionRuleFunc *symbol_table_actions[] = {
-        &grammar_null_action,    /* P_GRAMMAR_RULES */
-        (G_ProductionRuleFunc *) &I_Production,      /* P_PRODUCTION */
-        (G_ProductionRuleFunc *) &I_Terminal,        /* P_TERMINAL */
-        &grammar_null_action, /* P_PRODUCTION_RULES */
-        (G_ProductionRuleFunc *) &I_ProductionRule,  /* P_PRODUCTION_RULE */
-        &grammar_null_action,   /* P_RULES */
-        &grammar_null_action,   /* P_RULE */
-        &grammar_null_action,   /* P_RULE_FLAG */
-        &grammar_null_action,   /* P_NON_EXCLUDABLE */
-        &grammar_null_action    /* P_RAISE_CHILDREN */
-    };
-
-    G_ProductionRuleFunc *code_gen_actions[] = {
-        &grammar_null_action,    /* P_GRAMMAR_RULES */
-        (G_ProductionRuleFunc *) &C_Production,      /* P_PRODUCTION */
-        &grammar_null_action,        /* P_TERMINAL */
-        &grammar_null_action, /* P_PRODUCTION_RULES */
-        (G_ProductionRuleFunc *) &C_ProductionRule,  /* P_PRODUCTION_RULE */
-        &grammar_null_action,   /* P_RULES */
-        &grammar_null_action,   /* P_RULE */
-        &grammar_null_action,   /* P_RULE_FLAG */
-        &grammar_null_action,   /* P_NON_EXCLUDABLE */
-        &grammar_null_action    /* P_RAISE_CHILDREN */
-    };
-
-    grammar_add_tree_actions(G, TREE_TRAVERSE_POSTORDER, symbol_table_actions);
-    grammar_add_state_action(G, (PDelegate *) &R_make_scanner);
-    grammar_add_tree_actions(G, TREE_TRAVERSE_POSTORDER, code_gen_actions);
-    grammar_add_state_action(G, (PDelegate *) &C_finish_parser);
-
-    grammar_add_non_terminal_symbol(G, P_GRAMMAR_RULES, G_RAISE_CHILDREN);
-    grammar_add_non_terminal_symbol(G, P_PRODUCTION, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_GRAMMAR_RULES, G_RAISE_CHILDREN);
-    grammar_add_non_terminal_symbol(G, P_TERMINAL, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_epsilon_symbol(G, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_GRAMMAR_RULES);
-
-    grammar_add_terminal_symbol(G, L_NON_TERMINAL, G_NON_EXCLUDABLE);
-    grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULES, G_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_SEMICOLON, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_PRODUCTION);
-
-    grammar_add_terminal_symbol(G, L_TERMINAL, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_COLON, G_AUTO);
-    grammar_add_terminal_symbol(G, L_REGEXP, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_SEMICOLON, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_TERMINAL);
-
-    grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULE, G_NON_EXCLUDABLE);
-    grammar_add_non_terminal_symbol(G, P_PRODUCTION_RULES, G_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_epsilon_symbol(G, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_PRODUCTION_RULES);
-
-    grammar_add_terminal_symbol(G, L_COLON, G_AUTO);
-    grammar_add_non_terminal_symbol(G, P_RULES, G_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_PRODUCTION_RULE);
-
-    grammar_add_non_terminal_symbol(G, P_RULE, G_RAISE_CHILDREN),
-    grammar_add_non_terminal_symbol(G, P_RULES, G_RAISE_CHILDREN);
-    grammar_add_phrase(G);
-    grammar_add_epsilon_symbol(G, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_RULES);
-
-    grammar_add_non_terminal_symbol(G, P_RULE_FLAG, G_AUTO);
-    grammar_add_terminal_symbol(G, L_NON_TERMINAL, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_RULE_FLAG, G_AUTO);
-    grammar_add_terminal_symbol(G, L_REGEXP, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_RULE_FLAG, G_AUTO);
-    grammar_add_terminal_symbol(G, L_TERMINAL, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_RULE_FLAG, G_AUTO);
-    grammar_add_terminal_symbol(G, L_EPSILON, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_CUT, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_RULE);
-
-    grammar_add_non_terminal_symbol(G, P_NON_EXCLUDABLE, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_non_terminal_symbol(G, P_RAISE_CHILDREN, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_epsilon_symbol(G, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_RULE_FLAG);
-
-    grammar_add_terminal_symbol(G, L_DASH, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_NON_EXCLUDABLE);
-
-    grammar_add_terminal_symbol(G, L_UP_ARROW, G_AUTO);
-    grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_RAISE_CHILDREN);
-
-    return G;
-}
-
-/* -------------------------------------------------------------------------- */
-
 int main(void) {
     PScanner *scanner = scanner_alloc();
-    PGrammar *grammar = parser_grammar_grammar();
+    PGrammar *grammar = make_grammar();
     PParserInfo info;
+
+    G_ProductionRuleFunc *symbol_table_actions[] = {
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        (G_ProductionRuleFunc *) &I_Terminal,
+        (G_ProductionRuleFunc *) &I_Production,
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        (G_ProductionRuleFunc *) &I_ProductionRule
+    };
+    G_ProductionRuleFunc *code_gen_actions[] = {
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        (G_ProductionRuleFunc *) &C_Production,
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        &grammar_null_action,
+        (G_ProductionRuleFunc *) &C_ProductionRule
+    };
 
     char *grammar_input_file = "src/grammars/parser.g",
          *grammar_output_file = "src/gen/grammar.h",
-         *lexer_output_file = "src/gen/lexer.h";
+         *lexer_output_file = "src/gen/tokenizer.h";
+
+    grammar_add_tree_actions(grammar, TREE_TRAVERSE_POSTORDER, symbol_table_actions);
+    grammar_add_state_action(grammar, (PDelegate *) &R_make_scanner);
+    grammar_add_tree_actions(grammar, TREE_TRAVERSE_POSTORDER, code_gen_actions);
+    grammar_add_state_action(grammar, (PDelegate *) &C_finish_parser);
 
     info.non_terminals = dict_alloc(
         53,
@@ -531,7 +390,7 @@ int main(void) {
         parse_tokens(
             grammar,
             scanner,
-            (PScannerFunc *) &parser_grammar_lexer,
+            (PScannerFunc *) &tokenize,
             &info
         );
     }
@@ -549,27 +408,6 @@ int main(void) {
     grammar_free(grammar);
 
     fclose(info.fp);
-
-#if 0
-    PScanner *scanner = scanner_alloc();
-    PGrammar *grammar = regexp_grammar();
-    PNFA *nfa = nfa_alloc();
-    unsigned int start = nfa_add_state(nfa);
-
-    nfa_change_start_state(nfa, start);
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) "ab",
-        start,
-        L_UP_ARROW
-    );
-
-    nfa_free(nfa);
-    grammar_free(grammar);
-    scanner_free(scanner);
-#endif
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
