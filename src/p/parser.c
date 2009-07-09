@@ -344,6 +344,7 @@ static void P_perform_grammar_actions(PGrammar *grammar,
     PTreeTraversalType traversal_type,
                        prev_traversal_type = -1;
     PParseTree *curr;
+    int i = -1;
 
     /* execute the action passes in sequence */
     for(; is_not_null(action); action = action->next) {
