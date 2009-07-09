@@ -179,6 +179,8 @@ typedef struct P_Frame {
 
         unsigned int is_direct:1,
                      is_used:1;
+
+        unsigned char seed_phrase;
     } left_recursion;
 
     /* deal with backtracking */

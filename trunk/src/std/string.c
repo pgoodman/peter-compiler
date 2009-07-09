@@ -122,3 +122,29 @@ int string_equal(const PString * const A, const PString * const B ) {
 
     return (i == len);
 }
+
+/**
+ * Hash a string into an int.
+ */
+uint32_t string_hash_fnc(PString *str) {
+   int n;
+   uint32_t hashval;
+   unsigned int i, ival;
+   char *p;
+   p = (char *) &ival;
+   hashval = ival = 0;
+   n = (((log10((double)(UINT_MAX)) / log10(2.0))) / CHAR_BIT) + 0.5;
+   for(i = 0; i < str->len; i += n) {
+      strncpy(p, str->str + i, n);
+      hashval += ival;
+   }
+
+   return hashval;
+}
+
+/**
+ * Check If two strings are different.
+ */
+int string_collision_fnc(PString *a, PString *b) {
+    return !string_equal(a, b);
+}

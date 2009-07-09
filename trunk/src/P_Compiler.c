@@ -18,7 +18,11 @@
 #include <p-grammar.h>
 #include <p-regexp.h>
 
+#include <math.h>
+
 #include "gen/parser.g.h"
+
+#define P fprintf
 
 enum {
     L_NON_TERMINAL,
@@ -28,7 +32,9 @@ enum {
     L_COLON,
     L_SEMICOLON,
     L_DASH,
-    L_UP_ARROW
+    L_UP_ARROW,
+    L_CUT,
+    L_FAIL
 };
 
 enum {
@@ -43,6 +49,19 @@ enum {
     P_NON_EXCLUDABLE,
     P_RAISE_CHILDREN
 };
+
+typedef struct {
+    PDictionary *terminals,
+                *non_terminals,
+                *production_rules,
+                *regexps;
+    PScanner *scanner;
+    FILE *fp;
+    char *lexer_output_file;
+    unsigned int num_symbols,
+                 num_phrases;
+    PString *first_production;
+} PParserInfo;
 
 /* print out the branches and terminals in the DOT graph language */
 static void print_branches(unsigned int num_branches, PParseTree *branches[]) {
@@ -72,110 +91,320 @@ static void print_branches(unsigned int num_branches, PParseTree *branches[]) {
     }
 }
 
-static void GrammarRules(void *state,
+/* -------------------------------------------------------------------------- */
+
+static void I_Production(PParserInfo *state,
                         unsigned char phrase,
                         unsigned int num_branches,
                         PParseTree *branches[]) {
-    printf("Ox%d [label=GrammarRules]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+    PString *production_name = ((PT_Terminal *) branches[0])->lexeme;
+    if(dict_is_set(state->production_rules, production_name)) {
+        std_error("Grammar Error: A Production rule cannot be defined twice.");
+    }
+    dict_set(state->production_rules, production_name, NULL, &delegate_do_nothing);
+    state->num_phrases += num_branches - 1;
+
+    if(is_null(state->first_production)) {
+        state->first_production = production_name;
+    }
 }
 
-static void Production(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=Production]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+static void I_Terminal(PParserInfo *state,
+                     unsigned char phrase,
+                     unsigned int num_branches,
+                     PParseTree *branches[]) {
+    PString *str = ((PT_Terminal *) branches[1])->lexeme;
+    unsigned int j;
+
+    /* get rid of leading and trailing ' */
+    for(j = 1; j < str->len; ++j) {
+        str->str[j-1] = str->str[j];
+    }
+    str->str[j-1] = 0;
+
+    dict_set(
+        state->terminals,
+        ((PT_Terminal *) branches[0])->lexeme, /* name */
+        str, /* regexp */
+        &delegate_do_nothing
+    );
 }
 
-static void Terminal(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=Terminal]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+static void I_ProductionRule(PParserInfo *state,
+                     unsigned char phrase,
+                     unsigned int num_branches,
+                     PParseTree *branches[]) {
+    static unsigned int k = 0;
+    unsigned int i = 0, j;
+    PT_Terminal *term;
+    PString *str;
+    char term_name[15],
+         *c;
+
+    for(; i < num_branches; ++i) {
+        if(branches[i]->type == PT_NON_TERMINAL) {
+            continue;
+        }
+
+        term = (PT_Terminal *) branches[i];
+
+        switch(term->terminal) {
+            case L_NON_TERMINAL:
+                ++(state->num_symbols);
+                dict_set(
+                    state->non_terminals,
+                    term->lexeme,
+                    NULL,
+                    &delegate_do_nothing
+                );
+                break;
+            case L_TERMINAL:
+                ++(state->num_symbols);
+                if(!dict_is_set(state->terminals, term->lexeme)) {
+                    std_error("Grammar Error: Undefined terminal symbol.");
+                }
+                break;
+            case L_REGEXP:
+                ++(state->num_symbols);
+
+                /* get rid of the leading and trailing ' */
+                for(j = 1; j < term->lexeme->len; ++j) {
+                    term->lexeme->str[j-1] = term->lexeme->str[j];
+                }
+                term->lexeme->str[j-1] = 0;
+
+                if(!dict_is_set(state->regexps, term->lexeme)) {
+                    sprintf(term_name, "regexp_%d", ++k);
+                    for(c = term_name, j = 0; *c; ++j, ++c)
+                        ;
+                    str = string_alloc_char(term_name, j);
+
+                    dict_set(
+                        state->regexps,
+                        term->lexeme,
+                        str,
+                        &delegate_do_nothing
+                    );
+                    dict_set(
+                        state->terminals,
+                        str,
+                        term->lexeme,
+                        &delegate_do_nothing
+                    );
+                }
+                break;
+            case L_CUT:
+            case L_EPSILON:
+                ++(state->num_symbols);
+                break;
+            default:
+                break;
+        }
+    }
 }
 
-static void ProductionRules(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=ProductionRules]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+/* -------------------------------------------------------------------------- */
+
+static void R_make_scanner(PParserInfo *state) {
+    PDictionaryGenerator *keys = dict_keys_generator_alloc(state->terminals),
+                         *values = dict_values_generator_alloc(state->terminals);
+    PString *regexp,
+            *key;
+    PGrammar *grammar = regexp_grammar();
+    PNFA *nfa = nfa_alloc(),
+         *dfa;
+    unsigned int start,
+                 i = 0;
+    char *sep = "    ";
+
+    start = nfa_add_state(nfa);
+    nfa_change_start_state(nfa, start);
+
+    P(state->fp, "\n\n");
+    P(state->fp, "#include <p-scanner.h>\n");
+    P(state->fp, "#include <p-grammar.h>\n");
+    P(state->fp, "#include <p-parser.h>\n\n");
+    P(state->fp, "enum {\n");
+
+    for(; generator_next(keys) && generator_next(values); ++i) {
+        key = generator_current(keys);
+        regexp = generator_current(values);
+
+        regexp_parse(
+            grammar,
+            state->scanner,
+            nfa,
+            (unsigned char *) regexp->str,
+            start,
+            i
+        );
+
+        P(state->fp, "%sL_%s=%d", sep, key->str, i);
+        sep = ",\n    ";
+    }
+
+    P(state->fp, "\n};\n\n");
+
+    grammar_free(grammar);
+
+    dfa = nfa_to_dfa(nfa);
+    nfa_free(nfa);
+
+    nfa_print_scanner(dfa, state->lexer_output_file, "tokenize");
+
+    nfa_free(dfa);
+    generator_free(keys);
+    generator_free(values);
+
+    sep = "    ";
+    keys = dict_keys_generator_alloc(state->non_terminals);
+    P(state->fp, "enum {\n");
+
+    for(i = 0; generator_next(keys); ++i) {
+        key = generator_current(keys);
+
+        if(!dict_is_set(state->production_rules, key)) {
+            std_error(
+                "Grammar Error: Grammar contains non-terminal that does not "
+                "have an associated production rule."
+            );
+        }
+
+        P(state->fp, "%sP_%s=%d", sep, key->str, i);
+        sep = ",\n    ";
+    }
+
+    P(state->fp, "\n};\n\n");
+
+    generator_free(keys);
+
+    P(state->fp, "extern PGrammar *make_grammar(void);");
+    P(state->fp, "PGrammar *make_grammar(void) {\n");
+    P(state->fp, "    PGrammar *G = grammar_alloc(\n");
+    P(state->fp, "        P_%s, /* production to start matching with */\n", state->first_production->str);
+    P(state->fp, "        %d, /* number of productions */\n", dict_size(state->production_rules));
+    P(state->fp, "        %d, /* number of tokens */\n", dict_size(state->terminals));
+    P(state->fp, "        %d, /* number of phrases */\n", state->num_phrases);
+    P(state->fp, "        %d /* number of phrase symbols */\n", state->num_symbols);
+    P(state->fp, "    );\n\n");
 }
 
-static void ProductionRule(void *state,
+/* -------------------------------------------------------------------------- */
+
+static void C_Production(PParserInfo *state,
                         unsigned char phrase,
                         unsigned int num_branches,
                         PParseTree *branches[]) {
-    printf("Ox%d [label=ProductionRule]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+    char *production_name = ((PT_Terminal *) branches[0])->lexeme->str;
+    P(state->fp, "    grammar_add_production_rule(G, P_%s);\n\n", production_name);
 }
 
-static void Rules(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=Rules]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+static void C_ProductionRule(PParserInfo *state,
+                     unsigned char phrase,
+                     unsigned int num_branches,
+                     PParseTree *branches[]) {
+    static unsigned int k = 0;
+    unsigned int i = 0, j;
+    PT_Terminal *term;
+    PT_NonTerminal *nterm;
+    PString *str;
+
+    char term_name[15],
+         *c,
+         *modifier = "G_AUTO";
+
+    for(; i < num_branches; ++i) {
+        if(branches[i]->type == PT_NON_TERMINAL) {
+            nterm = (PT_NonTerminal *) branches[i];
+            if(nterm->production == P_NON_EXCLUDABLE) {
+                modifier = "G_NON_EXCLUDABLE";
+            } else {
+                modifier = "G_RAISE_CHILDREN";
+            }
+            continue;
+        }
+
+        term = (PT_Terminal *) branches[i];
+
+        switch(term->terminal) {
+            case L_NON_TERMINAL:
+                P(state->fp, "    grammar_add_non_terminal_symbol(G, P_%s, %s);\n", term->lexeme->str, modifier);
+                break;
+            case L_TERMINAL:
+                P(state->fp, "    grammar_add_terminal_symbol(G, L_%s, %s);\n", term->lexeme->str, modifier);
+                break;
+            case L_REGEXP:
+                str = dict_get(state->regexps, term->lexeme);
+                P(state->fp, "    grammar_add_terminal_symbol(G, L_%s, %s);\n", str->str, modifier);
+                break;
+            case L_CUT:
+                P(state->fp, "    grammar_add_cut_symbol(G);\n");
+                break;
+            case L_FAIL:
+                P(state->fp, "    grammar_add_fail_symbol(G);\n");
+                break;
+            case L_EPSILON:
+                P(state->fp, "    grammar_add_epsilon_symbol(G, %s);\n", modifier);
+                break;
+            default:
+                break;
+        }
+
+        modifier = "G_AUTO";
+    }
+
+    P(state->fp, "    grammar_add_phrase(G);\n");
 }
 
-static void Rule(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=Rule]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
+/* -------------------------------------------------------------------------- */
+
+static void C_finish_parser(PParserInfo *state) {
+    P(state->fp, "    return G;\n");
+    P(state->fp, "}\n\n");
 }
 
-static void RuleFlag(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=RuleFlag]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
-}
-
-static void NonExcludable(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=NonExcludable]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
-}
-
-static void RaiseChildren(void *state,
-                        unsigned char phrase,
-                        unsigned int num_branches,
-                        PParseTree *branches[]) {
-    printf("Ox%d [label=RaiseChildren]\n", (unsigned int) branches);
-    print_branches(num_branches, branches);
-}
+/* -------------------------------------------------------------------------- */
 
 static PGrammar *parser_grammar_grammar(void) {
 
     PGrammar *G = grammar_alloc(
         P_GRAMMAR_RULES, /* production to start matching with */
         10,              /* number of productions */
-        8,               /* number of tokens */
-        19,              /* number of production phrases */
-        33               /* number of phrase symbols */
+        9,               /* number of tokens */
+        20,              /* number of production phrases */
+        34               /* number of phrase symbols */
     );
 
-    G_ProductionRuleFunc *actions[] = {
-        &GrammarRules,    /* P_GRAMMAR_RULES */
-        &Production,      /* P_PRODUCTION */
-        &Terminal,        /* P_TERMINAL */
-        &ProductionRules, /* P_PRODUCTION_RULES */
-        &ProductionRule,  /* P_PRODUCTION_RULE */
-        &Rules,           /* P_RULES */
-        &Rule,            /* P_RULE */
-        &RuleFlag,        /* P_RULE_FLAG */
-        &NonExcludable,   /* P_NON_EXCLUDABLE */
-        &RaiseChildren    /* P_RAISE_CHILDREN */
+    G_ProductionRuleFunc *symbol_table_actions[] = {
+        &grammar_null_action,    /* P_GRAMMAR_RULES */
+        (G_ProductionRuleFunc *) &I_Production,      /* P_PRODUCTION */
+        (G_ProductionRuleFunc *) &I_Terminal,        /* P_TERMINAL */
+        &grammar_null_action, /* P_PRODUCTION_RULES */
+        (G_ProductionRuleFunc *) &I_ProductionRule,  /* P_PRODUCTION_RULE */
+        &grammar_null_action,   /* P_RULES */
+        &grammar_null_action,   /* P_RULE */
+        &grammar_null_action,   /* P_RULE_FLAG */
+        &grammar_null_action,   /* P_NON_EXCLUDABLE */
+        &grammar_null_action    /* P_RAISE_CHILDREN */
     };
 
-    grammar_add_actions(G, TREE_TRAVERSE_POSTORDER, actions);
+    G_ProductionRuleFunc *code_gen_actions[] = {
+        &grammar_null_action,    /* P_GRAMMAR_RULES */
+        (G_ProductionRuleFunc *) &C_Production,      /* P_PRODUCTION */
+        &grammar_null_action,        /* P_TERMINAL */
+        &grammar_null_action, /* P_PRODUCTION_RULES */
+        (G_ProductionRuleFunc *) &C_ProductionRule,  /* P_PRODUCTION_RULE */
+        &grammar_null_action,   /* P_RULES */
+        &grammar_null_action,   /* P_RULE */
+        &grammar_null_action,   /* P_RULE_FLAG */
+        &grammar_null_action,   /* P_NON_EXCLUDABLE */
+        &grammar_null_action    /* P_RAISE_CHILDREN */
+    };
+
+    grammar_add_tree_actions(G, TREE_TRAVERSE_POSTORDER, symbol_table_actions);
+    grammar_add_state_action(G, (PDelegate *) &R_make_scanner);
+    grammar_add_tree_actions(G, TREE_TRAVERSE_POSTORDER, code_gen_actions);
+    grammar_add_state_action(G, (PDelegate *) &C_finish_parser);
 
     grammar_add_non_terminal_symbol(G, P_GRAMMAR_RULES, G_RAISE_CHILDREN);
     grammar_add_non_terminal_symbol(G, P_PRODUCTION, G_NON_EXCLUDABLE);
@@ -231,6 +460,8 @@ static PGrammar *parser_grammar_grammar(void) {
     grammar_add_non_terminal_symbol(G, P_RULE_FLAG, G_AUTO);
     grammar_add_terminal_symbol(G, L_EPSILON, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_CUT, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
     grammar_add_production_rule(G, P_RULE);
 
     grammar_add_non_terminal_symbol(G, P_NON_EXCLUDABLE, G_NON_EXCLUDABLE);
@@ -252,210 +483,93 @@ static PGrammar *parser_grammar_grammar(void) {
     return G;
 }
 
+/* -------------------------------------------------------------------------- */
+
 int main(void) {
-
     PScanner *scanner = scanner_alloc();
-
-
     PGrammar *grammar = parser_grammar_grammar();
+    PParserInfo info;
 
-    if(scanner_use_file(scanner, "src/grammars/parser.g")) {
+    char *grammar_input_file = "src/grammars/parser.g",
+         *grammar_output_file = "src/gen/grammar.h",
+         *lexer_output_file = "src/gen/lexer.h";
+
+    info.non_terminals = dict_alloc(
+        53,
+        (PDictionaryHashFunc *) &string_hash_fnc,
+        (PDictionaryCollisionFunc *) &string_collision_fnc
+    );
+    info.regexps = dict_alloc(
+        53,
+        (PDictionaryHashFunc *) &string_hash_fnc,
+        (PDictionaryCollisionFunc *) &string_collision_fnc
+    );
+    info.terminals = dict_alloc(
+        53,
+        (PDictionaryHashFunc *) &string_hash_fnc,
+        (PDictionaryCollisionFunc *) &string_collision_fnc
+    );
+    info.production_rules = dict_alloc(
+        53,
+        (PDictionaryHashFunc *) &string_hash_fnc,
+        (PDictionaryCollisionFunc *) &string_collision_fnc
+    );
+
+    info.scanner = scanner;
+    info.lexer_output_file = lexer_output_file;
+    info.fp = fopen(grammar_output_file, "w");
+    info.num_symbols = 0;
+    info.num_phrases = 0;
+    info.first_production = NULL;
+
+    if(is_null(info.fp)) {
+        std_error("Internal Parser Generator Error: Unable to create output file.");
+    }
+
+    if(scanner_use_file(scanner, grammar_input_file)) {
         scanner_flush(scanner, 1);
         parse_tokens(
             grammar,
             scanner,
             (PScannerFunc *) &parser_grammar_lexer,
-            NULL
+            &info
         );
     }
+
+    dict_free(info.production_rules, &delegate_do_nothing, &delegate_do_nothing);
+    dict_free(info.non_terminals, &delegate_do_nothing, &delegate_do_nothing);
+    dict_free(info.terminals, &delegate_do_nothing, &delegate_do_nothing);
+    dict_free(
+        info.regexps,
+        &delegate_do_nothing,
+        (PDictionaryFreeValueFunc *) &string_free
+    );
 
     scanner_free(scanner);
     grammar_free(grammar);
 
-    /*
-    G_Terminal t;
+    fclose(info.fp);
 
-    if(scanner_use_file(scanner, "src/grammars/parser.g")) {
-        scanner_flush(scanner, 1);
-
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_NON_TERMINAL
-            );
-        }
-
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_COLON
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_UP_ARROW
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_NON_TERMINAL
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_NON_TERMINAL
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_COLON
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_EPSILON
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_SEMICOLON
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_NON_TERMINAL
-            );
-        }
-        if((t = lex_parser(scanner)) >= 0) {
-            printf(
-                "Next lexeme: %s, term %d =? %d \n",
-                scanner_get_lexeme(scanner)->str,
-                t,
-                L_COLON
-            );
-        }
-    } else {
-        printf("Error: Unable to open file. \n");
-    }
-
-    scanner_free(scanner);
-    */
-
-/*
+#if 0
+    PScanner *scanner = scanner_alloc();
     PGrammar *grammar = regexp_grammar();
-    PNFA *nfa = nfa_alloc(),
-         *dfa;
-    unsigned int start;
+    PNFA *nfa = nfa_alloc();
+    unsigned int start = nfa_add_state(nfa);
 
-    start = nfa_add_state(nfa);
     nfa_change_start_state(nfa, start);
-
     regexp_parse(
         grammar,
         scanner,
         nfa,
-        (unsigned char *) "[A-Z][a-zA-Z0-9_]*",
-        start,
-        L_NON_TERMINAL
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) "[a-z][a-zA-Z0-9_]*",
-        start,
-        L_TERMINAL
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) "''",
-        start,
-        L_EPSILON
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) "'([^']*\\')*[^']*'",
-        start,
-        L_REGEXP
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) ":",
-        start,
-        L_COLON
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) ";",
-        start,
-        L_SEMICOLON
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) "-",
-        start,
-        L_DASH
-    );
-
-    regexp_parse(
-        grammar,
-        scanner,
-        nfa,
-        (unsigned char *) "^",
+        (unsigned char *) "ab",
         start,
         L_UP_ARROW
     );
 
+    nfa_free(nfa);
     grammar_free(grammar);
     scanner_free(scanner);
-
-    dfa = nfa_to_dfa(nfa);
-    nfa_free(nfa);
-
-    nfa_print_scanner(dfa, "src/gen/parser.g.h", "parser_grammar_lexer");
-    nfa_free(dfa);
-*/
+#endif
 
 #if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
     printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
@@ -463,428 +577,3 @@ int main(void) {
 
     return 0;
 }
-
-#if 0
-
-#include <p-grammar.h>
-#include <p-parser.h>
-
-#define P(x) printf(x)
-
-
-static char production_names[12][16] = {
-    "Productions",
-    "Production",
-    "ProductionRules",
-    "ProductionRule",
-    "Rules",
-    "Rule",
-    "RuleFlag",
-    "NonExludable",
-    "Subsumable",
-    "Temp"
-};
-
-#if 0
-
-typedef int (*char_predicate_t)(int);
-typedef struct {
-    PString *str;
-    char next;
-} accumulate_result_t;
-
-/* -------------------------------------------------------------------------- */
-
-static accumulate_result_t accumulate_chars(char_predicate_t predicate,
-                                            char *S,
-                                            char C,
-                                            PTokenGenerator *G) {
-    int i;
-    accumulate_result_t result;
-
-    for(i = 0; i < 30 && predicate(C); ++i) {
-        S[i] = C;
-        ++(G->column);
-
-        C = file_get_char(G->stream);
-    }
-    S[i] = 0;
-
-    result.str = string_alloc_char(S, i);
-    result.next = C;
-
-    return result;
-}
-
-static int ident_char(int C) {
-    return (isalpha(C) || '_' == C);
-}
-
-/**
- * Generate a token.
- */
-static PToken *lexer_grammar_token_generator(PTokenGenerator *G) {
-    char C,
-         S[31],
-         next_start_char = -1;
-    unsigned char token = 0xFF;
-    accumulate_result_t result;
-
-    assert_not_null(G);
-
-    result.str = NULL;
-
-    C = G->start_char;
-
-    /* we need to get our first character. */
-    if(-1 == C) {
-        ++(G->column);
-        C = file_get_char(G->stream);
-
-    /* nothing left to lex */
-    } else if(EOF == C) {
-        return NULL;
-    }
-
-    /* skip spaces. */
-clear_spaces:
-    while(isspace(C)) {
-        if(C == '\n') {
-            ++(G->line);
-            G->column = 0;
-        }
-
-        C = file_get_char(G->stream);
-        ++(G->column);
-    }
-
-    /* line comment */
-    if('#' == C) {
-        while('\n' != C) {
-            if(EOF == C) {
-                return NULL;
-            }
-            C = file_get_char(G->stream);
-        }
-
-        ++(G->line);
-        G->column = 1;
-
-        C = file_get_char(G->stream);
-        goto clear_spaces;
-    }
-
-    switch(C) {
-        case EOF:
-            return NULL;
-        case '<':
-            C = file_get_char(G->stream);
-
-            if('>' == C) {
-                result.str = string_alloc_char("", 0);
-                token = L_EPSILON;
-                break;
-            }
-
-            result = accumulate_chars(&ident_char, S, C, G);
-
-            if(string_length(result.str) == 30 && '>' != result.next) {
-                std_error(
-                    "Grammar error: non-terminals are limited to 30 characters."
-                );
-            }
-
-            token = L_TERMINAL;
-            break;
-        case ':':
-            result.str = string_alloc_char(":", 1);
-            token = L_COLON;
-            break;
-        case ';':
-            result.str = string_alloc_char(";", 1);
-            token = L_SEMICOLON;
-            break;
-        case '-':
-            result.str = string_alloc_char("-", 1);
-            token = L_DASH;
-            break;
-        case '^':
-            result.str = string_alloc_char("^", 1);
-            token = L_UP_ARROW;
-            break;
-        default:
-            if(ident_char(C)) {
-                result = accumulate_chars(&ident_char, S, C, G);
-                next_start_char = result.next;
-                token = L_NON_TERMINAL;
-            } else {
-                std_error("Unrecognized character in grammar file.");
-                return NULL;
-            }
-    }
-
-    G->start_char = next_start_char;
-    G->lexeme = result.str;
-    G->token = token;
-
-    return (void *) 1;
-}
-#endif
-
-/* -------------------------------------------------------------------------- */
-
-static char *indent(unsigned int level, char *str) {
-    str[level] = 0;
-    for(; level > 0; ) {
-        str[--level] = '\t';
-    }
-
-    return str;
-}
-
-static void print_tree_rec(PParseTree *tree, unsigned int level) {
-    unsigned int i;
-    char level_buffer[100];
-
-    if(is_null(tree))
-        return;
-
-    switch(tree->type) {
-
-        /* non-terminal */
-        case 0:
-            printf("%s[%s] \n",
-                indent(level, level_buffer),
-                production_names[((PT_NonTerminal *) tree)->production]
-            );
-
-            break;
-
-        /* terminal */
-        case 1:
-            printf("%s{%s} \n",
-                indent(level, level_buffer),
-                (char *) ((PT_Terminal *) tree)->lexeme->str
-            );
-            break;
-
-        /* epsilon */
-        case 2:
-            printf("%s{} \n", indent(level, level_buffer));
-            break;
-    }
-
-    for(i = 0; i < tree->_._fill; ++i) {
-        print_tree_rec((PParseTree *) tree->_._branches[i], level+1);
-    }
-}
-
-/* -------------------------------------------------------------------------- */
-
-
-
-static PGrammar *peg_equivalence_grammar(void) {
-    PGrammar *G;
-
-    P("\t allocating grammar. \n");
-
-    G = grammar_alloc(
-        P_PRODUCTIONS, /* production to start matching with */
-        1, /* number of productions */
-        1, /* number of tokens */
-        2, /* number of production phrases */
-        4 /* number of phrase symbols */
-    );
-
-    P("\t grammar allocated. \n");
-    P("\t initializing grammar. \n");
-
-            grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
-            grammar_add_non_terminal_symbol(G, P_PRODUCTIONS, 1, 0);
-            grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
-        grammar_add_phrase(G);
-            grammar_add_terminal_symbol(G, L_NON_TERMINAL, 1);
-        grammar_add_phrase(G);
-    grammar_add_production_rule(G, P_PRODUCTIONS);
-
-    P("\t grammar initialized. \n");
-
-    return G;
-}
-
-static void test_peg_equivalence(void) {
-
-    int i = 0;
-    PGrammar *grammar;
-    PToken tokens[20];
-    PParseTree *tree;
-
-    P("Making tokens...\n");
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("a", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 1;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("b", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 2;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("c", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 3;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("d", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 4;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("e", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 5;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("f", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 6;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("g", 1);
-    tokens[i].line = 1;
-    tokens[i++].column = 7;
-
-    grammar = peg_equivalence_grammar();
-
-    P("Calling parse_tokens().. \n\n");
-    tree = parse_tokens(grammar, tokens, i);
-
-    print_tree_rec(tree, 0);
-
-    P("Freeing parse tree.. \n");
-    parser_free_parse_tree(tree);
-    P("\t Parse tree freed. \n");
-
-    P("Freeing grammar...\n");
-    grammar_free(grammar);
-    P("\t Grammar freed.\n");
-
-#if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
-    printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
-#endif
-}
-
-/* -------------------------------------------------------------------------- */
-
-static void test_parser(void) {
-
-    int i = 0;
-    PGrammar *grammar;
-    PToken tokens[20];
-    PParseTree *tree;
-
-    P("Making tokens...\n");
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("Productions*", 12);
-    tokens[i].line = 2;
-    tokens[i++].column = 1;
-
-    tokens[i].terminal = L_COLON;
-    tokens[i].lexeme = string_alloc_char(":", 1);
-    tokens[i].line = 3;
-    tokens[i++].column = 5;
-
-    tokens[i].terminal = L_UP_ARROW;
-    tokens[i].lexeme = string_alloc_char("^", 1);
-    tokens[i].line = 3;
-    tokens[i++].column = 7;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("Temp", 4);
-    tokens[i].line = 3;
-    tokens[i++].column = 8;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("Production", 10);
-    tokens[i].line = 3;
-    tokens[i++].column = 13;
-
-    tokens[i].terminal = L_COLON;
-    tokens[i].lexeme = string_alloc_char(":", 1);
-    tokens[i].line = 4;
-    tokens[i++].column = 5;
-
-    tokens[i].terminal = L_EPSILON;
-    tokens[i].lexeme = string_alloc_char("<>", 2);
-    tokens[i].line = 4;
-    tokens[i++].column = 7;
-
-    tokens[i].terminal = L_SEMICOLON;
-    tokens[i].lexeme = string_alloc_char(";", 1);
-    tokens[i].line = 5;
-    tokens[i++].column = 5;
-
-    /* -- */
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("Temp*", 5);
-    tokens[i].line = 7;
-    tokens[i++].column = 1;
-
-    tokens[i].terminal = L_COLON;
-    tokens[i].lexeme = string_alloc_char(":", 1);
-    tokens[i].line = 8;
-    tokens[i++].column = 5;
-
-    tokens[i].terminal = L_UP_ARROW;
-    tokens[i].lexeme = string_alloc_char("^", 1);
-    tokens[i].line = 8;
-    tokens[i++].column = 7;
-
-    tokens[i].terminal = L_NON_TERMINAL;
-    tokens[i].lexeme = string_alloc_char("Productions", 11);
-    tokens[i].line = 8;
-    tokens[i++].column = 8;
-
-    tokens[i].terminal = L_SEMICOLON;
-    tokens[i].lexeme = string_alloc_char(";", 1);
-    tokens[i].line = 9;
-    tokens[i++].column = 5;
-
-    P("\t Tokens made.\n");
-    P("Making grammar...\n");
-
-    grammar = make_grammar();
-
-    P("\t Grammar made.\n");
-
-    P("Calling parse_tokens().. \n\n");
-    tree = parse_tokens(grammar, tokens, i);
-
-    print_tree_rec(tree, 0);
-
-    P("Freeing parse tree.. \n");
-    parser_free_parse_tree(tree);
-    P("\t Parse tree freed. \n");
-
-    P("Freeing grammar...\n");
-    grammar_free(grammar);
-    P("\t Grammar freed.\n");
-
-#if defined(P_DEBUG) && P_DEBUG == 1 && defined(P_DEBUG_MEM) && P_DEBUG_MEM == 1
-    printf("num unfreed pointers: %ld\n", mem_num_allocated_pointers());
-#endif
-}
-
-int main(void) {
-
-    /*test_peg_equivalence();*/
-    test_parser();
-
-    return 1;
-}
-
-#endif

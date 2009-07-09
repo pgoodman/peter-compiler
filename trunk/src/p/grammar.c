@@ -259,9 +259,9 @@ void grammar_null_action(void *s, unsigned char r, unsigned int n, PParseTree *c
  * Note: This function assumes that an array of length grammar->num_productions
  *       of production rule action function pointers is being passed to it.
  */
-void grammar_add_actions(PGrammar *grammar,
-                         PTreeTraversalType traversal_type,
-                         G_ProductionRuleFunc *actions[]) {
+void grammar_add_tree_actions(PGrammar *grammar,
+                              PTreeTraversalType traversal_type,
+                              G_ProductionRuleFunc *actions[]) {
     int i, j;
     char *data;
     G_ActionRules *new,
@@ -277,18 +277,46 @@ void grammar_add_actions(PGrammar *grammar,
     );
 
     if(is_null(data)) {
-        mem_error("Internal Grammar Error: Unable to add action functions.");
+        mem_error("Internal Grammar Error: Unable to add tree action functions.");
     }
 
     new = (G_ActionRules *) data;
-    arr = new->actions;
+    new->type = G_TREE_ACTIONS;
+    arr = new->action.rule.funcs;
 
     for(i = grammar->num_productions, j = 0; --i >= 0; ++j) {
        arr[j] = actions[j];
     }
 
     new->next = NULL;
-    new->traversal_type = traversal_type;
+    new->action.rule.traversal_type = traversal_type;
+
+    if(is_null(grammar->actions)) {
+        grammar->actions = new;
+    } else {
+        for(next = grammar->actions; is_not_null(next->next); next = next->next)
+            ;
+        next->next = new;
+    }
+}
+
+/**
+ * Add an action rule to the grammar to be performed on whatever state is being
+ * used.
+ */
+void grammar_add_state_action(PGrammar *grammar, PDelegate *action_fnc) {
+
+    G_ActionRules *new,
+                  *next;
+
+    new = mem_alloc(sizeof(G_ActionRules));
+    if(is_null(new)) {
+        mem_error("Internal Grammar Error: Unable to add state action function.");
+    }
+
+    new->next = NULL;
+    new->type = G_STATE_ACTION;
+    new->action.func = action_fnc;
 
     if(is_null(grammar->actions)) {
         grammar->actions = new;

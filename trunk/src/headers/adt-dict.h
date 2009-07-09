@@ -11,6 +11,7 @@
 
 #include "std-include.h"
 #include "vendor-murmur-hash.h"
+#include "adt-generator.h"
 
 typedef void * H_key_type;
 typedef void * H_val_type;
@@ -40,6 +41,15 @@ typedef struct {
     unsigned char prime_index,
                   grow_table;
 } H_type;
+
+typedef struct {
+    PGenerator _;
+    H_type *dict;
+    uint32_t slot;
+    H_Entry *entry;
+} PDictionaryGenerator;
+
+/* -------------------------------------------------------------------------- */
 
 void *gen_dict_alloc(const size_t dict_struct_size,
                      uint32_t num_slots,
@@ -77,10 +87,18 @@ typedef H_collision_fnc_type PDictionaryCollisionFunc;
 typedef H_free_val_fnc_type PDictionaryFreeValueFunc;
 typedef H_free_key_fnc_type PDictionaryFreeKeyFunc;
 
+/* -------------------------------------------------------------------------- */
+
 /* generic helper functions for simple key types */
 uint32_t dict_pointer_hash_fnc(void *pointer);
 int dict_pointer_collision_fnc(void *a, void *b);
 
 unsigned long int dict_num_allocated_pointers(void);
+
+/* -------------------------------------------------------------------------- */
+
+PDictionaryGenerator *dict_keys_generator_alloc(PDictionary *H);
+PDictionaryGenerator *dict_values_generator_alloc(PDictionary *H);
+
 
 #endif /* HASHSET_H_ */
