@@ -252,15 +252,12 @@ static void C_ProductionRule(PParserInfo *state,
                      unsigned char phrase,
                      unsigned int num_branches,
                      PParseTree *branches[]) {
-    static unsigned int k = 0;
-    unsigned int i = 0, j;
+    unsigned int i = 0;
     PT_Terminal *term;
     PT_NonTerminal *nterm;
     PString *str;
 
-    char term_name[15],
-         *c,
-         *modifier = "G_AUTO";
+    char *modifier = "G_AUTO";
 
     for(; i < num_branches; ++i) {
         if(branches[i]->type == PT_NON_TERMINAL) {

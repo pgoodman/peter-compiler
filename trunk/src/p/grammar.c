@@ -120,8 +120,7 @@ void grammar_free(PGrammar *grammar) {
  * production rule for the production "D" has only one phrase.
  */
 void grammar_add_production_rule(PGrammar *grammar, G_NonTerminal production) {
-    G_ProductionRule *rule,
-                     *prev_rule;
+    G_ProductionRule *rule;
 
     unsigned int which_rule;
 

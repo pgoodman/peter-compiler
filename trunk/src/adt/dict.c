@@ -48,9 +48,6 @@ static H_Entry *H_entry_alloc(H_key_type key, H_val_type val) {
 /* Set an entry to a dictionary. */
 static void H_entry_add(H_type *H, H_Entry *E) {
     uint32_t i = H->key_hash_fnc(E->key) % H->num_slots;
-    H_Entry *temp,
-            *prev;
-
     if(is_null(H->slots[i])) {
         H->slots[i] = E;
         E->next = NULL;
@@ -58,7 +55,6 @@ static void H_entry_add(H_type *H, H_Entry *E) {
         E->next = H->slots[i];
         H->slots[i] = E;
     }
-
 }
 
 /**
@@ -410,7 +406,6 @@ static void H_generator_free(PDictionaryGenerator *gen) {
 }
 
 PDictionaryGenerator *dict_keys_generator_alloc(PDictionary *H) {
-    unsigned int i;
     PDictionaryGenerator *gen = generator_alloc(sizeof(PDictionaryGenerator));
 
     gen->dict = H;
@@ -427,7 +422,6 @@ PDictionaryGenerator *dict_keys_generator_alloc(PDictionary *H) {
 }
 
 PDictionaryGenerator *dict_values_generator_alloc(PDictionary *H) {
-    unsigned int i;
     PDictionaryGenerator *gen = generator_alloc(sizeof(PDictionaryGenerator));
 
     gen->dict = H;

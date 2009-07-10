@@ -214,17 +214,6 @@ static void IR_free_all(PParser *parser, PGrammar *grammar) {
 }
 
 /**
- * Clear the branches off of an intermediate parse tree.
- */
-static void IR_clear_tree(P_IntermediateResult *result) {
-    PTree *tree = (PTree *) result->intermediate_tree;
-
-    if(is_not_null(tree) && IR_FAILED != tree && IR_INITIAL != tree) {
-        tree_clear(tree);
-    }
-}
-
-/**
  * Get an intermediate result.
  */
 static P_IntermediateResult *IR_get(PParser *parser,
@@ -250,7 +239,7 @@ static void LR_mark_origin(PParser *parser, P_IntermediateResult *result) {
     int i = parser->call.frame;
 
     P_Frame *top = parser->call.stack[i],
-            *origin;
+            *origin = NULL;
 
     for(; i > 0; ) {
 
@@ -344,7 +333,6 @@ static void P_perform_grammar_actions(PGrammar *grammar,
     PTreeTraversalType traversal_type,
                        prev_traversal_type = -1;
     PParseTree *curr;
-    int i = -1;
 
     /* execute the action passes in sequence */
     for(; is_not_null(action); action = action->next) {
@@ -448,8 +436,7 @@ void parse_tokens(PGrammar *grammar,
 
     /* useful counter, be it for hinting to GCC that a block shouldn't be
      * optimized out, or for actually counting something. */
-    unsigned int j = 0,
-                 delt_with_end_of_input = 0;
+    unsigned int j = 0;
 
     D( printf("initializing parser...\n"); )
 

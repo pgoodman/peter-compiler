@@ -192,7 +192,6 @@ int scanner_use_file(PScanner *scanner, const char *file_name) {
  * This expects a null-terminated string.
  */
 int scanner_use_string(PScanner *scanner, unsigned char *string) {
-    int i;
     unsigned char *s = string;
 
     assert_not_null(scanner);

@@ -11,8 +11,7 @@
 #define NFA_MAX 256
 
 static unsigned int in_char_class = 0,
-                    first_char_in_class = 1,
-                    got_char = 0;
+                    first_char_in_class = 0;
 
 /* grammar terminals */
 enum {
@@ -75,8 +74,6 @@ static void Machine(PThompsonsConstruction *thompson,
                  PParseTree *branches[]) {
 
     unsigned int start, end;
-    PT_Terminal *term;
-    PParseTree *tree;
 
     switch(num_branches) {
         /* ... */
@@ -165,8 +162,7 @@ static void CatExpr(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    unsigned int start, prev, end, inter_start, inter_end;
-    PT_Terminal *character;
+    unsigned int end, inter_start, inter_end;
 
     end = thompson->state_stack[thompson->top_state - 1];
 
@@ -231,7 +227,7 @@ static void Char(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    unsigned int start, prev, end, i;
+    unsigned int start, end;
     int the_char;
     PT_Terminal *term = (PT_Terminal *) branches[0];
     PSet *all_chars;
@@ -558,8 +554,6 @@ all_chars:
     /*if(term == L_CHARACTER) {*/
         scanner_mark_lexeme_end(scanner);
     /*}*/
-
-done:
 
     return term;
 }

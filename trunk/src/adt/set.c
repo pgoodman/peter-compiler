@@ -187,8 +187,6 @@ void set_free(PSet *set) {
  * Add an element to a set.
  */
 void set_add_elm(PSet *set, unsigned int elm) {
-    int had_elm = 0;
-
     assert_not_null(set);
 
     if(elm > set->num_bits) {

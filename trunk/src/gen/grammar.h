@@ -85,6 +85,8 @@ PGrammar *make_grammar(void) {
 
     grammar_add_terminal_symbol(G, L_fail, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_cut, G_NON_EXCLUDABLE);
+    grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_RuleFlag, G_AUTO);
     grammar_add_terminal_symbol(G, L_non_terminal, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
@@ -96,8 +98,6 @@ PGrammar *make_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_non_terminal_symbol(G, P_RuleFlag, G_AUTO);
     grammar_add_terminal_symbol(G, L_epsilon, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_cut, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_Rule);
 
