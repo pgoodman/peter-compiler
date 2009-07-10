@@ -83,7 +83,6 @@ static void PT_clear(PParseTree *parse_tree) {
  * Free a parse tree (excluding its branches).
  */
 static void PT_free(PParseTree *parse_tree) {
-    PT_Terminal *term;
     PT_clear(parse_tree);
     tree_free((PTree *) parse_tree, &delegate_do_nothing);
 }

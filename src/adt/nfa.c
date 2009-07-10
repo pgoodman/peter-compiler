@@ -72,8 +72,7 @@ static void NFA_alloc_slot(void **slots,
 static NFA_Transition *NFA_alloc_transition(PNFA *nfa,
                                             unsigned int start_state,
                                             unsigned int end_state) {
-    NFA_Transition *trans,
-                   *prev;
+    NFA_Transition *trans;
     NFA_TransitionGroup *group;
 
     assert_not_null(nfa);
@@ -167,8 +166,7 @@ static int NFA_transitive_closure(PNFA *nfa,
     NFA_StateStack stack;
     NFA_Transition *transition;
 
-    int accepting_id = -1,
-        i;
+    int accepting_id = -1;
 
     stack.ptr = stack.bottom;
     stack.top = stack.bottom + NFA_MAX_EPSILON_STACK;
@@ -217,8 +215,6 @@ static PSet *NFA_simulate_transition(PNFA *nfa,
 
     int i,
         j = 0;
-
-    const int num_transitions = nfa->num_transitions;
 
     PSet *output_states = NULL;
     NFA_Transition **transitions = (NFA_Transition **) nfa->state_transitions,
@@ -317,12 +313,10 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
                  num_dfa_states = 0;
 
     int c,
-        as,
-        is_accepting;
+        as;
 
     DFA_State dfa_state_stack[NFA_NUM_DEFAULT_STATES],
-              *state,
-              *new_state;
+              *state;
 
     /* this maps the state sets to the DFA dfa_state_stack indexes. Dict expects
      * pointer entries, but we will just give it ints as those are really what
@@ -506,7 +500,6 @@ static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
          **mdfa_states;
 
     const int num_states = dfa->num_states,
-              num_transitions = dfa->num_transitions,
               ss = (int) dfa->start_state;
 
     char *mark_table,
@@ -824,10 +817,8 @@ void nfa_free(PNFA *nfa) {
 }
 
 PNFA *nfa_to_dfa(PNFA *nfa) {
-    int largest_char, i;
+    int largest_char;
     PNFA *dfa = NULL;
-    NFA_Transition **transitions,
-                   *trans;
     assert_not_null(nfa);
 
     largest_char = NFA_max_alphabet_char(nfa);
@@ -1154,7 +1145,7 @@ void nfa_print_scanner(const PNFA *nfa,
     P(F, "extern G_Terminal %s(PScanner *);\n\n", func_name);
     P(F, "G_Terminal %s(PScanner *S) {\n", func_name);
     P(F, "    G_Terminal pterm = -1, term = -1;\n");
-    P(F, "    unsigned int n = 0, seen_accepting_state = 0;\n");
+    P(F, "    unsigned int seen_accepting_state = 0;\n");
     P(F, "    int cc, nc = 0, pnc = 0;\n");
     P(F, "    scanner_skip(S, &isspace);\n");
     P(F, "    cc = scanner_look(S, 1);\n");

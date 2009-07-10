@@ -176,8 +176,6 @@ unsigned short tree_get_num_branches(PTree *T) {
  * Clear off all of the branches, without doing any proper cleaning up on them.
  */
 void tree_clear(PTree *tree) {
-    int i = 0;
-
     assert_not_null(tree);
     tree->_fill = 0;
 

@@ -26,8 +26,7 @@ static void **V_alloc_slots(uint32_t num_slots) {
  * Resize the vector so that it has at least i slots in it.
  */
 static void V_resize(PVector *V, uint32_t i) {
-    uint32_t new_size,
-             max_size = (uint32_t) -1;
+    uint32_t new_size;
 
     assert_not_null(V);
 
