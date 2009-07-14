@@ -164,7 +164,6 @@ int scanner_use_file(PScanner *scanner, const char *file_name) {
     scanner->buffer.flush_point = (end_of_buffer - S_MAX_LOOKAHEAD);
     scanner->buffer.next_char = end_of_buffer;
     scanner->buffer.allowed_to_flush = 1;
-    scanner->buffer.ptr_start = (unsigned char *) scanner->buffer.start;
 
     scanner->lexeme.end = end_of_buffer;
     scanner->lexeme.start = end_of_buffer;
@@ -192,17 +191,30 @@ int scanner_use_file(PScanner *scanner, const char *file_name) {
  * This expects a null-terminated string.
  */
 int scanner_use_string(PScanner *scanner, unsigned char *string) {
-    unsigned char *s = string;
+    unsigned char *s = string,
+                  *b = scanner->buffer.start;
+    const unsigned char *be = b + S_INPUT_BUFFER_SIZE;
 
     assert_not_null(scanner);
 
-    for(s = string; *s; ++s)
-        ;
+    /* copy as much of the string into the buffer as we can. */
+    for(; *s && b < be; ++s, ++b) {
+        *b = *s;
+    }
 
-    scanner->buffer.ptr_start = string;
-    scanner->buffer.end = s;
-    scanner->buffer.flush_point = s;
-    scanner->buffer.next_char = string;
+    if(*s && b >= be) {
+        std_error("Internal Scanner Error: String cannot fit into buffer.");
+    }
+
+    /* add in the null character */
+    if(b < be) {
+        *b = 0;
+        ++b;
+    }
+
+    scanner->buffer.end = b;
+    scanner->buffer.flush_point = b;
+    scanner->buffer.next_char = scanner->buffer.start;
     scanner->buffer.allowed_to_flush = 0;
 
     scanner->input.column = 1;
@@ -210,8 +222,8 @@ int scanner_use_string(PScanner *scanner, unsigned char *string) {
     scanner->input.eof_read = 0;
     scanner->input.file_descriptor = -1;
 
-    scanner->lexeme.end = s;
-    scanner->lexeme.start = s;
+    scanner->lexeme.end = b;
+    scanner->lexeme.start = b;
     scanner->lexeme.as_string = NULL;
 
     return 1;
@@ -233,7 +245,7 @@ int scanner_flush(PScanner *scanner, int force_flush) {
                  shift_amount = 0;
 
     unsigned char *left_edge,
-                  *buffer_start = scanner->buffer.ptr_start,
+                  *buffer_start = scanner->buffer.start,
                   *buffer_end = scanner->buffer.end;
 
     if(NO_MORE_CHARS(scanner)) {
@@ -324,7 +336,7 @@ char scanner_look(PScanner *scanner, const int n) {
             return EOF;
         }
         return 0;
-    } else if(ch < scanner->buffer.ptr_start) {
+    } else if(ch < scanner->buffer.start) {
         return 0;
     }
 
@@ -425,15 +437,25 @@ void scanner_mark_lexeme_end(PScanner *scanner) {
  */
 PString *scanner_get_lexeme(PScanner *scanner) {
 
+    char term_char;
+    PString *str;
+
     assert_not_null(scanner);
 
     if(is_not_null(scanner->lexeme.as_string)) {
         return scanner->lexeme.as_string;
     } else if(scanner->lexeme.end > scanner->lexeme.start) {
-        return scanner->lexeme.as_string = string_alloc_char(
+
+        term_char = *scanner->lexeme.end;
+        *(scanner->lexeme.end) = 0;
+
+        str = scanner->lexeme.as_string = string_alloc_char(
             (char *) scanner->lexeme.start,
-            (uint32_t) (scanner->lexeme.end - scanner->lexeme.start - 1)
+            (uint32_t) (scanner->lexeme.end - scanner->lexeme.start)
         );
+
+        *scanner->lexeme.end = term_char;
+        return str;
     }
 
     return NULL;

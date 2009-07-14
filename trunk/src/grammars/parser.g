@@ -1,47 +1,57 @@
 
 non_terminal : '[A-Z][a-zA-Z0-9_]*' ;
 terminal : '[a-z][a-zA-Z0-9_]*' ;
-epsilon : '<>|\'\'' ;
+epsilon : '<>' ;
 regexp : '\'([^\']*\\\')*[^\']*\'' ;
+string : '"([^"]*\\")*[^"]*"' ;
 cut : '!' ;
 fail : '><' ;
+kleene_closure : "*" ;
+positive_closure : "+" ;
+optional : "?" ;
+followed_by : '&' ;
+not_followed_by : '~' ;
+non_excludable : '-' ;
+raise_children : '^' ;
 
 GrammarRules
-    : ^GrammarRules -Production
-    : ^GrammarRules -Terminal
-    : <>
+    : -Production ^GrammarRules
+    | -Terminal ^GrammarRules
+    | <>
     ;
 
-Production : -non_terminal ^ProductionRules ';' ;
+Production
+    : -non_terminal ':' ^ProductionRules ';'
+    ;
 
-Terminal : -terminal ':' -regexp ';' ;
+Terminal
+    : -terminal ':' ^(-regexp | -string) ';'
+    ;
 
 ProductionRules
-    : -ProductionRule ^ProductionRules
-    : <>
+    : -Rules "|" ^ProductionRules
+    | -Rules
     ;
-
-ProductionRule : ':' ^Rules ;
 
 Rules
     : ^Rule ^Rules
-    : <>
+    | ^Rule
     ;
 
 Rule
     : -fail
-    : -cut
-    : RuleFlag -non_terminal
-    : RuleFlag -regexp
-    : RuleFlag -terminal
-    : RuleFlag -epsilon
+    | -cut
+    | ^RuleFlag "(" -ProductionRules ")"
+    | ^RuleFlag ^(-non_terminal | -regexp | -string | -terminal | -epsilon)
     ;
 
 RuleFlag
-    : -NonExcludable
-    : -RaiseChildren
-    : <>
+    : -non_excludable
+    | -raise_children
+    | -kleene_closure
+    | -positive_closure
+    | -optional
+    | -followed_by
+    | -not_followed_by
+    | <>
     ;
-
-NonExcludable : '-' ;
-RaiseChildren : '^' ;

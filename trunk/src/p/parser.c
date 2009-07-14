@@ -286,6 +286,7 @@ static PT_Terminal *P_alloc_terminals(PScanner *scanner,
 
     /* bring the entire token stream into memory */
     while((term = scanner_fnc(scanner)) >= 0) {
+
         curr = PT_alloc_terminal(
             term,
             scanner_get_lexeme(scanner),

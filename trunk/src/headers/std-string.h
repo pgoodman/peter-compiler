@@ -27,6 +27,8 @@ PString *string_alloc_char(const char * const str, const uint32_t len );
 
 void string_free(PString * );
 
+PString *string_copy(PString *str);
+
 int string_equal(const PString * const, const PString * const );
 
 uint32_t string_length(const PString * const );

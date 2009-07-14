@@ -62,7 +62,7 @@ PTreeGenerator *tree_generator_init(PTreeGenerator *, void *, const PTreeTravers
 void tree_generator_reuse(PTreeGenerator *, void *);
 
 #define tree_get_branch(T,branch) (((PTree *) T)->_branches[branch])
-
+#define tree_get_branches(T) (((PTree *) T)->_branches)
 
 unsigned long int tree_num_allocated_pointers(void);
 

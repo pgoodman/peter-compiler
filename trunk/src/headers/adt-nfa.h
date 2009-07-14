@@ -72,7 +72,7 @@ PNFA *nfa_alloc(void);
 
 void nfa_free(PNFA *nfa);
 
-PNFA *nfa_to_dfa(PNFA *nfa);
+PNFA *nfa_to_dfa(PNFA *nfa, PSet *priority_set);
 
 void nfa_change_start_state(PNFA *nfa, unsigned int start_state);
 
