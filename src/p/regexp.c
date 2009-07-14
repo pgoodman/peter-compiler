@@ -548,12 +548,67 @@ all_chars:
                 }
             }
             first_char_in_class = 0;
+            break;
     }
 
     /* go drop the lexeme unless it's a character */
     /*if(term == L_CHARACTER) {*/
         scanner_mark_lexeme_end(scanner);
     /*}*/
+
+    return term;
+}
+
+/**
+ * Scan the input letter-by-letter until a lexeme is matched. This doesn't look
+ * for any special regular expression forms, instead it matches everything as
+ * a character.
+ */
+static G_Terminal R_simple_get_token(PScanner *scanner) {
+
+    char curr_char;
+    G_Terminal term;
+
+    scanner_skip(scanner, &isspace);
+    scanner_mark_lexeme_start(scanner);
+    curr_char = scanner_advance(scanner);
+
+    if(!curr_char) {
+        return -1;
+    }
+
+    switch(curr_char) {
+        case '\\':
+            switch(scanner_look(scanner, 1)) {
+                case 'n':
+                    term = L_NEW_LINE;
+                    scanner_advance(scanner);
+                    break;
+                case 's':
+                    term = L_SPACE;
+                    scanner_advance(scanner);
+                    break;
+                case 't':
+                    term = L_TAB;
+                    scanner_advance(scanner);
+                    break;
+                case 'r':
+                    term = L_CARRIAGE_RETURN;
+                    scanner_advance(scanner);
+                    break;
+                default:
+                    scanner_mark_lexeme_start(scanner);
+                    scanner_advance(scanner);
+                    goto all_chars;
+            }
+            break;
+all_chars:
+        default:
+            term = L_CHARACTER;
+            break;
+    }
+
+    scanner_mark_lexeme_end(scanner);
 
     return term;
 }
@@ -823,34 +878,88 @@ PGrammar *regexp_grammar(void) {
  * then turn that NFA into a DFA using subset construction, then minimize the
  * DFA.
  */
-void regexp_parse(PGrammar *grammar,
-                  PScanner *scanner,
-                  PNFA *nfa,
-                  unsigned char *regexp,
-                  unsigned int start_state,
-                  G_Terminal terminal) {
+static unsigned int R_parse(PGrammar *grammar,
+                    PScanner *scanner,
+                    PNFA *nfa,
+                    unsigned char *regexp,
+                    unsigned int start_state,
+                    G_Terminal terminal,
+                    PScannerFunc *scanner_fnc) {
 
     PThompsonsConstruction thom, *thompson = &thom;
     PNFA *dfa;
+
+    assert_not_null(grammar);
+    assert_not_null(scanner);
+    assert_not_null(regexp);
 
     thom.nfa = nfa;
     thom.top_state = -1;
 
     scanner_use_string(scanner, regexp);
+
     scanner_flush(scanner, 1);
 
     parse_tokens(
         grammar,
         scanner,
-        (PScannerFunc *) &R_get_token,
+        scanner_fnc,
         (void *) thompson
     );
 
     if(!thom.top_state) {
-        return;
+        return 0;
     }
 
     nfa_add_epsilon_transition(nfa, start_state, thom.state_stack[1]);
     nfa_add_conclusion(nfa, thom.state_stack[0], terminal);
+
+    return thom.state_stack[0];
+}
+
+/**
+ * Parse a regular expression according to the POSIX rules.
+ */
+unsigned int regexp_parse(PGrammar *grammar,
+                          PScanner *scanner,
+                          PNFA *nfa,
+                          unsigned char *regexp,
+                          unsigned int start_state,
+                          G_Terminal terminal) {
+
+    in_char_class = 0;
+    first_char_in_class = 0;
+
+    return R_parse(
+        grammar,
+        scanner,
+        nfa,
+        regexp,
+        start_state,
+        terminal,
+        (PScannerFunc *) &R_get_token
+    );
+}
+
+/**
+ * Parse a string as a regular expression, i.e. parse it as the concatenation
+ * of all of the characters.
+ */
+unsigned int regexp_parse_cat(PGrammar *grammar,
+                              PScanner *scanner,
+                              PNFA *nfa,
+                              unsigned char *regexp,
+                              unsigned int start_state,
+                              G_Terminal terminal) {
+
+    return R_parse(
+        grammar,
+        scanner,
+        nfa,
+        regexp,
+        start_state,
+        terminal,
+        (PScannerFunc *) &R_simple_get_token
+    );
 }
 

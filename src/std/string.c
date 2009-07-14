@@ -32,9 +32,23 @@ static PString *string_alloc(uint32_t len) {
 
     S->len = len;
     S->str = (PChar *) (((char *) S) + (sizeof(PString) / sizeof(char)));
-    S->str[len] = '\0';
+    S->str[len] = 0;
 
     return S;
+}
+
+/**
+ * Copy an existing string.
+ */
+PString *string_copy(PString *str) {
+    PString *copy;
+
+    assert_not_null(str);
+
+    copy = string_alloc(str->len);
+    copy->str = memcpy(copy->str, str->str, (str->len + 1) * sizeof(PChar));
+
+    return copy;
 }
 
 static PChar S_char_to_pchar(char c ) {
@@ -52,9 +66,8 @@ PString *string_alloc_char(const char *str, const uint32_t len ) {
 
     /* copy the old characters, including null character, into the
      * heap-allocated chars */
-    for(i = 0; i < len+1; ++i) {
-        S->str[i] = S_char_to_pchar(str[i]);
-    }
+    S->str = memcpy(S->str, str, (len + 1) * sizeof(PChar));
+    S->str[len] = 0;
 
     return S;
 }

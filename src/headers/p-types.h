@@ -32,7 +32,6 @@ typedef struct PScanner {
 
     struct {
         unsigned char start[S_INPUT_BUFFER_SIZE],
-                      *ptr_start,
                       *end,
                       *next_char,
                       *flush_point;

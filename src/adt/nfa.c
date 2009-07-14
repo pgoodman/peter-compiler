@@ -152,6 +152,41 @@ static void NFA_state_stack_push(NFA_StateStack *stack, unsigned int state) {
 }
 
 /**
+ * Determine the largest character of the alphabet that this dfa recognizes.
+ */
+static unsigned int NFA_max_alphabet_char(PNFA *nfa) {
+
+    int max = 0,
+        j,
+        i = nfa->num_transitions;
+
+    NFA_TransitionGroup *group;
+    NFA_Transition *trans;
+
+    D( printf("\t finding the maximum alphabet character... \n"); )
+
+    for(group = nfa->transition_group; is_not_null(group); group = group->next) {
+        trans = group->transitions;
+        for(i = group->num_transitions; --i >= 0; ++trans) {
+            if(trans->type == T_VALUE) {
+                if(trans->condition.value > max) {
+                   max = trans->condition.value;
+                }
+            } else if(trans->type == T_SET) {
+                j = set_max_elm(trans->condition.set);
+                if(j > max) {
+                    max = j;
+                }
+            }
+        }
+    }
+
+    D( printf("\t done, max char is ASCII %d. \n", max); )
+
+    return max;
+}
+
+/**
  * Find the transitive closure of epsilon transitions on a particular set of
  * states. The epsilon closure for the set of states is added to the set of
  * states in place.
@@ -162,11 +197,16 @@ static void NFA_state_stack_push(NFA_StateStack *stack, unsigned int state) {
  */
 static int NFA_transitive_closure(PNFA *nfa,
                                   PSet *states,
-                                  int transition_type) {
+                                  PSet *priority_states,
+                                  unsigned int transition_type) {
     NFA_StateStack stack;
     NFA_Transition *transition;
 
-    int accepting_id = -1;
+    int accepting_id = -1,
+        accepting_was_priority = 0,
+        state_is_priority = 0;
+
+    unsigned int state_id;
 
     stack.ptr = stack.bottom;
     stack.top = stack.bottom + NFA_MAX_EPSILON_STACK;
@@ -182,18 +222,48 @@ static int NFA_transitive_closure(PNFA *nfa,
 
     while(stack.ptr > stack.bottom && stack.ptr < stack.top) {
 
-        transition = nfa->state_transitions[*(--stack.ptr)];
+        state_id = *(--stack.ptr);
+        transition = nfa->state_transitions[state_id];
 
-        if(set_has_elm(nfa->accepting_states, *stack.ptr)) {
+        /* we have found an accepting state. the following heuristic is in place
+         * in the event that more than one accepting states are reachable for
+         * the same input: we prefer accepting states with no outgoing
+         * transitions, if we find two such states then we error. */
+        if(set_has_elm(nfa->accepting_states, state_id)) {
             D( printf("\t\t\t %d is an accepting state. \n", *stack.ptr); )
-            accepting_id = *stack.ptr;
+
+            state_is_priority = set_has_elm(priority_states, state_id);
+            if(accepting_id < 0) {
+                accepting_id = state_id;
+                accepting_was_priority = state_is_priority;
+            } else {
+                if(state_is_priority) {
+                    if(accepting_was_priority) {
+                        std_error(
+                            "Internal NFA Error: Cannot resolve conflict in "
+                            "subset construction. Two transition-less accepting "
+                            "states can be reached given the same input."
+                        );
+                    }
+
+                    accepting_id = state_id;
+                    accepting_was_priority = state_is_priority;
+
+                    D( printf(
+                        "\t\t\t\t choosing %d as the accepting state. state "
+                        "has transitions is %d \n",
+                        state_id,
+                        state_has_transitions
+                    ); )
+                }
+            }
         }
 
         for(; is_not_null(transition); transition = transition->trans_next) {
             if(set_has_elm(states, transition->to_state)) {
                 continue;
             }
-            if(transition->type == T_EPSILON) {
+            if(transition->type == transition_type) {
                 set_add_elm(states, transition->to_state);
                 NFA_state_stack_push(&stack, transition->to_state);
             }
@@ -261,41 +331,6 @@ static PSet *NFA_simulate_transition(PNFA *nfa,
     return output_states;
 }
 
-/**
- * Determine the largest character of the alphabet that this dfa recognizes.
- */
-static unsigned int NFA_max_alphabet_char(PNFA *nfa) {
-
-    int max = 0,
-        j,
-        i = nfa->num_transitions;
-
-    NFA_TransitionGroup *group;
-    NFA_Transition *trans;
-
-    D( printf("\t finding the maximum alphabet character... \n"); )
-
-    for(group = nfa->transition_group; is_not_null(group); group = group->next) {
-        trans = group->transitions;
-        for(i = group->num_transitions; --i >= 0; ++trans) {
-            if(trans->type == T_VALUE) {
-                if(trans->condition.value > max) {
-                   max = trans->condition.value;
-                }
-            } else if(trans->type == T_SET) {
-                j = set_max_elm(trans->condition.set);
-                if(j > max) {
-                    max = j;
-                }
-            }
-        }
-    }
-
-    D( printf("\t done, max char is ASCII %d. \n", max); )
-
-    return max;
-}
-
 /* DFA state, represents a subset of all NFA states. */
 typedef struct DFA_State {
     PSet *nfa_states;
@@ -306,7 +341,9 @@ typedef struct DFA_State {
 /**
  * Perform the subset construction on the NFA to turn it into a DFA.
  */
-static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
+static PNFA *NFA_subset_construction(PNFA *nfa,
+                                     PSet *priority_set,
+                                     int largest_char) {
 
     unsigned int next_state_id,
                  prev_state_id,
@@ -351,7 +388,12 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
        );
     )
 
-    as = NFA_transitive_closure(nfa, dfa_state_stack->nfa_states, T_EPSILON);
+    as = NFA_transitive_closure(
+        nfa,
+        dfa_state_stack->nfa_states,
+        priority_set,
+        T_EPSILON
+    );
     if(as >= 0) {
         nfa_add_accepting_state(dfa, dfa_state_stack->id);
     }
@@ -401,7 +443,12 @@ static PNFA *NFA_subset_construction(PNFA *nfa, int largest_char) {
             /* for each state in the transition set, find all of the states that
              * they are simultaneously at by adding the transitive closure of
              * epsilon transitions to the transition_set. */
-            as = NFA_transitive_closure(nfa, transition_set, T_EPSILON);
+            as = NFA_transitive_closure(
+                nfa,
+                transition_set,
+                priority_set,
+                T_EPSILON
+            );
 
             /* we have already seen this DFA state */
             next_state_id = (unsigned int) dict_get(dfa_states, transition_set);
@@ -476,15 +523,22 @@ clean_up:
 }
 
 /**
- * Minimize a DFA. The main idea is that we want to find the partition the set
- * of DFA states into equivalence classes, and then each equivalence class
- * represents a minimized DFA state.
+ * Minimize a DFA. The main idea is that we want to partition the set of DFA
+ * states into equivalence classes, and then each equivalence class represents
+ * a minimized DFA state.
  *
  * The way we generate the classes is by repeatedly marking pairs of states that
  * we know to be distinguishable until no more marking is done. Once we have
  * done this, it is merely about extracting the classes from the marking table,
  * building the minimized DFA states (easy), and then figuring out the new
  * transitions (slightly more involved).
+ *
+ * The usual way to perform this marking is to go over every unmarked pair of
+ * states, and for each pair check transitions on each character of our input
+ * alphabet.
+ *
+ * This function takes a different approach insofar as it works in terms of
+ * transitions.
  *
  * Note: This procedure assumes that all transitions are value transitions.
  *
@@ -568,8 +622,8 @@ static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
 
         for(i = num_states; --i >= 0; row += num_states) {
 
-            /* fill in the values, this will allow us to compare transitions between
-             * any two states. */
+            /* fill in the values, this will allow us to compare transitions
+             * between any two states. */
             trans = source_transitions[i];
             for(; is_not_null(trans); trans = trans->trans_next) {
                 state_trans_values[trans->condition.value] = trans->to_state;
@@ -577,18 +631,25 @@ static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
 
             D( printf("Looking at state %d \n", i); )
 
+            /* for every transition */
             for(group = groups; is_not_null(group); group = group->next) {
                 trans = group->transitions;
                 for(o = group->num_transitions; --o >= 0; ++trans) {
 
+                    /* get the (i, trans->from_state) and (trans->from_state, i)
+                     * pairs in the mark table */
                     cell = row + (num_states - trans->from_state - 1);
                     cell_p = mark_table
                            + (jjp - (num_states * trans->from_state) + jp - i);
 
+                    /* ignore marked pairs */
                     if(*cell || *cell_p) {
                         continue;
                     }
 
+                    /* if state[trans->from_state] has a transition on a specific
+                     * value that state[i] does not have then mark the states as
+                     * distinguishable. */
                     k = state_trans_values[trans->condition.value];
                     if(k < 0) {
                         D( printf("\t marking (%d, %d) \n", i, trans->from_state); )
@@ -598,7 +659,16 @@ static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
                         continue;
                     }
 
-                    temp = mark_table + (jjp - (num_states * k) + jp - trans->to_state);
+                    /* go get the state that the transition goes to */
+                    temp = mark_table
+                         + (jjp - (num_states * k) + jp - trans->to_state);
+
+                    /* if the (k, trans->to_state) cell is marked then mark the
+                     * current cell. state[k] is the result of performing a
+                     * transition on trans->condition.value on state[i].
+                     * state[trans->to_state] is the result of performing a
+                     * transition on trans->condition.value on state[trans->
+                     * from_state]. */
                     if(*temp) {
                         ++m;
                         *cell = 1;
@@ -630,9 +700,11 @@ static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
     seen = set_alloc();
     row = mark_table + jjp + num_states - 1;
     k = num_states;
+
     /* start by creating all minimized DFA states and a mapping between DFA
      * states and minimized-DFA states. This works by starting at the bottom-
-     * right of the mark_table and ascending up the main diagonal. */
+     * right of the mark_table and ascending up the bottom-left triangle, row-
+     * by-row. */
     for(i = num_states; --i >= 0; --k, row -= num_states) {
         if(set_has_elm(seen, i)) {
             continue;
@@ -816,13 +888,13 @@ void nfa_free(PNFA *nfa) {
     mem_free(nfa);
 }
 
-PNFA *nfa_to_dfa(PNFA *nfa) {
+PNFA *nfa_to_dfa(PNFA *nfa, PSet *priority_set) {
     int largest_char;
     PNFA *dfa = NULL;
     assert_not_null(nfa);
 
     largest_char = NFA_max_alphabet_char(nfa);
-    nfa = NFA_subset_construction(nfa, largest_char);
+    nfa = NFA_subset_construction(nfa, priority_set, largest_char);
     dfa = DFA_minimize(nfa, largest_char);
     nfa_free(nfa);
     return dfa;
@@ -1136,8 +1208,8 @@ void nfa_print_scanner(const PNFA *nfa,
     transitions = nfa->state_transitions;
 
     P(F, "\n");
-    P(F, "#ifndef _P_LEX_H_\n");
-    P(F, "#define _P_LEX_H_\n");
+    P(F, "#ifndef _P_SCANNER_%s_\n", func_name);
+    P(F, "#define _P_SCANNER_%s_\n", func_name);
     P(F, "#include <ctype.h>\n");
     P(F, "#include <std-include.h>\n");
     P(F, "#include <p-types.h>\n");
