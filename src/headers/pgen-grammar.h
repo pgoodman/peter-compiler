@@ -27,12 +27,13 @@ enum {
     L_pg_kleene_closure=10,
     L_pg_non_excludable=11,
     L_pg_terminal=12,
-    L_pg_cut=13,
-    L_pg_raise_children=14,
-    L_pg_not_followed_by=15,
-    L_pg_string=16,
-    L_pg_optional=17,
-    L_pg_fail=18
+    L_pg_self=13,
+    L_pg_cut=14,
+    L_pg_raise_children=15,
+    L_pg_not_followed_by=16,
+    L_pg_string=17,
+    L_pg_optional=18,
+    L_pg_fail=19
 };
 
 enum {

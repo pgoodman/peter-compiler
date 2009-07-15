@@ -41,10 +41,41 @@ typedef struct {
 
 /* -------------------------------------------------------------------------- */
 
+static void change_self_refs(PParseTree **branches,
+                             int num_branches,
+                             PString *new_name) {
+
+    int j, k;
+    PParseTree **rule_branches;
+    PT_Terminal *term;
+    for(; --num_branches >= 0; ) {
+        if(branches[num_branches]->type != PT_NON_TERMINAL) {
+            continue;
+        }
+        rule_branches = (PParseTree **) tree_get_branches(branches[num_branches]);
+        k = tree_get_num_branches((PTree *) branches[num_branches]);
+        for(; --k >= 0; ) {
+
+            if(rule_branches[k]->type == PT_TERMINAL) {
+                term = (PT_Terminal *) rule_branches[k];
+                if(term->terminal == L_pg_self) {
+                    term->terminal = L_pg_non_terminal;
+                    if(is_not_null(term->lexeme)) {
+                        string_free(term->lexeme);
+                    }
+                    term->lexeme = string_copy(new_name);
+                }
+            }
+        }
+    }
+}
+
 static void I_Production(PParserInfo *state,
                         unsigned char phrase,
                         unsigned int num_branches,
                         PParseTree *branches[]) {
+
+    int i;
     PString *production_name = ((PT_Terminal *) branches[0])->lexeme;
 
     if(dict_is_set(state->production_rules, production_name)) {
@@ -60,6 +91,8 @@ static void I_Production(PParserInfo *state,
     if(is_null(state->first_production)) {
         state->first_production = production_name;
     }
+
+    change_self_refs(branches, num_branches, production_name);
 }
 
 /**
@@ -122,6 +155,7 @@ static void I_Rules(PParserInfo *state,
     static unsigned int k = 0, l = 0;
     unsigned int i = 0, j;
     PT_Terminal *term;
+    PParseTree **sub_branches;
     PString *str;
     char term_name[15],
          *c;
@@ -142,6 +176,13 @@ static void I_Rules(PParserInfo *state,
                 str,
                 &delegate_do_nothing
             );
+
+            change_self_refs(
+                (PParseTree **) tree_get_branches(branches[i]),
+                tree_get_num_branches((PTree *) branches[i]),
+                str
+            );
+
             continue;
         }
 
@@ -217,6 +258,7 @@ static void I_Rules(PParserInfo *state,
             case L_pg_cut:
             case L_pg_fail:
             case L_pg_epsilon:
+            case L_pg_self:
                 ++(state->num_symbols);
                 break;
             default:

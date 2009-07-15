@@ -92,7 +92,7 @@ int main(void) {
     grammar_free(grammar);
     scanner_free(scanner);
     */
-    /*
+
     parser_gen(
         "src/grammars/lang.g",
         "lang_grammar",
@@ -101,8 +101,8 @@ int main(void) {
         "src/gen/lang_lexer.h",
         "lang"
     );
-    */
 
+    /*
     PScanner *scanner = scanner_alloc();
     PGrammar *grammar = lang_grammar();
 
@@ -118,7 +118,7 @@ int main(void) {
 
     scanner_free(scanner);
     grammar_free(grammar);
-
+    */
     /*
     PScanner *scanner = scanner_alloc();
     PGrammar *grammar = lang_grammar();

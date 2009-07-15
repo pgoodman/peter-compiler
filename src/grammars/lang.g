@@ -1,81 +1,36 @@
 
-type_name : '[A-Z][a-zA-Z0-9_\-]*' ;
-identifier : '[a-z\-_*+?$!>:/.<=^#][a-zA-Z0-9\-_*+?$!>:/.<=^#]*' ;
+type_name : '[A-Z][a-zA-Z0-9_]*' ;
+identifier : '[a-z_:][a-zA-Z0-9_:?!]*' ;
 integer : '[0-9]+' ;
 string : '"([^"]*\\")*[^"]*"' ;
 
 Program
-    : ^StatementList
+    : -Statement ^Program
+    | <>
     ;
 
-FunctionType
-    : "(" ^TypeList "->" -Type ")"
+Statement
+    : FunctionDefinition
+    | Expression
     ;
 
 Type
-    : -type_name
-    | -FunctionType
+    :
     ;
-
-TypeList
-    : -Type ^TypeList
-    | <>
-    ;
-
-IdentifierList
-    : -identifier ^IdentifierList
-    | <>
-    ;
-
-TypedIdentifier
-    : -Type -identifier
-    ;
-
-TypeDestructure
-    : -TypedIdentifier ^IdentifierList
-    | -TypedIdentifier
-    ;
-
-TypedParameter
-    : ^TypedIdentifier
-    | "(" ^TypeDestructure ")"
-    ;
-
-TypedParameterList
-    : -TypedParameter ^TypedParameterList
-    | <>
-    ;
-
-FunctionHeader
-    : "|" -TypedParameterList "->" -Type "|"
-    ;
-
-Atom
-    : -integer
-    | -string
-    | -identifier
-    ;
-
-FunctionApplication
-    : "(" -identifier ^ExpressionList ")"
+    
+FunctionDefinition
+    : -identifier "(" -FunctionParameterList ")" ":" -Type "{" ^Program "}"
     ;
 
 Expression
-    : ^Atom
-    | -FunctionApplication
+    : "(" Expression ")"
+    | FunctionExpression
+    ;
+    
+FunctionExpression
+    : "(" -FunctionParameterList ")" ":" -Type "{" ^Program "}"
     ;
 
-ExpressionList
-    : Expression ExpressionList
-    | <>
-    ;
-
-StatementList
-    : Expression StatementList
-    | FunctionDefinition StatementList
-    | <>
-    ;
-
-FunctionDefinition
-    : "(" "defun" -identifier -FunctionHeader -StatementList ")"
+FunctionParameterList
+    :
     ;
