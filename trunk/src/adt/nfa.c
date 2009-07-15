@@ -250,10 +250,8 @@ static int NFA_transitive_closure(PNFA *nfa,
                     accepting_was_priority = state_is_priority;
 
                     D( printf(
-                        "\t\t\t\t choosing %d as the accepting state. state "
-                        "has transitions is %d \n",
-                        state_id,
-                        state_has_transitions
+                        "\t\t\t\t choosing %d as the accepting state.\n",
+                        state_id
                     ); )
                 }
             }
@@ -1216,14 +1214,10 @@ void nfa_print_scanner(const PNFA *nfa,
     P(F, "#include <p-scanner.h>\n\n");
     P(F, "extern G_Terminal %s(PScanner *);\n\n", func_name);
     P(F, "G_Terminal %s(PScanner *S) {\n", func_name);
-    P(F, "    G_Terminal pterm = -1, term = -1;\n");
+    P(F, "    G_Terminal term = -1;\n");
     P(F, "    unsigned int seen_accepting_state = 0;\n");
     P(F, "    int cc, nc = 0, pnc = 0;\n");
     P(F, "    scanner_skip(S, &isspace);\n");
-    P(F, "    cc = scanner_look(S, 1);\n");
-    P(F, "    if(cc == EOF || !cc) {\n");
-    P(F, "        return -1;\n");
-    P(F, "    }\n");
     P(F, "    scanner_mark_lexeme_start(S);\n");
 
     if(nfa->start_state > 0) {
@@ -1236,18 +1230,15 @@ void nfa_print_scanner(const PNFA *nfa,
 
         trans = transitions[n];
         if(is_null(trans) && set_has_elm(astates, n)) {
-            P(F, "    pterm = %d;\n", *(nfa->conclusions+n));
+            P(F, "    term = %d;\n", *(nfa->conclusions+n));
             P(F, "    goto commit;\n");
         } else {
-            P(F, "    if(!(cc = scanner_advance(S))) { goto undo_and_commit; }\n");
-
             if(set_has_elm(astates, n)) {
-                P(F, "    pterm = term;\n");
                 P(F, "    term = %d;\n", *(nfa->conclusions+n));
                 P(F, "    pnc = nc;\n");
                 P(F, "    seen_accepting_state = 1;\n");
             }
-
+            P(F, "    if(!(cc = scanner_advance(S))) { goto undo_and_commit; }\n");
             P(F, "    ++nc;\n");
             P(F, "    switch(cc) {\n");
             for(; is_not_null(trans); trans = trans->trans_next) {
@@ -1273,15 +1264,12 @@ void nfa_print_scanner(const PNFA *nfa,
 
     P(F, "undo_and_commit:\n");
     P(F, "    if(!seen_accepting_state) {\n");
-    P(F, "        std_error(\"Scanner Error: Unable to match token.\");\n");
+    P(F, "        return -1;\n");
     P(F, "    }\n");
     P(F, "    scanner_pushback(S, nc - pnc);\n");
     P(F, "commit:\n");
     P(F, "    scanner_mark_lexeme_end(S);\n");
-    P(F, "    if(seen_accepting_state && pterm < 0 && term >= 0) {\n");
-    P(F, "        return term;\n");
-    P(F, "    }\n");
-    P(F, "    return pterm;\n");
+    P(F, "    return term;\n");
     P(F, "}\n\n");
     P(F, "#endif\n\n");
 

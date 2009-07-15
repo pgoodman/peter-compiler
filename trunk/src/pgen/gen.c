@@ -17,7 +17,7 @@
 #include <pgen-gen.h>
 
 #define P fprintf
-#define D(x) x
+#define D(x)
 
 typedef struct {
     PDictionary *terminals,
