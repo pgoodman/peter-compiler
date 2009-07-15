@@ -8,14 +8,13 @@
 
 #include <pgen-grammar.h>
 
-
 PGrammar *parser_grammar_grammar(void) {
     PGrammar *G = grammar_alloc(
         P_pg_GrammarRules, /* production to start matching with */
         9, /* number of productions */
-        19, /* number of tokens */
-        40, /* number of phrases */
-        50 /* number of phrase symbols */
+        20, /* number of tokens */
+        29, /* number of phrases */
+        44 /* number of phrase symbols */
     );
 
     grammar_add_non_terminal_symbol(G, P_pg_Production, G_NON_EXCLUDABLE);
@@ -71,6 +70,8 @@ PGrammar *parser_grammar_grammar(void) {
     grammar_add_terminal_symbol(G, L_pg_string_4, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_pg_ProductionRules, G_NON_EXCLUDABLE);
     grammar_add_terminal_symbol(G, L_pg_string_5, G_AUTO);
+    grammar_add_phrase(G);
+    grammar_add_terminal_symbol(G, L_pg_self, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_pg_non_terminal, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
