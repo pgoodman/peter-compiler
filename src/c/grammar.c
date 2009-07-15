@@ -5,9 +5,9 @@ PGrammar *lang_grammar(void) {
     PGrammar *G = grammar_alloc(
         P_lang_Program, /* production to start matching with */
         16, /* number of productions */
-        10, /* number of tokens */
+        9, /* number of tokens */
         28, /* number of phrases */
-        57 /* number of phrase symbols */
+        54 /* number of phrase symbols */
     );
 
     grammar_add_non_terminal_symbol(G, P_lang_StatementList, G_RAISE_CHILDREN);
@@ -15,19 +15,16 @@ PGrammar *lang_grammar(void) {
     grammar_add_production_rule(G, P_lang_Program);
 
     grammar_add_terminal_symbol(G, L_lang_string_1, G_AUTO);
-    grammar_add_terminal_symbol(G, L_lang_string_2, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_lang_TypeList, G_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_lang_string_3, G_AUTO);
-    grammar_add_non_terminal_symbol(G, P_lang_Type, G_NON_EXCLUDABLE);
     grammar_add_terminal_symbol(G, L_lang_string_2, G_AUTO);
+    grammar_add_non_terminal_symbol(G, P_lang_Type, G_NON_EXCLUDABLE);
+    grammar_add_terminal_symbol(G, L_lang_string_3, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_FunctionType);
 
     grammar_add_terminal_symbol(G, L_lang_type_name, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_lang_string_4, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_lang_FunctionType, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_lang_string_5, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_Type);
 
@@ -59,9 +56,9 @@ PGrammar *lang_grammar(void) {
 
     grammar_add_non_terminal_symbol(G, P_lang_TypedIdentifier, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_lang_string_4, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_1, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_lang_TypeDestructure, G_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_lang_string_5, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_3, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_TypedParameter);
 
@@ -72,11 +69,11 @@ PGrammar *lang_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_TypedParameterList);
 
-    grammar_add_terminal_symbol(G, L_lang_string_2, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_4, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_lang_TypedParameterList, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_lang_string_3, G_AUTO);
-    grammar_add_non_terminal_symbol(G, P_lang_Type, G_NON_EXCLUDABLE);
     grammar_add_terminal_symbol(G, L_lang_string_2, G_AUTO);
+    grammar_add_non_terminal_symbol(G, P_lang_Type, G_NON_EXCLUDABLE);
+    grammar_add_terminal_symbol(G, L_lang_string_4, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_FunctionHeader);
 
@@ -88,10 +85,10 @@ PGrammar *lang_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_Atom);
 
-    grammar_add_terminal_symbol(G, L_lang_string_4, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_1, G_AUTO);
     grammar_add_terminal_symbol(G, L_lang_identifier, G_NON_EXCLUDABLE);
     grammar_add_non_terminal_symbol(G, P_lang_ExpressionList, G_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_lang_string_5, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_3, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_FunctionApplication);
 
@@ -118,12 +115,12 @@ PGrammar *lang_grammar(void) {
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_StatementList);
 
-    grammar_add_terminal_symbol(G, L_lang_string_4, G_AUTO);
-    grammar_add_terminal_symbol(G, L_lang_string_6, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_1, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_5, G_AUTO);
     grammar_add_terminal_symbol(G, L_lang_identifier, G_NON_EXCLUDABLE);
     grammar_add_non_terminal_symbol(G, P_lang_FunctionHeader, G_NON_EXCLUDABLE);
     grammar_add_non_terminal_symbol(G, P_lang_StatementList, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_lang_string_5, G_AUTO);
+    grammar_add_terminal_symbol(G, L_lang_string_3, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_lang_FunctionDefinition);
 

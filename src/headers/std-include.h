@@ -13,6 +13,11 @@
 #ifndef STDHEADER_H_
 #define STDHEADER_H_
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <limits.h>
+#include <stdint.h>
+
 #ifdef MSDOS
 #   define MSFT(x) x
 #else
@@ -22,8 +27,6 @@
 #define is_null(x) (NULL == (x))
 #define is_not_null(x) (NULL != (x))
 
-#include <stdlib.h>
-#include <stdio.h>
 #include "vendor-pstdint.h"
 #include "std-debug.h"
 #include "std-assert.h"

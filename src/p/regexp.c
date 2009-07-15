@@ -951,8 +951,7 @@ unsigned int regexp_parse_cat(PGrammar *grammar,
                               unsigned char *regexp,
                               unsigned int start_state,
                               G_Terminal terminal) {
-
-    return R_parse(
+    unsigned int i = R_parse(
         grammar,
         scanner,
         nfa,
@@ -961,5 +960,10 @@ unsigned int regexp_parse_cat(PGrammar *grammar,
         terminal,
         (PScannerFunc *) &R_simple_get_token
     );
+
+    printf("\n\nstate for regexp {%s} is %d **** \n\n", regexp, i);
+
+    return i;
+
 }
 

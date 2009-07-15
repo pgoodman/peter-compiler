@@ -14,16 +14,15 @@
 #include <p-parser.h>
 
 enum {
-    L_lang_string_6=0,
-    L_lang_string_5=1,
-    L_lang_string_4=2,
-    L_lang_string_3=3,
-    L_lang_string_2=4,
-    L_lang_type_name=5,
-    L_lang_string_1=6,
-    L_lang_integer=7,
-    L_lang_identifier=8,
-    L_lang_string=9
+    L_lang_string_5=0,
+    L_lang_string_4=1,
+    L_lang_string_3=2,
+    L_lang_string_2=3,
+    L_lang_type_name=4,
+    L_lang_string_1=5,
+    L_lang_integer=6,
+    L_lang_identifier=7,
+    L_lang_string=8
 };
 
 enum {
