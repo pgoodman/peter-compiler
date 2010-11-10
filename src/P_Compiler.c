@@ -34,7 +34,8 @@ static int print_options(void) {
         "\t\t -dfa <regex>\n"
         "\t\t -mdfa <regex>\n"
         "\tOptions:\n"
-        "\t\t-label-subsets\n\n"
+        "\t\t-label-subsets\n"
+        "\t\t-latex\n\n"
     );
     return 0;
 }
@@ -49,6 +50,7 @@ int main(int argc, char *argv[]) {
     int start = nfa_add_state(nfa);
     int i;
     int seen_tool = 0;
+    int out_dot = 1;
     PScanner *scanner = scanner_alloc();
     PGrammar *grammar = regexp_grammar();
 
@@ -65,6 +67,8 @@ int main(int argc, char *argv[]) {
             seen_tool = 1;
         } else if(0 == strcmp("-nfa", argv[i])) {
             seen_tool = 1;
+        } else if(0 == strcmp("-latex", argv[i])) {
+            out_dot = 0;
         }
     }
 
@@ -74,7 +78,8 @@ int main(int argc, char *argv[]) {
 
     for(i = 1; i < argc; ++i) {
 
-        if(0 == strcmp("-label-subsets", argv[i])) {
+        if(0 == strcmp("-label-subsets", argv[i])
+        || 0 == strcmp("-latex", argv[i])) {
             continue;
         } else if((i + 1) < argc && '-' == argv[i][0]
                && ('d' == argv[i][1] || 'm' == argv[i][1] || 'n' == argv[i][1])){
@@ -100,7 +105,11 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    nfa_print_dot(dfa);
+    if(out_dot) {
+        nfa_print_dot(dfa);
+    } else {
+        nfa_print_latex(dfa);
+    }
     nfa_free(dfa);
     set_free(set);
     scanner_free(scanner);
