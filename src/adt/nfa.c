@@ -18,6 +18,15 @@
 #define NFA_MAX_EPSILON_STACK 256
 #define NFA_UNUSED_STATE ((void *) 0x1)
 
+static int LABEL_SUBSETS = 0;
+
+int nfa_label_states(int set, int val) {
+    if(set) {
+        LABEL_SUBSETS = val;
+    }
+    return LABEL_SUBSETS;
+}
+
 /* -------------------------------------------------------------------------- */
 
 /**
@@ -80,7 +89,7 @@ static NFA_Transition *NFA_alloc_transition(PNFA *nfa,
     assert(end_state < nfa->num_states);
 
     if(nfa->transition_group->num_transitions >= NFA_NUM_DEFAULT_TRANSITIONS) {
-        group = mem_alloc(sizeof(NFA_TransitionGroup));
+        group = mem_calloc(1, sizeof(NFA_TransitionGroup));
         if(is_null(group)) {
             mem_error("Internal NFA Error: Unable to add more transitions.");
         }
@@ -336,6 +345,17 @@ typedef struct DFA_State {
                  accepting_id;
 } DFA_State;
 
+static void *uint_to_pointer(unsigned int val) {
+    union {
+        unsigned int val;
+        void *ptr;
+    } trans;
+    trans.val = 0;
+    trans.ptr = NULL;
+    trans.val = val;
+    return trans.ptr;
+}
+
 /**
  * Perform the subset construction on the NFA to turn it into a DFA.
  */
@@ -392,8 +412,18 @@ static PNFA *NFA_subset_construction(PNFA *nfa,
         priority_set,
         T_EPSILON
     );
+
     if(as >= 0) {
         nfa_add_accepting_state(dfa, dfa_state_stack->id);
+    }
+
+    if(LABEL_SUBSETS) {
+        vector_set(
+            dfa->state_subsets,
+            0,
+            set_copy(dfa_state_stack->nfa_states),
+            delegate_do_nothing
+        );
     }
 
     /* state id +1 is stored so that we can distinguish NULL from a state id.
@@ -406,7 +436,7 @@ static PNFA *NFA_subset_construction(PNFA *nfa,
     dict_set(
          dfa_states,
          dfa_state_stack->nfa_states,
-         (void *) (dfa_state_stack->id + 1),
+         ((char *) NULL) + (dfa_state_stack->id + 1),
          &delegate_do_nothing
     );
 
@@ -449,7 +479,9 @@ static PNFA *NFA_subset_construction(PNFA *nfa,
             );
 
             /* we have already seen this DFA state */
-            next_state_id = (unsigned int) dict_get(dfa_states, transition_set);
+            next_state_id = (unsigned int) (
+                (char *) dict_get(dfa_states, transition_set) - (char *) NULL
+            );
 
             if(next_state_id > 0) {
                 --next_state_id;
@@ -476,9 +508,18 @@ static PNFA *NFA_subset_construction(PNFA *nfa,
                 dict_set(
                     dfa_states,
                     transition_set,
-                    (void *) (next_state_id + 1),
+                    ((char *) NULL) + (next_state_id + 1),
                     &delegate_do_nothing
                 );
+
+                if(LABEL_SUBSETS) {
+                    vector_set(
+                        dfa->state_subsets,
+                        next_state_id,
+                        set_copy(transition_set),
+                        delegate_do_nothing
+                    );
+                }
 
                 ++num_dfa_states;
             }
@@ -521,287 +562,291 @@ clean_up:
 }
 
 /**
- * Minimize a DFA. The main idea is that we want to partition the set of DFA
- * states into equivalence classes, and then each equivalence class represents
- * a minimized DFA state.
- *
- * The way we generate the classes is by repeatedly marking pairs of states that
- * we know to be distinguishable until no more marking is done. Once we have
- * done this, it is merely about extracting the classes from the marking table,
- * building the minimized DFA states (easy), and then figuring out the new
- * transitions (slightly more involved).
- *
- * The usual way to perform this marking is to go over every unmarked pair of
- * states, and for each pair check transitions on each character of our input
- * alphabet.
- *
- * This function takes a different approach insofar as it works in terms of
- * transitions.
- *
- * Note: This procedure assumes that all transitions are value transitions.
- *
- * Note: Two accepting states will be seen as distinguishable if they both have
- *       different conclusions associated with them.
+ * Minimize a DFA.
  */
-static PNFA *DFA_minimize(PNFA *dfa, int largest_char) {
+#define AT(r,c,num_cols) (((r) * ((num_cols) + 1)) + (c))
 
-    PNFA *min_dfa;
-
-    PSet * const astates = dfa->accepting_states,
-         *seen,
-         **mdfa_states;
-
-    const int num_states = dfa->num_states,
-              ss = (int) dfa->start_state;
-
-    char *mark_table,
-         *row,
-         *cell, /* refers to some (i, j) location in the marking matrix */
-         *cell_p, /* refers to the (j, i) locating in the marking matrix */
-         *temp;
-
+static void collect_transitions(
+    const unsigned state,
+    const unsigned num_states,
+    const int largest_char,
     NFA_Transition *trans,
-                   ** const source_transitions = dfa->state_transitions;
-
-    NFA_TransitionGroup *groups = dfa->transition_group,
-                        *group;
-
-    int i = dfa->num_transitions,
-        j, k, m, n, o,
-        *state_trans_values,
-        *states_to_mstates;
-
-    const long int jp = num_states - 1,
-                   jjp = num_states * jp;
-
-    /* ------------------ */
-
-    D( printf("configuring global minimize.. \n"); )
-
-    mark_table = mem_alloc((sizeof(char) * num_states) * num_states);
-    if(is_null(mark_table)) {
-        mem_error("Internal DFA Error: Cannot create marking table.");
+    unsigned *destination_states,
+    PSet *alphabet
+) {
+    int k;
+    for(k = 0; k <= largest_char; ++k) {
+        destination_states[k] = num_states;
     }
 
-    D( printf("marking initial distinguishable transitions... \n"); )
+    for(; NULL != trans; trans = trans->trans_next) {
+        assert(T_VALUE == trans->type);
+        destination_states[trans->condition.value] = trans->to_state;
+        set_add_elm(alphabet, trans->condition.value);
+    }
+}
 
-    /* populate the table and mark all transitions where one of the states is
-     * accepting and the other is not. */
-    cell = mark_table;
-    states_to_mstates = dfa->conclusions;
-    for(i = num_states; --i >= 0; ) {
-        m = set_has_elm(astates, i);
-        for(j = num_states; --j >= 0; ++cell) {
-            n = set_has_elm(astates, j);
-            if(m && n) {
-                if(states_to_mstates[i] != states_to_mstates[j]) {
-                    *cell = 1;
+struct mdfa_state_pair {
+    PNFA *mdfa;
+    unsigned state;
+};
+
+static void add_sink_state_transitions(struct mdfa_state_pair *pair, unsigned int label) {
+    nfa_add_value_transition(
+        pair->mdfa,
+        pair->state,
+        pair->mdfa->num_states - 1,
+        (int) label
+    );
+}
+
+static PNFA *DFA_minimize(PNFA *dfa, const int largest_char) {
+
+    PNFA *mdfa;
+    PSet *alphabet = set_alloc();
+    PSet *seen_chars = NULL;
+    PSet **state_subsets;
+    char *distinguishable = NULL;
+    unsigned *destination_states[2];
+    unsigned num_states = dfa->num_states;
+    unsigned state_i, state_j;
+    unsigned *new_state_ids;
+    unsigned *old_state_reps;
+    unsigned at_i_j, at_j_i;
+    unsigned state_i_is_accepting = 0;
+    unsigned made_progress;
+    NFA_Transition *trans;
+    const unsigned i = 0, j = 1;
+    unsigned k;
+    unsigned need_sink_state = 0;
+    struct mdfa_state_pair mdfa_and_state_id;
+
+    /* scale the alphabet up */
+    set_add_elm(alphabet, largest_char);
+
+    distinguishable = mem_calloc(
+        (num_states + 1) * (num_states + 1),
+        sizeof(char)
+    );
+
+    destination_states[i] = mem_calloc(largest_char + 1, sizeof(int));
+    destination_states[j] = mem_calloc(largest_char + 1, sizeof(int));
+
+    /* fill in the last row and last column with 1. this is so that we can
+     * refer to distinguishable states when checking the outgoing transitions
+     * on two states. */
+    for(k = 0; k <= num_states; ++k) {
+        distinguishable[AT(k, num_states, num_states)] = 1;
+        distinguishable[AT(num_states, k, num_states)] = 1;
+    }
+    distinguishable[AT(num_states, num_states, num_states)] = 0;
+
+    D( printf("searching for distinguishable states %d.\n", num_states); )
+
+    /* for every state i: */
+    for(made_progress = 1; 1 == made_progress; ) {
+        made_progress = 0;
+
+        for(state_i = 0; state_i < num_states; ++state_i) {
+
+            state_i_is_accepting = set_has_elm(dfa->accepting_states, state_i);
+
+            collect_transitions(
+                state_i,
+                num_states,
+                largest_char,
+                dfa->state_transitions[state_i],
+                destination_states[i],
+                alphabet
+            );
+
+            /* for every state j: */
+            for(state_j = 0; state_j < num_states; ++state_j) {
+
+                /* same state */
+                if(state_i == state_j) {
                     continue;
                 }
-            }
-            *cell = (m != n);
-        }
-    }
 
-    D( printf("running main algorithm... \n"); )
+                at_i_j = AT(state_i, state_j, num_states);
+                at_j_i = AT(state_j, state_i, num_states);
 
-    state_trans_values = mem_alloc(sizeof(int) * (++largest_char));
-    if(is_null(mark_table)) {
-        mem_error("Internal DFA Error: Cannot create value transition table.");
-    }
-    memset(state_trans_values, -1, sizeof(int) * largest_char);
+                /* already marked */
+                if(1 == distinguishable[at_i_j]) {
+                    continue;
+                }
 
-    do {
-        D( printf("marking cells... \n"); )
+                /* one state accepts and another doesn't */
+                if(state_i_is_accepting
+                && !set_has_elm(dfa->accepting_states, state_j)) {
 
-        m = 0;
-        row = mark_table;
-        cell = mark_table;
+                    D( printf("\t\tstate %d and state %d are distinguishable (final, non-final)\n", state_i, state_j); )
 
-        for(i = num_states; --i >= 0; row += num_states) {
+                    distinguishable[at_i_j] = 1;
+                    distinguishable[at_j_i] = 1;
+                    made_progress = 1;
+                    continue;
+                }
 
-            /* fill in the values, this will allow us to compare transitions
-             * between any two states. */
-            trans = source_transitions[i];
-            for(; is_not_null(trans); trans = trans->trans_next) {
-                state_trans_values[trans->condition.value] = trans->to_state;
-            }
+                /* collect ordered transition info for state j */
+                collect_transitions(
+                    state_j,
+                    num_states,
+                    largest_char,
+                    dfa->state_transitions[state_j],
+                    destination_states[j],
+                    alphabet
+                );
 
-            D( printf("Looking at state %d \n", i); )
+                /* check for distinguishability */
+                for(k = 0; k <= ((unsigned) largest_char); ++k) {
 
-            /* for every transition */
-            for(group = groups; is_not_null(group); group = group->next) {
-                trans = group->transitions;
-                for(o = group->num_transitions; --o >= 0; ++trans) {
+                    if(1 == distinguishable[AT(
+                        destination_states[i][k],
+                        destination_states[j][k],
+                        num_states
+                    )]) {
 
-                    /* get the (i, trans->from_state) and (trans->from_state, i)
-                     * pairs in the mark table */
-                    cell = row + (num_states - trans->from_state - 1);
-                    cell_p = mark_table
-                           + (jjp - (num_states * trans->from_state) + jp - i);
+                        D( printf("\tstate %d and state %d are distinguishable\n", state_i, state_j); )
 
-                    /* ignore marked pairs */
-                    if(*cell || *cell_p) {
-                        continue;
-                    }
-
-                    /* if state[trans->from_state] has a transition on a specific
-                     * value that state[i] does not have then mark the states as
-                     * distinguishable. */
-                    k = state_trans_values[trans->condition.value];
-                    if(k < 0) {
-                        D( printf("\t marking (%d, %d) \n", i, trans->from_state); )
-                        *cell = 1;
-                        *cell_p = 1;
-                        ++m;
-                        continue;
-                    }
-
-                    /* go get the state that the transition goes to */
-                    temp = mark_table
-                         + (jjp - (num_states * k) + jp - trans->to_state);
-
-                    /* if the (k, trans->to_state) cell is marked then mark the
-                     * current cell. state[k] is the result of performing a
-                     * transition on trans->condition.value on state[i].
-                     * state[trans->to_state] is the result of performing a
-                     * transition on trans->condition.value on state[trans->
-                     * from_state]. */
-                    if(*temp) {
-                        ++m;
-                        *cell = 1;
-                        *cell_p = 1;
-                        D( printf("\t marking (%d, %d) \n", i, trans->from_state); )
+                        distinguishable[at_i_j] = 1;
+                        distinguishable[at_j_i] = 1;
+                        made_progress = 1;
+                        break;
                     }
                 }
             }
-
-            /* undo the changes made to the state_trans_values table */
-            trans = source_transitions[i];
-            for(; is_not_null(trans); trans = trans->trans_next) {
-                state_trans_values[trans->condition.value] = -1;
-            }
         }
-    } while(m > 0);
-
-    D( printf("states marked. \n"); )
-
-    /* go and build the minimized DFA */
-    states_to_mstates = mem_alloc(sizeof(int) * num_states);
-    if(is_null(states_to_mstates)) {
-        mem_error("Internal DFA Error: Unable to complete DFA minimization.");
     }
 
-    D( printf("making minimized DFA states. \n"); )
+    mem_free(destination_states[i]);
+    mem_free(destination_states[j]);
 
-    min_dfa = nfa_alloc();
-    seen = set_alloc();
-    row = mark_table + jjp + num_states - 1;
-    k = num_states;
+    at_i_j = num_states + 1;
+    new_state_ids = mem_alloc(at_i_j * sizeof(unsigned int));
+    mdfa = nfa_alloc();
 
-    /* start by creating all minimized DFA states and a mapping between DFA
-     * states and minimized-DFA states. This works by starting at the bottom-
-     * right of the mark_table and ascending up the bottom-left triangle, row-
-     * by-row. */
-    for(i = num_states; --i >= 0; --k, row -= num_states) {
-        if(set_has_elm(seen, i)) {
+    for(k = 0; k <= num_states; ++k) {
+        new_state_ids[k] = at_i_j;
+    }
+
+    if(LABEL_SUBSETS) {
+        state_subsets = mem_alloc(sizeof(PSet *) * at_i_j);
+        for(state_i = 0; state_i <= num_states; ++state_i) {
+            state_subsets[state_i] = set_alloc();
+        }
+    }
+
+    /* create an old state id -> new state id mapping, this also adds
+     * a sink state. */
+    for(state_i = 0; state_i <= num_states; ++state_i) {
+
+        if(at_i_j != new_state_ids[state_i]) {
             continue;
         }
 
-        m = nfa_add_state(min_dfa);
-        set_add_elm(seen, i);
+        new_state_ids[state_i] = nfa_add_state(mdfa);
+        seen_chars = state_subsets[new_state_ids[state_i]];
 
-        cell = row - (num_states - k);
+        D( printf("state[%d] = {", new_state_ids[state_i]); )
+        for(state_j = 0; state_j < num_states; ++state_j) {
+            if(0 == distinguishable[AT(state_i, state_j, num_states)]) {
+                D( printf("%d ", state_j); )
+                new_state_ids[state_j] = new_state_ids[state_i];
 
-        D( printf("\t added mstate %d. \n", m); )
+                /* collect the final states */
+                if(set_has_elm(dfa->accepting_states, state_j)) {
+                    nfa_add_accepting_state(mdfa, new_state_ids[state_i]);
+                }
 
-        for(n = num_states - k, j = k; --j >= 0; ++n, --cell) {
-            if(*cell) {
-                continue;
-            }
-
-            D( printf("\t\t has state %d \n", n); )
-
-            states_to_mstates[n] = m;
-            set_add_elm(seen, j);
-
-            if(ss == n) {
-                nfa_change_start_state(min_dfa, m);
-            }
-
-            if(set_has_elm(astates, n)) {
-                nfa_add_accepting_state(min_dfa, m);
-                nfa_add_conclusion(
-                    min_dfa,
-                    m,
-                    *(dfa->conclusions + n)
-                );
+                if(LABEL_SUBSETS) {
+                    set_add_elm(seen_chars, state_j);
+                }
             }
         }
-    }
 
-    D( printf("constructed minimized DFA states. \n"); )
-
-    mem_free(mark_table);
-    mem_free(state_trans_values);
-    set_free(seen);
-
-    /* weed to keep track of what *values* we've added transitions for on the
-     * particular minimized DFA states. */
-    mdfa_states = mem_alloc(sizeof(PSet *) * min_dfa->num_states);
-    if(is_null(mdfa_states)) {
-        mem_error("Internal DFA Error: Unable to finish off DFA minimization.");
-    }
-    n = (int) min_dfa->num_states;
-    for(i = 0; i < n; ++i) {
-        mdfa_states[i] = set_alloc();
-    }
-
-    D( printf("adding minimized transitions. \n"); )
-
-    /* go over all of the transitions and add in the min_dfa transitions where
-     * needed. */
-    for(group = groups; is_not_null(group); group = group->next) {
-        trans = group->transitions;
-        for(o = group->num_transitions; --o >= 0; ++trans) {
-            j = states_to_mstates[trans->from_state];
-            if(set_has_elm(mdfa_states[j], trans->condition.value)) {
-                continue;
-            }
-
-            D(
-               printf(
-                   "\t adding dfa transition %d -> %d to min-dfa as %d -> %d \n",
-                   trans->from_state,
-                   trans->to_state,
-                   j,
-                   states_to_mstates[trans->to_state]
-               );
-            )
-
-            set_add_elm(mdfa_states[j], trans->condition.value);
-
-            nfa_add_value_transition(
-                 min_dfa,
-                 j,
-                 states_to_mstates[trans->to_state],
-                 trans->condition.value
+        if(LABEL_SUBSETS) {
+            vector_set(
+                mdfa->state_subsets,
+                new_state_ids[state_i],
+                seen_chars,
+                delegate_do_nothing
             );
 
+            state_subsets[new_state_ids[state_i]] = NULL;
         }
+
+        D( printf("}\n"); )
     }
 
-    /* clean up */
-    for(i = 0; i < n; ++i) {
-        set_free(mdfa_states[i]);
+    if(LABEL_SUBSETS) {
+        for(state_i = 0; state_i <= num_states; ++state_i) {
+            if(NULL != state_subsets[state_i]) {
+                set_free(state_subsets[state_i]);
+                state_subsets[state_i] = NULL;
+            }
+        }
+        mem_free(state_subsets);
     }
 
-    mem_free(mdfa_states);
-    mem_free(states_to_mstates);
+    /* go get some representatives from the dfa */
+    old_state_reps = mem_alloc(mdfa->num_states * sizeof(int));
+    for(k = 0; k < num_states; ++k) {
+        old_state_reps[new_state_ids[k]] = k;
+    }
 
-    D( printf("done. \n"); )
+    /* add in the transitions for all states but the sink state */
+    seen_chars = set_copy(alphabet);
+    mdfa_and_state_id.mdfa = mdfa;
 
-    return min_dfa;
+    for(num_states = mdfa->num_states - 1, k = 0; k < num_states; ++k) {
+        set_empty(seen_chars);
+
+        for(trans = dfa->state_transitions[old_state_reps[k]];
+            NULL != trans;
+            trans = trans->trans_next) {
+
+            nfa_add_value_transition(
+                mdfa,
+                k,
+                new_state_ids[trans->to_state],
+                trans->condition.value
+            );
+
+            set_add_elm(seen_chars, trans->condition.value);
+        }
+
+        mdfa_and_state_id.state = k;
+        set_complement_inplace(seen_chars);
+        set_intersect_inplace(seen_chars, alphabet);
+        need_sink_state += set_cardinality(seen_chars);
+        set_map(
+            seen_chars,
+            (void *) &mdfa_and_state_id,
+            (PSetMapFunc *) &add_sink_state_transitions
+        );
+    }
+
+    /* add in transitions on the sink state */
+    if(need_sink_state) {
+        mdfa_and_state_id.state = mdfa->num_states - 1;
+        set_map(
+            alphabet,
+            (void *) &mdfa_and_state_id,
+            (PSetMapFunc *) &add_sink_state_transitions
+        );
+    } else {
+        mdfa->num_states -= 1;
+    }
+
+    set_free(alphabet);
+    set_free(seen_chars);
+
+    mem_free(old_state_reps);
+    mem_free(new_state_ids);
+    mem_free(distinguishable);
+
+    return mdfa;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -816,10 +861,13 @@ PNFA *nfa_alloc(void) {
     NFA_Transition **state_transitions,
                    **transition_destinations;
     NFA_TransitionGroup *group;
+    PVector *state_subsets;
     int *conclusions;
 
-    nfa = mem_alloc(sizeof(PNFA));
-    group = mem_alloc(sizeof(NFA_TransitionGroup));
+    state_subsets = vector_alloc(100);
+
+    nfa = mem_calloc(1, sizeof(PNFA));
+    group = mem_calloc(1, sizeof(NFA_TransitionGroup));
     state_transitions = mem_calloc(
         NFA_NUM_DEFAULT_STATES,
         sizeof(NFA_Transition *)
@@ -829,17 +877,19 @@ PNFA *nfa_alloc(void) {
         sizeof(NFA_Transition *)
     );
 
-    conclusions = mem_alloc(NFA_NUM_DEFAULT_STATES * sizeof(int));
+    conclusions = mem_calloc(NFA_NUM_DEFAULT_STATES, sizeof(int));
 
     if(is_null(nfa)
     || is_null(group)
     || is_null(state_transitions)
-    || is_null(transition_destinations)) {
+    || is_null(transition_destinations)
+    || is_null(state_subsets)) {
         mem_error("Unable to allocate DFA on the heap.");
     }
 
     memset(conclusions, -1, NFA_NUM_DEFAULT_STATES * sizeof(int));
 
+    nfa->state_subsets = state_subsets;
     nfa->accepting_states = set_alloc();
     nfa->current_state = 0;
     nfa->num_state_slots = NFA_NUM_DEFAULT_STATES;
@@ -860,6 +910,9 @@ PNFA *nfa_alloc(void) {
 /**
  * Free a NFA.
  */
+static void free_state_subset(void *subset) {
+    set_free((PSet *) subset);
+}
 void nfa_free(PNFA *nfa) {
     int i;
     NFA_Transition *transition;
@@ -879,6 +932,7 @@ void nfa_free(PNFA *nfa) {
         mem_free(group);
     }
 
+    vector_free(nfa->state_subsets, (PDelegate *) free_state_subset);
     set_free(nfa->accepting_states);
     mem_free(nfa->state_transitions);
     mem_free(nfa->destination_states);
@@ -887,6 +941,15 @@ void nfa_free(PNFA *nfa) {
 }
 
 PNFA *nfa_to_dfa(PNFA *nfa, PSet *priority_set) {
+    int largest_char;
+    PNFA *dfa = NULL;
+    assert_not_null(nfa);
+
+    largest_char = NFA_max_alphabet_char(nfa);
+    return NFA_subset_construction(nfa, priority_set, largest_char);
+}
+
+PNFA *nfa_to_mdfa(PNFA *nfa, PSet *priority_set) {
     int largest_char;
     PNFA *dfa = NULL;
     assert_not_null(nfa);
@@ -1089,18 +1152,115 @@ void nfa_add_set_transition(PNFA *nfa,
 
 /* -------------------------------------------------------------------------- */
 
+typedef struct nfa_state_pair {
+    unsigned int from_state;
+    unsigned int to_state;
+} NFAStatePair;
+
+static uint32_t nfa_state_pair_hash(void *pair) {
+    uint64_t together;
+    union {
+        uint32_t uint32;
+        uint64_t uint64;
+        void *pointer;
+    } as;
+
+    NFAStatePair *state_pair;
+
+    /* init */
+    state_pair = (struct nfa_state_pair *) pair;
+    as.pointer = 0;
+    as.uint64 = 0;
+
+    switch(sizeof(void *)) {
+    case 8:
+        together = (state_pair->from_state * 33) ^ state_pair->to_state;
+        together <<= 32;
+        together |= state_pair->from_state ^ (state_pair->to_state * 57);
+        as.uint64 = together;
+        break;
+    case 4:
+        as.uint32 = (
+            (state_pair->from_state * 33) ^ (state_pair->to_state * 57)
+        );
+        break;
+    }
+
+    return dict_pointer_hash_fnc(as.pointer);
+}
+
+static int nfa_state_pair_collision(void *a, void *b) {
+    struct nfa_state_pair *pair_a = (struct nfa_state_pair *) a;
+    struct nfa_state_pair *pair_b = (struct nfa_state_pair *) b;
+
+    return pair_a->from_state != pair_b->from_state
+        || pair_a->to_state != pair_b->to_state;
+}
+
+static void print_state_id(int *seen, unsigned state_id) {
+    if(*seen) {
+        printf(", ");
+    }
+    if(0 == ++*seen % 5) {
+        printf("<BR />");
+    }
+    printf("%d", state_id);
+}
+
+static void print_state_subset(PNFA *nfa, unsigned state) {
+    int seen = 0;
+    PSet *state_ids;
+
+    if(!LABEL_SUBSETS) {
+        return;
+    }
+
+    state_ids = vector_get(nfa->state_subsets, state);
+
+    if(NULL == state_ids) {
+        return;
+    }
+
+    printf(" <BR /> {");
+    set_map(state_ids, &seen, (PSetMapFunc *) &print_state_id);
+    printf("}");
+}
+
 /**
  * Print out the NFA in the DOT language.
  */
 void nfa_print_dot(PNFA *nfa) {
 
-    unsigned int i = nfa->num_states,
-                 state = 0;
+    unsigned int i = nfa->num_states;
+    unsigned int j;
+    unsigned int state = 0;
 
-    NFA_Transition *transition,
-                   **state_transitions = (NFA_Transition **) nfa->state_transitions;
+    /* for keeping track of transition id pairs */
+    NFAStatePair *trans_ids;
+    NFAStatePair *trans_id;
+
+    NFA_Transition *transition;
+    NFA_Transition **state_transitions = (
+        (NFA_Transition **) nfa->state_transitions
+    );
+
+    const unsigned num_slots = nfa->num_transitions / (nfa->num_states + 1);
+    char *transition_chars = 0;
+    char *transition_char;
+    const char *sep = ", ";
+    const char *sep_offset;
+
+    PDictionary *trans_set = 0;
+    PDictionaryGenerator *ids = 0;
 
     assert_not_null(nfa);
+
+    printf("digraph {\n");
+
+    trans_ids = (NFAStatePair *) mem_calloc(
+        (1 + nfa->num_transitions), sizeof(NFAStatePair)
+    );
+    trans_id = &(trans_ids[0]);
 
     for(state = 0; i--; ++state) {
 
@@ -1112,69 +1272,142 @@ void nfa_print_dot(PNFA *nfa) {
 
         if(set_has_elm(nfa->accepting_states, state)) {
             printf(
-                "Ox%d [label=<S<FONT POINT-SIZE=\"8\"> %d</FONT>(%d)> "
-                "shape=doublecircle] \n",
-                state,
-                state,
-                nfa->conclusions[state]
-            );
-        } else {
-            printf(
-                "Ox%d [label=<S<FONT POINT-SIZE=\"8\"> %d</FONT>>] \n",
+                "x%d [label=<<FONT POINT-SIZE=\"20\">%d</FONT>",
                 state,
                 state
             );
+
+            print_state_subset(nfa, state);
+
+            printf("> shape=doublecircle] \n");
+        } else {
+            printf(
+                "x%d [label=< <FONT POINT-SIZE=\"20\">%d</FONT>",
+                state,
+                state
+            );
+
+            print_state_subset(nfa, state);
+
+            printf("> shape=circle] \n");
         }
 
         if(state == nfa->start_state) {
-            printf("Ox%d [color=blue] \n", state);
+            printf("xSTART [color=white label=\"\"] \n");
+            printf("xSTART -> x%d \n", state);
         }
 
-        for(; is_not_null(transition); transition = transition->trans_next) {
+        trans_set = dict_alloc(
+            num_slots,
+            nfa_state_pair_hash,
+            nfa_state_pair_collision
+        );
+
+        for(/* */;
+            is_not_null(transition);
+            transition = transition->trans_next, ++trans_id) {
+
+            trans_id->from_state = transition->from_state;
+            trans_id->to_state = transition->to_state;
+
             switch(transition->type) {
                 case T_VALUE:
-                    if(transition->condition.value < 32
-                    || transition->condition.value > 126
-                    || transition->condition.value == 60
-                    || transition->condition.value == 62) {
-                        printf(
-                            "Ox%d -> Ox%d [label=< '#%d'<FONT POINT-SIZE=\"8\"> %d</FONT> >] \n",
-                            state,
-                            transition->to_state,
-                            transition->condition.value,
-                            transition->id
-                        );
-                    } else {
-                        printf(
-                            "Ox%d -> Ox%d [label=< '%c'<FONT POINT-SIZE=\"8\"> %d</FONT> >] \n",
-                            state,
-                            transition->to_state,
-                            (unsigned char) transition->condition.value,
-                            transition->id
+                    if(!dict_is_set(trans_set, trans_id)) {
+
+                        transition_chars = calloc(256UL, sizeof(char));
+                        dict_set(
+                            trans_set,
+                            trans_id,
+                            transition_chars,
+                            delegate_do_nothing
                         );
                     }
+
+                    transition_chars = dict_get(trans_set, trans_id);
+                    transition_chars[
+                        (size_t) ((unsigned char) transition->condition.value)
+                    ] = (char) transition->condition.value;
+
                     break;
                 case T_SET:
                     printf(
-                        "Ox%d -> Ox%d [label=< {...}<FONT POINT-SIZE=\"8\"> %d</FONT> >] \n",
+                        "x%d -> x%d [label=< {...} >] \n",
                         state,
-                        transition->to_state,
-                        transition->id
+                        transition->to_state
                     );
                     break;
                 case T_EPSILON:
                     printf(
-                        "Ox%d -> Ox%d [label=< &#949;<FONT POINT-SIZE=\"8\"> %d</FONT> >] \n",
+                        "x%d -> x%d [label=< >] \n", /* &#949; */
                         state,
-                        transition->to_state,
-                        transition->id
+                        transition->to_state
                     );
                     break;
                 default:
                     break;
             }
         }
+
+        ids = dict_keys_generator_alloc(trans_set);
+        for(; generator_next(ids); ) {
+
+            trans_id = generator_current(ids);
+            transition_chars = dict_get(trans_set, trans_id);
+
+            printf(
+                "x%d -> x%d [label=<<FONT face=\"Courier\"> ",
+                trans_id->from_state,
+                trans_id->to_state
+            );
+
+            for(sep_offset = &(sep[1]), j = 0,
+                transition_char = &(transition_chars[256]);
+                transition_char-- > &(transition_chars[0]); ) {
+
+                if(0 == *transition_char) {
+                    continue;
+                }
+
+                if(j > 0 && 0 == j % 5) {
+                    printf(" <BR />");
+                    sep_offset = &(sep[1]);
+                }
+
+                if(isgraph(*transition_char)
+                && !isspace(*transition_char)) {
+                    if('<' == *transition_char) {
+                        printf("%s&lt;", sep_offset);
+                    } else if('>' == *transition_char) {
+                        printf("%s&gt;", sep_offset);
+                    } else {
+                        printf("%s%c", sep_offset, *transition_char);
+                    }
+                } else {
+                    printf("%s0x%x", sep_offset, (int) *transition_char);
+                }
+
+                sep_offset = &(sep[0]);
+                ++j;
+            }
+
+            printf(" </FONT>>] \n");
+        }
+
+        generator_free(ids);
+        dict_free(
+            trans_set,
+            delegate_do_nothing,
+            free
+        );
+
+        ids = 0;
+        trans_set = 0;
     }
+
+    mem_free(trans_ids);
+    trans_ids = 0;
+
+    printf("}\n");
 }
 
 /* -------------------------------------------------------------------------- */

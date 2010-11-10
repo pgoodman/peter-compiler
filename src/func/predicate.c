@@ -15,3 +15,7 @@ int predicate_true(void *X) {
 int predicate_false(void *X) {
     return 0;
 }
+
+int predicate_same_pointers(void *a, void *b) {
+    return a == b;
+}

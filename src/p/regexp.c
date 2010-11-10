@@ -162,10 +162,50 @@ static void CatExpr(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    unsigned int end, inter_start, inter_end;
+    unsigned int start, end, inter_start, inter_end, prev_start;
+
+    (void) start;
+    (void) end;
+    (void) prev_start;
+    (void) inter_end;
+    (void) inter_end;
+#if 0
+    if(num_branches > 1) {
+        /*start = nfa_add_state(thompson->nfa);*/
+        /*prev_end = end = nfa_add_state(thompson->nfa);*/
+
+        start = thompson->state_stack[thompson->top_state--];
+        end = thompson->state_stack[thompson->top_state--];
+
+        for(; --num_branches; ) {
+            inter_start = thompson->state_stack[thompson->top_state--];
+
+            nfa_merge_states(
+                thompson->nfa,
+                thompson->state_stack[thompson->top_state--],
+                start
+            );
+            start = inter_start;
+
+            /*
+            inter_start = thompson->state_stack[thompson->top_state--];
+            inter_end = thompson->state_stack[thompson->top_state--];
+            nfa_add_epsilon_transition(thompson->nfa, inter_end, prev_end);
+            prev_end = inter_start;*/
+        }
+
+        /*nfa_add_epsilon_transition(thompson->nfa, start, prev_end);
+
+        thompson->state_stack[++thompson->top_state] = end;
+        thompson->state_stack[++thompson->top_state] = prev_end;*/
+
+        thompson->state_stack[++thompson->top_state] = end;
+        thompson->state_stack[++thompson->top_state] = start;
+
+    }
+
 
     end = thompson->state_stack[thompson->top_state - 1];
-
     if(num_branches > 1) {
         for(; --num_branches; ) {
             inter_start = thompson->state_stack[thompson->top_state];
@@ -178,6 +218,21 @@ static void CatExpr(PThompsonsConstruction *thompson,
     }
 
     thompson->state_stack[thompson->top_state - 1] = end;
+#endif
+
+    prev_start = thompson->state_stack[thompson->top_state--];
+    end = thompson->state_stack[thompson->top_state--];
+
+    for(; --num_branches; ) {
+        inter_start = thompson->state_stack[thompson->top_state--];
+        inter_end = thompson->state_stack[thompson->top_state--];
+
+        nfa_merge_states(thompson->nfa, prev_start, inter_end);
+        prev_start = inter_start;
+    }
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = prev_start;
 }
 
 /**
@@ -187,11 +242,6 @@ static void CatExpr(PThompsonsConstruction *thompson,
  *
  * >--(a2_start)--B--(a2_end)-->
  *
- * becomes:
- *
- *                 .--A--(a1_end)--.
- * >--(a1_start)--|                 |--(end)-->
- *                 `--B--(a2_end)--'
  *
  */
 static void OrExpr(PThompsonsConstruction *thompson,
@@ -199,13 +249,15 @@ static void OrExpr(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    unsigned int a1_start, a1_end, a2_start, a2_end, end;
+    unsigned int start, end;
+    unsigned int a1_start, a1_end, a2_start, a2_end;
 
     a1_start = thompson->state_stack[thompson->top_state--];
     a1_end = thompson->state_stack[thompson->top_state--];
     a2_start = thompson->state_stack[thompson->top_state--];
     a2_end = thompson->state_stack[thompson->top_state--];
 
+    /*
     nfa_merge_states(thompson->nfa, a1_start, a2_start);
     end = nfa_add_state(thompson->nfa);
 
@@ -214,6 +266,19 @@ static void OrExpr(PThompsonsConstruction *thompson,
 
     thompson->state_stack[++thompson->top_state] = end;
     thompson->state_stack[++thompson->top_state] = a1_start;
+    */
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    nfa_add_epsilon_transition(thompson->nfa, start, a1_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, a2_start);
+
+    nfa_add_epsilon_transition(thompson->nfa, a1_end, end);
+    nfa_add_epsilon_transition(thompson->nfa, a2_end, end);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
 }
 
 /**
@@ -227,7 +292,7 @@ static void Char(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
-    unsigned int start, end;
+    unsigned int start, end, i;
     int the_char;
     PT_Terminal *term = (PT_Terminal *) branches[0];
     PSet *all_chars;
@@ -241,7 +306,12 @@ static void Char(PThompsonsConstruction *thompson,
 
     if(term->terminal == L_ANY_CHAR) {
         all_chars = set_alloc_inverted();
-        set_remove_elm(all_chars, '\n');
+        /*set_remove_elm(all_chars, '\n');*/
+        for(i = set_cardinality(all_chars); i--; ) {
+            if(!isgraph(i)) {
+                set_remove_elm(all_chars, i);
+            }
+        }
         nfa_add_set_transition(
             thompson->nfa,
             start,
@@ -399,6 +469,8 @@ static void KleeneClosure(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
+
+    /*
     unsigned int start, loop_start, loop_end;
 
     loop_start = thompson->state_stack[thompson->top_state--];
@@ -410,6 +482,24 @@ static void KleeneClosure(PThompsonsConstruction *thompson,
     nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
 
     thompson->state_stack[++thompson->top_state] = loop_start;
+    thompson->state_stack[++thompson->top_state] = start;
+    */
+
+    unsigned int start, end;
+    unsigned inter_start, inter_end;
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    inter_start = thompson->state_stack[thompson->top_state--];
+    inter_end = thompson->state_stack[thompson->top_state--];
+
+    nfa_add_epsilon_transition(thompson->nfa, start, end);
+    nfa_add_epsilon_transition(thompson->nfa, inter_end, inter_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, inter_start);
+    nfa_add_epsilon_transition(thompson->nfa, inter_end, end);
+
+    thompson->state_stack[++thompson->top_state] = end;
     thompson->state_stack[++thompson->top_state] = start;
 }
 
@@ -428,7 +518,7 @@ static void PositiveClosure(PThompsonsConstruction *thompson,
                  unsigned char phrase,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
-
+    /*
     unsigned int start, loop_start, loop_end;
 
     start = nfa_add_state(thompson->nfa);
@@ -439,6 +529,23 @@ static void PositiveClosure(PThompsonsConstruction *thompson,
     nfa_add_epsilon_transition(thompson->nfa, start, loop_start);
 
     thompson->state_stack[thompson->top_state] = start;
+    */
+
+    unsigned int start, end;
+    unsigned inter_start, inter_end;
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    inter_start = thompson->state_stack[thompson->top_state--];
+    inter_end = thompson->state_stack[thompson->top_state--];
+
+    nfa_add_epsilon_transition(thompson->nfa, inter_end, inter_start);
+    nfa_add_epsilon_transition(thompson->nfa, start, inter_start);
+    nfa_add_epsilon_transition(thompson->nfa, inter_end, end);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
 }
 
 /**
@@ -453,11 +560,28 @@ static void OptionalTerm(PThompsonsConstruction *thompson,
                  unsigned int num_branches,
                  PParseTree *branches[]) {
 
+    /*
     nfa_add_epsilon_transition(
        thompson->nfa,
        thompson->state_stack[thompson->top_state],
        thompson->state_stack[thompson->top_state - 1]
-    );
+    );*/
+
+    unsigned int start, end;
+    unsigned inter_start, inter_end;
+
+    start = nfa_add_state(thompson->nfa);
+    end = nfa_add_state(thompson->nfa);
+
+    inter_start = thompson->state_stack[thompson->top_state--];
+    inter_end = thompson->state_stack[thompson->top_state--];
+
+    nfa_add_epsilon_transition(thompson->nfa, start, end);
+    nfa_add_epsilon_transition(thompson->nfa, start, inter_start);
+    nfa_add_epsilon_transition(thompson->nfa, inter_end, end);
+
+    thompson->state_stack[++thompson->top_state] = end;
+    thompson->state_stack[++thompson->top_state] = start;
 }
 
 /**

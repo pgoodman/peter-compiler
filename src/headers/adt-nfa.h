@@ -10,10 +10,13 @@
 #define ADTNFA_H_
 
 #include <string.h>
+#include <ctype.h>
 
 #include "adt-dict.h"
+#include "adt-vector.h"
 #include "adt-set.h"
 #include "func-delegate.h"
+#include "func-predicate.h"
 
 #define NFA_MAX_KNOWN_UNUSED_STATES 64
 #define NFA_NUM_DEFAULT_TRANSITIONS 256
@@ -66,6 +69,7 @@ typedef struct PNFA {
                    **destination_states;
 
     PSet *accepting_states;
+    PVector *state_subsets;
 } PNFA;
 
 PNFA *nfa_alloc(void);
@@ -73,6 +77,7 @@ PNFA *nfa_alloc(void);
 void nfa_free(PNFA *nfa);
 
 PNFA *nfa_to_dfa(PNFA *nfa, PSet *priority_set);
+PNFA *nfa_to_mdfa(PNFA *nfa, PSet *priority_set);
 
 void nfa_change_start_state(PNFA *nfa, unsigned int start_state);
 
@@ -107,5 +112,7 @@ void nfa_print_dot(PNFA *nfa);
 void nfa_print_scanner(const PNFA *nfa,
                        const char *out_file,
                        const char *func_name);
+
+int nfa_label_states(int set, int val);
 
 #endif /* ADTDFA_H_ */

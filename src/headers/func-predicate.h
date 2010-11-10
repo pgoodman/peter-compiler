@@ -13,5 +13,6 @@ typedef int (PPredicate)(void *);
 
 int predicate_true(void *X);
 int predicate_false(void *X);
+int predicate_same_pointers(void *a, void *b);
 
 #endif /* FUNCPREDICATE_H_ */

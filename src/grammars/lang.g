@@ -1,36 +1,83 @@
 
-type_name : '[A-Z][a-zA-Z0-9_]*' ;
-identifier : '[a-z_:][a-zA-Z0-9_:?!]*' ;
-integer : '[0-9]+' ;
-string : '"([^"]*\\")*[^"]*"' ;
+type : '[A-Z][A-Za-z0-9_\-]*' ;
+unbound_id : "_" ;
+id : '[a-z*_\-!?<=>][a-zA-Z0-9*_\-!?<=>]*' ;
+number : '[0-9]+(\.[0-9]+)?' ;
+bool_true : "true" ;
+bool_false : "false" ;
 
-Program
-    : -Statement ^Program
-    | <>
+Program 
+    : ^(-FuncDef Self | -TypeDef Self | <>)
     ;
 
-Statement
-    : FunctionDefinition
-    | Expression
-    ;
-
-Type
-    :
-    ;
+    TypeDef
+        : "type" -type ":" -(-TypeList "," ^Self | -TypeList) "."
+        ;
+        
+        TypeList
+            : -type -Self | -type
+            ;
     
-FunctionDefinition
-    : -identifier "(" -FunctionParameterList ")" ":" -Type "{" ^Program "}"
+    FuncDef
+        : "def" -id "(" -FuncParams ")" "->" -type ":" -StmtList
+        ;
+
+        FuncParams
+            : -FuncParamList ^(";" ^FuncParams | <>)
+            ;
+        
+        FuncParamList
+            : -type ^(-id "," ^Self | -id)
+            ;
+   
+Stmt
+    : "with" -WithStmt
+    | "bind" -BindStmt
+    | "return" -ReturnStmt
+    | "print" -PrintStmt
+    | "pass" -PassStmt
+    | Expr
     ;
 
-Expression
-    : "(" Expression ")"
-    | FunctionExpression
-    ;
+    StmtList
+        : -Stmt "," ^StmtList 
+        | -Stmt "."
+        ;
     
-FunctionExpression
-    : "(" -FunctionParameterList ")" ":" -Type "{" ^Program "}"
-    ;
-
-FunctionParameterList
-    :
-    ;
+    WithStmt
+        : -id "{" ^("bind" -BindStmt ^Self | "bind" -BindStmt) "}"
+        ;
+        
+        BindStmt
+            : -DestructureStmt "{" -StmtList "}"
+            ;
+            
+            DestructureBind
+                : -id
+                | -unbound_id
+                | -DestructureStmt
+                ;
+            
+            DestructureStmt
+                : -type "(" ^(^DestructureBind ^Self | ^DestructureBind) ")"
+                ;
+    
+    ReturnStmt
+        : ^Expr ("." ! >< | <>)
+        ;
+    
+    PrintStmt
+        : ^Expr
+        ;
+    
+    PassStmt
+        : <>
+        ;
+        
+    Expr
+        : id
+        | number
+        | bool_true
+        | bool_false
+        | "(" id ^(-Expr ^Self | <>) ")"
+        ;

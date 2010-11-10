@@ -8,25 +8,20 @@
 
 enum {
     L_pg_string_5=0,
-    L_pg_positive_closure=1,
-    L_pg_epsilon=2,
-    L_pg_string_4=3,
-    L_pg_string_3=4,
-    L_pg_followed_by=5,
+    L_pg_epsilon=1,
+    L_pg_string_4=2,
+    L_pg_string_3=3,
+    L_pg_string_2=4,
+    L_pg_string_1=5,
     L_pg_regexp=6,
-    L_pg_regexp_2=7,
-    L_pg_non_terminal=8,
-    L_pg_regexp_1=9,
-    L_pg_kleene_closure=10,
-    L_pg_non_excludable=11,
-    L_pg_terminal=12,
-    L_pg_self=13,
-    L_pg_cut=14,
-    L_pg_raise_children=15,
-    L_pg_not_followed_by=16,
-    L_pg_string=17,
-    L_pg_optional=18,
-    L_pg_fail=19
+    L_pg_non_terminal=7,
+    L_pg_non_excludable=8,
+    L_pg_terminal=9,
+    L_pg_self=10,
+    L_pg_cut=11,
+    L_pg_raise_children=12,
+    L_pg_string=13,
+    L_pg_fail=14
 };
 
 enum {
@@ -47,9 +42,9 @@ PGrammar *parser_grammar_grammar(void) {
     PGrammar *G = grammar_alloc(
         P_pg_GrammarRules, /* production to start matching with */
         9, /* number of productions */
-        20, /* number of tokens */
-        29, /* number of phrases */
-        44 /* number of phrase symbols */
+        15, /* number of tokens */
+        24, /* number of phrases */
+        39 /* number of phrase symbols */
     );
 
     grammar_add_non_terminal_symbol(G, P_pg_Production, G_NON_EXCLUDABLE);
@@ -63,9 +58,9 @@ PGrammar *parser_grammar_grammar(void) {
     grammar_add_production_rule(G, P_pg_GrammarRules);
 
     grammar_add_terminal_symbol(G, L_pg_non_terminal, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_pg_regexp_1, G_AUTO);
+    grammar_add_terminal_symbol(G, L_pg_string_1, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_pg_ProductionRules, G_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_pg_regexp_2, G_AUTO);
+    grammar_add_terminal_symbol(G, L_pg_string_2, G_AUTO);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_pg_Production);
 
@@ -76,9 +71,9 @@ PGrammar *parser_grammar_grammar(void) {
     grammar_add_production_rule(G, P_pg_subrule_1);
 
     grammar_add_terminal_symbol(G, L_pg_terminal, G_NON_EXCLUDABLE);
-    grammar_add_terminal_symbol(G, L_pg_regexp_1, G_AUTO);
+    grammar_add_terminal_symbol(G, L_pg_string_1, G_AUTO);
     grammar_add_non_terminal_symbol(G, P_pg_subrule_1, G_RAISE_CHILDREN);
-    grammar_add_terminal_symbol(G, L_pg_regexp_2, G_RAISE_CHILDREN);
+    grammar_add_terminal_symbol(G, L_pg_string_2, G_RAISE_CHILDREN);
     grammar_add_phrase(G);
     grammar_add_production_rule(G, P_pg_Terminal);
 
@@ -128,16 +123,6 @@ PGrammar *parser_grammar_grammar(void) {
     grammar_add_terminal_symbol(G, L_pg_non_excludable, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_terminal_symbol(G, L_pg_raise_children, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_pg_kleene_closure, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_pg_positive_closure, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_pg_optional, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_pg_followed_by, G_NON_EXCLUDABLE);
-    grammar_add_phrase(G);
-    grammar_add_terminal_symbol(G, L_pg_not_followed_by, G_NON_EXCLUDABLE);
     grammar_add_phrase(G);
     grammar_add_epsilon_symbol(G, G_AUTO);
     grammar_add_phrase(G);
