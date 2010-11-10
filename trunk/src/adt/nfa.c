@@ -609,7 +609,7 @@ static PNFA *DFA_minimize(PNFA *dfa, const int largest_char) {
     char *distinguishable = NULL;
     unsigned *destination_states[2];
     unsigned num_states = dfa->num_states;
-    unsigned state_i, state_j;
+    unsigned state_i = 0, state_j = 0;
     unsigned *new_state_ids;
     unsigned *old_state_reps;
     unsigned at_i_j, at_j_i;
@@ -723,15 +723,15 @@ static PNFA *DFA_minimize(PNFA *dfa, const int largest_char) {
     mem_free(destination_states[j]);
 
     at_i_j = num_states + 1;
-    new_state_ids = mem_alloc(at_i_j * sizeof(unsigned int));
+    new_state_ids = mem_calloc(at_i_j, sizeof(unsigned int));
     mdfa = nfa_alloc();
 
     for(k = 0; k <= num_states; ++k) {
-        new_state_ids[k] = at_i_j;
+        new_state_ids[k] = num_states;
     }
 
     if(LABEL_SUBSETS) {
-        state_subsets = mem_alloc(sizeof(PSet *) * at_i_j);
+        state_subsets = mem_calloc(at_i_j, sizeof(PSet *));
         for(state_i = 0; state_i <= num_states; ++state_i) {
             state_subsets[state_i] = set_alloc();
         }
@@ -741,12 +741,17 @@ static PNFA *DFA_minimize(PNFA *dfa, const int largest_char) {
      * a sink state. */
     for(state_i = 0; state_i <= num_states; ++state_i) {
 
-        if(at_i_j != new_state_ids[state_i]) {
+        if(num_states != new_state_ids[state_i]) {
             continue;
         }
 
         new_state_ids[state_i] = nfa_add_state(mdfa);
-        seen_chars = state_subsets[new_state_ids[state_i]];
+
+        D( printf("new_state_ids[%d] = %d\n", state_i, new_state_ids[state_i]); )
+
+        if(LABEL_SUBSETS) {
+            seen_chars = state_subsets[new_state_ids[state_i]];
+        }
 
         D( printf("state[%d] = {", new_state_ids[state_i]); )
         for(state_j = 0; state_j < num_states; ++state_j) {
@@ -779,6 +784,8 @@ static PNFA *DFA_minimize(PNFA *dfa, const int largest_char) {
         D( printf("}\n"); )
     }
 
+    D( printf("\n"); )
+
     if(LABEL_SUBSETS) {
         for(state_i = 0; state_i <= num_states; ++state_i) {
             if(NULL != state_subsets[state_i]) {
@@ -790,8 +797,9 @@ static PNFA *DFA_minimize(PNFA *dfa, const int largest_char) {
     }
 
     /* go get some representatives from the dfa */
-    old_state_reps = mem_alloc(mdfa->num_states * sizeof(int));
+    old_state_reps = mem_calloc(mdfa->num_states, sizeof(int));
     for(k = 0; k < num_states; ++k) {
+        D( printf("old_state_reps[new_state_ids[%d] = %d]\n", k, new_state_ids[k]); )
         old_state_reps[new_state_ids[k]] = k;
     }
 
@@ -933,6 +941,7 @@ void nfa_free(PNFA *nfa) {
     }
 
     vector_free(nfa->state_subsets, (PDelegate *) free_state_subset);
+
     set_free(nfa->accepting_states);
     mem_free(nfa->state_transitions);
     mem_free(nfa->destination_states);
@@ -1408,6 +1417,80 @@ void nfa_print_dot(PNFA *nfa) {
     trans_ids = 0;
 
     printf("}\n");
+}
+
+/**
+ * Print out the NFA as a right-linear grammar formatted in LaTeX.
+ */
+void nfa_print_latex(PNFA *nfa) {
+
+    unsigned int i = nfa->num_states;
+    unsigned int j;
+    unsigned int state = 0;
+
+    NFA_Transition *transition;
+    NFA_Transition **state_transitions = (
+        (NFA_Transition **) nfa->state_transitions
+    );
+
+    const unsigned num_slots = nfa->num_transitions / (nfa->num_states + 1);
+    const char *sep = "| ";
+    const char *sep_offset;
+
+    assert_not_null(nfa);
+
+    printf("\\begin{eqnarray*}\n");
+
+    for(state = 0; i--; ++state) {
+
+        transition = state_transitions[state];
+
+        if(transition == NFA_UNUSED_STATE) {
+            continue;
+        }
+
+        sep_offset = &(sep[2]);
+
+        if(set_has_elm(nfa->accepting_states, state)) {
+            printf("S%d & \\to & \\epsilon", state);
+            sep_offset = sep;
+
+        } else {
+            printf("S%d & \\to & ", state);
+        }
+
+        for(/* */;
+            is_not_null(transition);
+            transition = transition->trans_next) {
+
+            switch(transition->type) {
+                case T_VALUE:
+                    printf(
+                        "%s %c S%d",
+                        sep_offset,
+                        (char) transition->condition.value,
+                        transition->to_state
+                    );
+
+                    break;
+                case T_EPSILON:
+                    printf(
+                        "%s S%d",
+                        sep_offset,
+                        transition->to_state
+                    );
+                    break;
+                default:
+                    break;
+            }
+
+            sep_offset = sep;
+        }
+
+        printf("\\\\ \n");
+    }
+
+    printf("\\end{eqnarray*}\n");
 }
 
 /* -------------------------------------------------------------------------- */

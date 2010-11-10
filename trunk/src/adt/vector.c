@@ -107,9 +107,11 @@ void vector_free(PVector *V, PDelegate *free_elm_fnc) {
     }
 
     mem_free(V->_elms);
-    mem_free(V);
 
     V->_elms = NULL;
+
+    mem_free(V);
+
     V = NULL;
 
     return;
