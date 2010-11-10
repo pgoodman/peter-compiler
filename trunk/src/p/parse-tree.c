@@ -9,6 +9,8 @@
 #include <p-parse-tree.h>
 #include <p-grammar-internal.h>
 
+#define D(p)
+
 /**
  * Allocate a new terminal tree.
  */
@@ -22,10 +24,9 @@ PT_Terminal *PT_alloc_terminal(G_Terminal terminal,
     tree = tree_alloc(sizeof(PT_Terminal), 0);
     ((PParseTree *) tree)->type = PT_TERMINAL;
 
-
-    if(is_not_null(lexeme)) {
+    D(if(is_not_null(lexeme)) {
         printf("lexeme: { %s } %d \n", lexeme->str, terminal);
-    }
+    })
 
 
     tree->terminal = terminal;
@@ -123,17 +124,18 @@ void parse_tree_print_dot(PParseTree *parse_tree,
 
         switch(curr->type) {
             case PT_NON_TERMINAL:
+
                 printf(
-                   "Ox%d [label=\"%s\"] \n",
-                   (unsigned int) tree,
+                   "%p [label=\"%s\"] \n",
+                   (void *) tree,
                    production_names[((PT_NonTerminal *) curr)->production]
                 );
 
                 for(i = 0; i < tree->_fill; ++i) {
                     printf(
-                        "Ox%d -> Ox%d \n",
-                        (unsigned int) tree,
-                        (unsigned int) tree->_branches[i]
+                        "%p -> %p \n",
+                        (void *) tree,
+                        (void *) tree->_branches[i]
                     );
                 }
 
@@ -142,8 +144,8 @@ void parse_tree_print_dot(PParseTree *parse_tree,
             case PT_TERMINAL:
                 term = (PT_Terminal *) curr;
                 printf(
-                    "Ox%d [label=\"%s<%s> @ %d\" color=gray shape=square] \n",
-                    (unsigned int) tree,
+                    "%p [label=\"%s<%s> @ %d\" color=gray shape=square] \n",
+                    (void *) tree,
                     terminal_names[term->terminal],
                     is_not_null(term->lexeme) ? term->lexeme->str : "",
                     term->id
@@ -153,8 +155,8 @@ void parse_tree_print_dot(PParseTree *parse_tree,
 
             case PT_EPSILON:
                 printf(
-                    "Ox%d [label=\"epsilon<>\" color=gray shape=diamond] \n",
-                    (unsigned int) tree
+                    "%p [label=\"epsilon<>\" color=gray shape=diamond] \n",
+                    (void *) tree
                 );
                 break;
         }

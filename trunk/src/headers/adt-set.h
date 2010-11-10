@@ -48,12 +48,14 @@ int set_equals(const PSet *set_a, const PSet *set_b);
 int set_not_equals(PSet *set_a, PSet *set_b);
 
 PSet *set_intersect(PSet *set_a, PSet *set_b);
+void set_intersect_inplace(PSet *dest, PSet *set_b);
 
 PSet *set_union(PSet *set_a, PSet *set_b);
 
 void set_union_inplace(PSet *set_a, PSet *set_b);
 
 PSet *set_complement(PSet *set);
+void set_complement_inplace(PSet *set);
 
 void set_map(PSet *set, void *state, PSetMapFunc *map_fnc);
 

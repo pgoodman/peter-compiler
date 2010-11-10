@@ -369,7 +369,7 @@ static void R_make_scanner(PParserInfo *state) {
     /* convert the now constructed NFA of all of the regular expressions that
      * match lexemes and associate then with terminals into a DFA. Once that has
      * been done, print the DFA out as a scanner (in C code) to a file. */
-    dfa = nfa_to_dfa(nfa, priority_set);
+    dfa = nfa_to_mdfa(nfa, priority_set);
     set_free(priority_set);
     nfa_free(nfa);
     nfa_print_scanner(dfa, state->lexer_output_file, state->lexer_func_name);

@@ -26,8 +26,8 @@ static PSet *S_alloc(unsigned int num_slots, int do_fill, unsigned int fill) {
         mem_error("Unable to allocate new set on the heap.");
     }
 
-    set = mem_alloc(sizeof(PSet));
-    map = mem_alloc(num_slots * sizeof(uint32_t));
+    set = mem_calloc(1, sizeof(PSet));
+    map = mem_calloc(num_slots, sizeof(uint32_t));
 
     if(do_fill) {
         memset(map, fill, num_slots * 4);
@@ -48,31 +48,30 @@ static PSet *S_alloc(unsigned int num_slots, int do_fill, unsigned int fill) {
 /**
  * Grow a set by factors of two until it has reached a ceiling size.
  */
-static void S_grow(PSet *set, unsigned int elm, int do_fill, unsigned char fill) {
+static void S_grow(PSet *set, unsigned int elm) {
     unsigned int size = set->num_bits;
     uint32_t *elms = set->map;
 
     while(size < elm) {
         if(size >= STOP_GROW_SIZE) {
-            size = elm;
+            size = elm + 1;
             break;
         }
         size *= 2;
     }
 
-    elms = mem_realloc(elms, sizeof(uint32_t) * size);
+    elms = mem_calloc(size, sizeof(uint32_t));
     if(is_null(elms)) {
         mem_error("Unable to resize set.");
     }
 
-    /* clear out all of the new elements */
-    if(do_fill) {
-        memset(
-           elms + set->num_slots,
-           fill,
-           (size - set->num_slots) * (sizeof(uint32_t) / sizeof(char))
-        );
-    }
+    elms = (uint32_t *) memcpy(
+        elms,
+        set->map,
+        sizeof(uint32_t) * set->num_slots
+    );
+
+    mem_free(set->map);
 
     set->map = elms;
     set->num_slots = size;
@@ -83,8 +82,9 @@ static void S_grow(PSet *set, unsigned int elm, int do_fill, unsigned char fill)
  * Toggle a bit in the set.
  */
 static void S_set(PSet *set, unsigned int elm, unsigned int toggle) {
-    unsigned int bit = 32 - (elm % 32),
-                 i = (elm / 32);
+    unsigned int bit = 32 - (elm % 32);
+    unsigned int i = (elm / 32);
+    /*i %= set->num_slots;*/
     set->map[i] = (toggle ? set->map[i] | 1 << bit : set->map[i] & ~(1 << bit));
 }
 
@@ -189,8 +189,8 @@ void set_free(PSet *set) {
 void set_add_elm(PSet *set, unsigned int elm) {
     assert_not_null(set);
 
-    if(elm > set->num_bits) {
-        S_grow(set, elm, 1, 0);
+    if(elm >= set->num_bits) {
+        S_grow(set, elm);
         ++(set->num_entries);
     } else if(!set_has_elm(set, elm)) {
         ++(set->num_entries);
@@ -253,12 +253,7 @@ void set_empty(PSet *set) {
     map = set->map;
 
     /* go eight cells at a time and compare the sets */
-    for(; --max >= 0; ) {
-        *map = 0;
-        *++map = 0;
-        *++map = 0;
-        *++map = 0;
-    }
+    memset(set->map, 0, sizeof(uint32_t) * set->num_slots);
 
     set->num_entries = 0;
 }
@@ -285,17 +280,7 @@ PSet *set_copy(PSet *set) {
     }
 
     cset = memcpy(cset, set, sizeof(PSet));
-
-    max /= 4;
-
-    for(; --max >= 0; ) {
-        *cmap = *map;
-        *++cmap = *++map;
-        *++cmap = *++map;
-        *++cmap = *++map;
-    }
-
-    cset->map = cmap;
+    cset->map = memcpy(cmap, set->map, sizeof(uint32_t) * max);
 
     return cset;
 }
@@ -411,6 +396,24 @@ PSet *set_intersect(PSet *set_a, PSet *set_b) {
     return new_set;
 }
 
+void set_intersect_inplace(PSet *dest, PSet *set_b) {
+    uint32_t *dest_map, *map_b, *max_map;
+    unsigned num_entries = 0;
+
+    assert_not_null(dest);
+    assert_not_null(set_b);
+
+    dest_map = dest->map;
+    max_map = dest_map + dest->num_slots;
+    map_b = set_b->map;
+
+    for(; dest_map < max_map; ++dest_map, ++map_b) {
+        *dest_map = *dest_map & *map_b;
+        num_entries += S_num_bits(*dest_map);
+    }
+    dest->num_entries = num_entries;
+}
+
 /**
  * Return a new set that is the union of both sets. The new set will be no
  * bigger than max{|set_a|, |set_b|}.
@@ -444,7 +447,7 @@ void set_union_inplace(PSet *set_a, PSet *set_b) {
     assert_not_null(set_b);
 
     if(set_a->num_slots < set_b->num_slots) {
-        S_grow(set_a, set_b->num_bits, 0, 0);
+        S_grow(set_a, set_b->num_bits);
     }
 
     S_union(set_a, set_b, set_a);
@@ -484,6 +487,19 @@ PSet *set_complement(PSet *set) {
     return set;
 }
 
+void set_complement_inplace(PSet *set) {
+    uint32_t *map, *map_end;
+    unsigned num_entries = 0;
+
+    assert_not_null(set);
+
+    for(map = set->map, map_end = map + set->num_slots; map < map_end; ++map) {
+        *map = ~*map;
+        num_entries += S_num_bits(*map);
+    }
+    set->num_entries = num_entries;
+}
+
 /**
  * Map a function over the elements of a set.
  */
@@ -492,6 +508,10 @@ void set_map(PSet *set, void *state, PSetMapFunc *map_fnc) {
     uint32_t *map;
 
     assert_not_null(set);
+
+    if(0 == set->num_entries) {
+        return;
+    }
 
     map = set->map;
     j = set->num_bits;
