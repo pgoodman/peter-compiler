@@ -1236,6 +1236,89 @@ static void print_state_subset(PNFA *nfa, unsigned state) {
 }
 
 /**
+ * Reverse the arrows in a NFA in-place.
+ */
+static void NFA_reverse(PNFA *nfa) {
+    NFA_Transition *trans;
+    unsigned state;
+    unsigned temp;
+
+    for(state = 0; state < nfa->num_states; ++state) {
+        trans = nfa->state_transitions[state];
+        if(NFA_UNUSED_STATE == trans) {
+            continue;
+        }
+
+        for(; is_not_null(trans); trans = trans->trans_next) {
+            temp = trans->from_state;
+            trans->from_state = trans->to_state;
+            trans->to_state = temp;
+        }
+    }
+}
+
+/**
+ * Update a set of reachable states given a start state.
+ */
+static void NFA_get_reachable_from(PNFA *nfa, PSet *reached, unsigned initial) {
+    NFA_Transition *trans;
+    unsigned state;
+    unsigned found = 0;
+
+    set_add_elm(reached, initial);
+
+    do {
+        found = 0;
+        for(state = 0; state < nfa->num_states; ++state) {
+            for(trans = nfa->state_transitions[state];
+                is_not_null(trans);
+                trans = trans->trans_next) {
+
+                if(set_has_elm(reached, trans->from_state)
+                && !set_has_elm(reached, trans->to_state)) {
+                    set_add_elm(reached, trans->to_state);
+                    found = 1;
+                }
+            }
+        }
+    } while(found);
+}
+
+/**
+ * Get the set of reachable states and return it.
+ */
+static PSet *NFA_get_reachable_states(PNFA *nfa) {
+    PSet *forward = set_alloc();
+    PSet *backward = set_alloc();
+    unsigned state;
+
+    /* scale the sets */
+    set_add_elm(forward, nfa->num_states);
+    set_remove_elm(forward, nfa->num_states);
+    set_add_elm(backward, nfa->num_states);
+    set_remove_elm(backward, nfa->num_states);
+
+    /* find reachable from the start state */
+    NFA_get_reachable_from(nfa, forward, nfa->start_state);
+
+    /* find the states that reach the final states */
+    NFA_reverse(nfa);
+    for(state = 0; state < nfa->num_states; ++state) {
+        if(set_has_elm(nfa->accepting_states, state)
+        && !set_has_elm(backward, state)) {
+            NFA_get_reachable_from(nfa, backward, state);
+        }
+    }
+    NFA_reverse(nfa);
+
+    /* keep the intersection */
+    set_intersect_inplace(forward, backward);
+    set_free(backward);
+
+    return forward;
+}
+
+/**
  * Print out the NFA in the DOT language.
  */
 void nfa_print_dot(PNFA *nfa) {
@@ -1261,8 +1344,6 @@ void nfa_print_dot(PNFA *nfa) {
 
     PDictionary *trans_set = 0;
     PDictionaryGenerator *ids = 0;
-
-    assert_not_null(nfa);
 
     printf("digraph {\n");
 
@@ -1420,7 +1501,8 @@ void nfa_print_dot(PNFA *nfa) {
 }
 
 /**
- * Print out the NFA as a right-linear grammar formatted in LaTeX.
+ * Print out the NFA as a right-linear grammar formatted in LaTeX. This does
+ * not output productions for unreachable or sink states.
  */
 void nfa_print_latex(PNFA *nfa) {
 
@@ -1433,8 +1515,10 @@ void nfa_print_latex(PNFA *nfa) {
         (NFA_Transition **) nfa->state_transitions
     );
 
+    PSet *reachable = NFA_get_reachable_states(nfa);
+
     const unsigned num_slots = nfa->num_transitions / (nfa->num_states + 1);
-    const char *sep = "| ";
+    const char *sep = "|\\ ";
     const char *sep_offset;
 
     assert_not_null(nfa);
@@ -1447,26 +1531,39 @@ void nfa_print_latex(PNFA *nfa) {
 
         if(transition == NFA_UNUSED_STATE) {
             continue;
+        } else if(!set_has_elm(reachable, state)) {
+            continue;
         }
 
         sep_offset = &(sep[2]);
 
         if(set_has_elm(nfa->accepting_states, state)) {
-            printf("S%d & \\to & \\epsilon", state);
+            printf("S_{%d} & \\to & \\epsilon\\ ", state);
             sep_offset = sep;
 
         } else {
-            printf("S%d & \\to & ", state);
+            printf("S_{%d} & \\to & ", state);
         }
 
-        for(/* */;
+        for(j = 0;
             is_not_null(transition);
             transition = transition->trans_next) {
+
+            if(!set_has_elm(reachable, transition->to_state)) {
+                continue;
+            }
+
+            if(j > 0 && 0 == (j % 10)) {
+                printf("\\\\\n & \\to & ");
+                sep_offset = &(sep[2]);
+            }
+
+            ++j;
 
             switch(transition->type) {
                 case T_VALUE:
                     printf(
-                        "%s %c S%d",
+                        "%s \\texttt{%c}\\ S_{%d}\\ ",
                         sep_offset,
                         (char) transition->condition.value,
                         transition->to_state
@@ -1475,7 +1572,7 @@ void nfa_print_latex(PNFA *nfa) {
                     break;
                 case T_EPSILON:
                     printf(
-                        "%s S%d",
+                        "%s\\ S_{%d}\\ ",
                         sep_offset,
                         transition->to_state
                     );
@@ -1491,6 +1588,8 @@ void nfa_print_latex(PNFA *nfa) {
     }
 
     printf("\\end{eqnarray*}\n");
+
+    set_free(reachable);
 }
 
 /* -------------------------------------------------------------------------- */
