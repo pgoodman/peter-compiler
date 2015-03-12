@@ -1,0 +1,3 @@
+This is my first attempt at a functioning compiler and compiler tools. The intent of having it online is more-so for backup than it is for releasing. In general, there will be little if nothing extraordinary about it.
+
+This package will hopefully include a compiler from the bottom up, including all custom tools that go into its creation. The reason for this is that I see coding this compiler as a learning experience.
